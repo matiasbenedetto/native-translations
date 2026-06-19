@@ -104,6 +104,25 @@ class Wpait_Translation_Store {
 			return new WP_Error( 'wpait_invalid_language', __( 'A language code is required.', 'wp-ai-translate' ) );
 		}
 
+		// Enforce the one-member-per-language invariant (C2): if this object is
+		// already in a group, refuse a code that another member already holds,
+		// otherwise the group→members map would silently collapse two members
+		// onto the same language key.
+		$group = $this->get_group( $object_type, $object_id );
+		if ( '' !== $group ) {
+			$members = $this->get_group_members( $object_type, $group );
+			if ( isset( $members[ $code ] ) && $members[ $code ] !== $object_id ) {
+				return new WP_Error(
+					'wpait_language_exists',
+					sprintf(
+						/* translators: %s: language code. */
+						__( 'This translation group already has a member in language "%s".', 'wp-ai-translate' ),
+						$code
+					)
+				);
+			}
+		}
+
 		if ( 'term' === $object_type ) {
 			update_term_meta( $object_id, self::META_LANGUAGE, $code );
 		} else {
@@ -113,7 +132,7 @@ class Wpait_Translation_Store {
 			}
 		}
 
-		$this->bust_group_cache( $object_type, $this->get_group( $object_type, $object_id ) );
+		$this->bust_group_cache( $object_type, $group );
 
 		return true;
 	}
@@ -344,10 +363,16 @@ class Wpait_Translation_Store {
 				'meta_key'               => self::META_GROUP, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 				'meta_value'             => $group,           // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'fields'                 => 'ids',
+				// A group holds at most one member per language, so this cap is
+				// effectively "number of configured languages" and never bites in
+				// practice; it is a defensive bound, not a paging limit.
 				'posts_per_page'         => 100,
 				'no_found_rows'          => true,
 				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
+				// Primed: every returned id is immediately passed to get_language()
+				// → wp_get_object_terms(), so caching object terms here avoids an
+				// N+1 of uncached term lookups.
+				'update_post_term_cache' => true,
 				'ignore_sticky_posts'    => true,
 			)
 		);
@@ -376,6 +401,8 @@ class Wpait_Translation_Store {
 				'taxonomy'   => array( 'category', 'post_tag' ),
 				'hide_empty' => false,
 				'fields'     => 'ids',
+				// Defensive bound: a group holds at most one member per language,
+				// so this is "number of configured languages" in practice.
 				'number'     => 100,
 				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 					array(

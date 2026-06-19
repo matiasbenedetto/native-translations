@@ -24,6 +24,14 @@ class Wpait_Admin_Settings {
 	private Wpait_Languages $languages;
 
 	/**
+	 * Whether reconcile admin notices have already been queued this request.
+	 * Guards against register_setting sanitizing the option more than once.
+	 *
+	 * @var bool
+	 */
+	private static bool $reconcile_notified = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Wpait_Languages $languages Languages handler.
@@ -172,9 +180,15 @@ class Wpait_Admin_Settings {
 		$languages = array_values( $languages );
 
 		// --- Reconcile terms (creates/updates terms, blocks unsafe deletes). ---
-		$result               = $this->languages->reconcile( $languages, $old['languages'] );
+		// register_setting's sanitize callback can fire more than once per
+		// request; reconcile() is idempotent, but guard the admin notices so
+		// they are not queued twice.
+		$result                = $this->languages->reconcile( $languages, $old['languages'] );
 		$settings['languages'] = $result['languages'];
-		$this->add_reconcile_notices( $result['report'] );
+		if ( ! self::$reconcile_notified ) {
+			$this->add_reconcile_notices( $result['report'] );
+			self::$reconcile_notified = true;
+		}
 
 		// --- Default language (must be one of the configured codes). ---
 		$codes   = wp_list_pluck( $settings['languages'], 'code' );
