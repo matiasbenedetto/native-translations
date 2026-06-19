@@ -41,6 +41,13 @@ final class Wpait_Plugin {
 	private Wpait_Admin_Settings $settings;
 
 	/**
+	 * AI translator (the only caller of the core AI connector).
+	 *
+	 * @var Wpait_Translator
+	 */
+	private Wpait_Translator $translator;
+
+	/**
 	 * Returns the singleton instance.
 	 *
 	 * @return Wpait_Plugin
@@ -56,9 +63,10 @@ final class Wpait_Plugin {
 	 * Wires hooks and instantiates components.
 	 */
 	private function __construct() {
-		$this->store     = new Wpait_Translation_Store();
-		$this->languages = new Wpait_Languages();
-		$this->settings  = new Wpait_Admin_Settings( $this->languages );
+		$this->store      = new Wpait_Translation_Store();
+		$this->languages  = new Wpait_Languages();
+		$this->settings   = new Wpait_Admin_Settings( $this->languages );
+		$this->translator = new Wpait_Translator( $this->store, $this->languages );
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
@@ -96,5 +104,14 @@ final class Wpait_Plugin {
 	 */
 	public function languages(): Wpait_Languages {
 		return $this->languages;
+	}
+
+	/**
+	 * Returns the AI translator.
+	 *
+	 * @return Wpait_Translator
+	 */
+	public function translator(): Wpait_Translator {
+		return $this->translator;
 	}
 }
