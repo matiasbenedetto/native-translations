@@ -1,0 +1,5 @@
+# harness runtime state — never committed. The whole .state/ dir is scratch:
+# recorded site-dir, mounts, server pid/pgid/port/logs, the wp-cli phar, cookies.
+.state/
+# cast.mjs default temp video dir (only used when run bare, not via playground.sh)
+casts/
