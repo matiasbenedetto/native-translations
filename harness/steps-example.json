@@ -1,0 +1,25 @@
+[
+  { "type": "note", "text": "Open the posts list" },
+  { "type": "goto", "url": "/wp-admin/edit.php" },
+  { "type": "wait_for", "selector": ".wp-list-table", "timeout": 15000 },
+  { "type": "wait", "ms": 800 },
+  { "type": "screenshot", "path": "/tmp/cast-list-all.png" },
+
+  { "type": "note", "text": "Filter by Spanish (deterministic filtered URL)" },
+  { "type": "goto", "url": "/wp-admin/edit.php?wpait_lang=es" },
+  { "type": "wait_for", "selector": ".wp-list-table", "timeout": 15000 },
+  { "type": "wait", "ms": 1000 },
+  { "type": "screenshot", "path": "/tmp/cast-list-es.png" },
+
+  { "type": "note", "text": "Show the Untranslated filter" },
+  { "type": "goto", "url": "/wp-admin/edit.php?wpait_lang=untranslated" },
+  { "type": "wait_for", "selector": ".wp-list-table", "timeout": 15000 },
+  { "type": "wait", "ms": 1000 },
+
+  { "type": "note", "text": "Open AI Translate settings" },
+  { "type": "goto", "url": "/wp-admin/options-general.php?page=wp-ai-translate" },
+  { "type": "wait_for", "selector": ".wrap h1", "timeout": 15000 },
+  { "type": "wait", "ms": 1000 },
+  { "type": "scroll", "y": 600 },
+  { "type": "wait", "ms": 800 }
+]
