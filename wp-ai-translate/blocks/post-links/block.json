@@ -1,0 +1,24 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "wp-ai-translate/post-links",
+	"version": "0.1.0",
+	"title": "Translation Links",
+	"category": "widgets",
+	"icon": "translation",
+	"description": "Links to the translations of the current post, one per language that has one.",
+	"keywords": [ "translation", "language", "multilingual", "links" ],
+	"textdomain": "wp-ai-translate",
+	"usesContext": [ "postId" ],
+	"supports": {
+		"html": false,
+		"align": [ "left", "center", "right", "wide" ],
+		"spacing": { "margin": true, "padding": true },
+		"typography": { "fontSize": true }
+	},
+	"attributes": {
+		"displayStyle": { "type": "string", "default": "both" },
+		"showCurrent": { "type": "boolean", "default": false }
+	},
+	"editorScript": "wpait-post-links-editor"
+}

@@ -67,6 +67,7 @@ require_once WPAIT_PLUGIN_DIR . 'includes/class-translator.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-rest.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-editor.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-admin-list.php';
+require_once WPAIT_PLUGIN_DIR . 'includes/class-frontend.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-plugin.php';
 
 /**

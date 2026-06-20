@@ -1,0 +1,386 @@
+<?php
+/**
+ * Front-end blocks + the shared resolver both of them call (plan §8 / S6 / S7).
+ *
+ * One resolver keeps the two dynamic blocks behaviourally identical: it is
+ * context-safe (only trusts an explicit block `postId` context or a genuine
+ * singular queried object — never guesses a post inside a query loop, template
+ * part, archive, or editor preview) and viewability-filtered (front-end siblings
+ * pass through `is_post_publicly_viewable()` via the store's `viewable` arg).
+ *
+ * @package WpAiTranslate
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+/**
+ * Registers and renders the `post-links` and `language-switcher` blocks.
+ */
+class Wpait_Frontend {
+
+	/**
+	 * Translation store.
+	 *
+	 * @var Wpait_Translation_Store
+	 */
+	private Wpait_Translation_Store $store;
+
+	/**
+	 * Languages handler.
+	 *
+	 * @var Wpait_Languages
+	 */
+	private Wpait_Languages $languages;
+
+	/**
+	 * Block definitions: handle + source dir, keyed by block name suffix.
+	 *
+	 * @var array<string,array<string,string>>
+	 */
+	private array $blocks = array(
+		'post-links'        => array( 'handle' => 'wpait-post-links-editor' ),
+		'language-switcher' => array( 'handle' => 'wpait-language-switcher-editor' ),
+	);
+
+	/**
+	 * Constructor.
+	 *
+	 * @param Wpait_Translation_Store $store     Translation store.
+	 * @param Wpait_Languages         $languages Languages handler.
+	 */
+	public function __construct( Wpait_Translation_Store $store, Wpait_Languages $languages ) {
+		$this->store     = $store;
+		$this->languages = $languages;
+	}
+
+	/**
+	 * Registers hooks.
+	 *
+	 * @return void
+	 */
+	public function register_hooks(): void {
+		add_action( 'init', array( $this, 'register_blocks' ) );
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Block registration
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Registers both dynamic blocks from their committed `block.json` metadata,
+	 * wiring a PHP render callback to each. Editor scripts are registered first so
+	 * the `editorScript` handle in block.json resolves.
+	 *
+	 * @return void
+	 */
+	public function register_blocks(): void {
+		$callbacks = array(
+			'post-links'        => array( $this, 'render_post_links' ),
+			'language-switcher' => array( $this, 'render_language_switcher' ),
+		);
+
+		foreach ( $this->blocks as $name => $meta ) {
+			$this->register_editor_script( $name, $meta['handle'] );
+
+			$dir = WPAIT_PLUGIN_DIR . 'blocks/' . $name;
+			if ( ! file_exists( $dir . '/block.json' ) ) {
+				continue;
+			}
+			register_block_type(
+				$dir,
+				array( 'render_callback' => $callbacks[ $name ] )
+			);
+		}
+	}
+
+	/**
+	 * Registers a block's built editor script under its block.json handle, reading
+	 * the wp-scripts-generated dependency/version manifest when present.
+	 *
+	 * @param string $name   Block name suffix (build dir).
+	 * @param string $handle Script handle referenced by block.json `editorScript`.
+	 * @return void
+	 */
+	private function register_editor_script( string $name, string $handle ): void {
+		$asset_file = WPAIT_PLUGIN_DIR . 'build/' . $name . '/index.asset.php';
+		$script     = WPAIT_PLUGIN_URL . 'build/' . $name . '/index.js';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+		$asset = require $asset_file;
+
+		wp_register_script(
+			$handle,
+			$script,
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+		wp_set_script_translations( $handle, 'wp-ai-translate' );
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Shared resolver (S6 / S7)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Resolves the post whose translations a block should show, context-safely.
+	 *
+	 * Prefers an explicit block `postId` context (set inside query loops, template
+	 * parts, and editor/server-side-render previews); falls back to the genuine
+	 * singular queried object on the front end; otherwise 0. Never derives a post
+	 * from a non-singular main query (S6).
+	 *
+	 * @param WP_Block|null $block Block instance, if available.
+	 * @return int Post id, or 0 when there is no safe current post.
+	 */
+	public function resolve_post_id( $block = null ): int {
+		if ( $block instanceof WP_Block && ! empty( $block->context['postId'] ) ) {
+			return (int) $block->context['postId'];
+		}
+		if ( is_singular() ) {
+			$obj = get_queried_object();
+			if ( $obj instanceof WP_Post ) {
+				return (int) $obj->ID;
+			}
+		}
+		// Editor preview only: ServerSideRender passes the edited post id as a query
+		// arg. Scoped to REST so it can never influence a front-end render (S6).
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only editor preview.
+			$pid = isset( $_GET['post_id'] ) ? absint( wp_unslash( $_GET['post_id'] ) ) : 0;
+			if ( $pid > 0 ) {
+				return $pid;
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Language links for a singular post: one row per enabled language that
+	 * resolves to a publicly-viewable target (the post itself for its own
+	 * language; a viewable sibling otherwise). Languages with no viewable
+	 * translation are omitted (locked decision §1 / S7).
+	 *
+	 * @param int  $post_id        Current post id.
+	 * @param bool $include_current Include the post's own language row.
+	 * @return array<int,array<string,mixed>> Rows of { code, name, native, flag, url, is_current }.
+	 */
+	public function links_for_post( int $post_id, bool $include_current ): array {
+		if ( $post_id <= 0 ) {
+			return array();
+		}
+
+		$own      = $this->store->get_language( 'post', $post_id );
+		$siblings = $this->store->get_translations( 'post', $post_id, array( 'viewable' => true ) );
+
+		$rows = array();
+		foreach ( $this->languages->enabled() as $lang ) {
+			$code = (string) $lang['code'];
+
+			if ( $code === $own ) {
+				if ( ! $include_current ) {
+					continue;
+				}
+				$url        = get_permalink( $post_id );
+				$is_current = true;
+			} elseif ( isset( $siblings[ $code ] ) ) {
+				$url        = get_permalink( (int) $siblings[ $code ] );
+				$is_current = false;
+			} else {
+				continue;
+			}
+
+			if ( ! $url ) {
+				continue;
+			}
+
+			$rows[] = $this->row( $lang, $url, $is_current );
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Fallback rows for non-singular contexts (home, archives): every enabled
+	 * language linking to the site home, since there is no per-item translation to
+	 * resolve (plan §8.2).
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function links_home(): array {
+		$rows = array();
+		foreach ( $this->languages->enabled() as $lang ) {
+			$rows[] = $this->row( $lang, home_url( '/' ), false );
+		}
+		return $rows;
+	}
+
+	/**
+	 * Normalizes one configured-language row into a render row.
+	 *
+	 * @param array<string,mixed> $lang       Configured language row.
+	 * @param string              $url        Target URL.
+	 * @param bool                $is_current Whether this is the current language.
+	 * @return array<string,mixed>
+	 */
+	private function row( array $lang, string $url, bool $is_current ): array {
+		return array(
+			'code'       => (string) $lang['code'],
+			'name'       => (string) $lang['name'],
+			'native'     => (string) ( $lang['native'] ?? '' ),
+			'flag'       => (string) ( $lang['flag'] ?? '' ),
+			'url'        => $url,
+			'is_current' => $is_current,
+		);
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Render callbacks
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Renders the `post-links` block: links to the current post's viewable
+	 * translation siblings, one per language (plan §8.1).
+	 *
+	 * @param array<string,mixed> $attributes Block attributes.
+	 * @param string              $content    Inner content (unused, dynamic).
+	 * @param WP_Block|null       $block      Block instance.
+	 * @return string
+	 */
+	public function render_post_links( $attributes, $content = '', $block = null ): string {
+		$post_id = $this->resolve_post_id( $block );
+		if ( $post_id <= 0 ) {
+			return '';
+		}
+
+		$show_current = ! empty( $attributes['showCurrent'] );
+		$rows         = $this->links_for_post( $post_id, $show_current );
+
+		// Nothing to link to (no viewable siblings) — render nothing rather than an
+		// empty shell.
+		$other = array_filter(
+			$rows,
+			static function ( $r ) {
+				return empty( $r['is_current'] );
+			}
+		);
+		if ( empty( $other ) && ! $show_current ) {
+			return '';
+		}
+
+		$style = $this->display_style( $attributes );
+		$items = array();
+		foreach ( $rows as $r ) {
+			$items[] = $this->render_item( $r, $style );
+		}
+
+		$wrapper = get_block_wrapper_attributes( array( 'class' => 'wpait-post-links' ) );
+
+		return sprintf(
+			'<nav %1$s aria-label="%2$s"><ul class="wpait-language-list">%3$s</ul></nav>',
+			$wrapper,
+			esc_attr__( 'Translations of this content', 'wp-ai-translate' ),
+			implode( '', $items )
+		);
+	}
+
+	/**
+	 * Renders the `language-switcher` block: site-wide list of enabled languages
+	 * that switches to the current page's translation when one exists, else the
+	 * site home; on non-singular views, links every language to home (plan §8.2).
+	 *
+	 * @param array<string,mixed> $attributes Block attributes.
+	 * @param string              $content    Inner content (unused, dynamic).
+	 * @param WP_Block|null       $block      Block instance.
+	 * @return string
+	 */
+	public function render_language_switcher( $attributes, $content = '', $block = null ): string {
+		$post_id = $this->resolve_post_id( $block );
+
+		$show_current = ! isset( $attributes['showCurrent'] ) || ! empty( $attributes['showCurrent'] );
+		$rows         = $post_id > 0 ? $this->links_for_post( $post_id, $show_current ) : $this->links_home();
+
+		if ( empty( $rows ) ) {
+			return '';
+		}
+
+		$style = $this->display_style( $attributes );
+		$items = array();
+		foreach ( $rows as $r ) {
+			$items[] = $this->render_item( $r, $style );
+		}
+
+		$wrapper = get_block_wrapper_attributes( array( 'class' => 'wpait-language-switcher' ) );
+
+		return sprintf(
+			'<nav %1$s aria-label="%2$s"><ul class="wpait-language-list">%3$s</ul></nav>',
+			$wrapper,
+			esc_attr__( 'Language switcher', 'wp-ai-translate' ),
+			implode( '', $items )
+		);
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Render helpers
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Normalizes the display-style attribute to one of flags|names|both.
+	 *
+	 * @param array<string,mixed> $attributes Block attributes.
+	 * @return string
+	 */
+	private function display_style( array $attributes ): string {
+		$style = isset( $attributes['displayStyle'] ) ? (string) $attributes['displayStyle'] : 'both';
+		return in_array( $style, array( 'flags', 'names', 'both' ), true ) ? $style : 'both';
+	}
+
+	/**
+	 * Renders a single language list item.
+	 *
+	 * @param array<string,mixed> $row   Render row.
+	 * @param string              $style flags|names|both.
+	 * @return string
+	 */
+	private function render_item( array $row, string $style ): string {
+		$flag = (string) $row['flag'];
+		$name = (string) $row['name'];
+
+		$show_flag = ( 'names' !== $style ) && '' !== $flag;
+		// Show a visible name unless we are in flags-only mode and actually have a
+		// flag to show in its place.
+		$show_name = ( 'flags' !== $style ) || '' === $flag;
+
+		$label_parts = array();
+		if ( $show_flag ) {
+			$label_parts[] = '<span class="wpait-flag" aria-hidden="true">' . esc_html( $flag ) . '</span>';
+		}
+		if ( $show_name ) {
+			$label_parts[] = '<span class="wpait-name">' . esc_html( $name ) . '</span>';
+		} else {
+			// Flags-only: the flag is aria-hidden, so carry the language name as
+			// screen-reader text — otherwise the link has an empty accessible name.
+			$label_parts[] = '<span class="screen-reader-text">' . esc_html( $name ) . '</span>';
+		}
+		$label = implode( ' ', $label_parts );
+
+		$li_class = 'wpait-language-item' . ( ! empty( $row['is_current'] ) ? ' is-current' : '' );
+
+		if ( ! empty( $row['is_current'] ) ) {
+			return sprintf(
+				'<li class="%1$s"><span aria-current="true">%2$s</span></li>',
+				esc_attr( $li_class ),
+				$label
+			);
+		}
+
+		return sprintf(
+			'<li class="%1$s"><a href="%2$s" lang="%3$s" hreflang="%3$s">%4$s</a></li>',
+			esc_attr( $li_class ),
+			esc_url( (string) $row['url'] ),
+			esc_attr( (string) $row['code'] ),
+			$label
+		);
+	}
+}
