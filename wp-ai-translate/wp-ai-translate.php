@@ -63,6 +63,7 @@ if ( version_compare( get_bloginfo( 'version' ), '7.0', '<' ) ) {
 require_once WPAIT_PLUGIN_DIR . 'includes/class-translation-store.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-languages.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-admin-settings.php';
+require_once WPAIT_PLUGIN_DIR . 'includes/class-translator.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-plugin.php';
 
 /**
