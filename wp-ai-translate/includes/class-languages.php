@@ -145,6 +145,19 @@ class Wpait_Languages {
 	}
 
 	/**
+	 * The plain configured name for a code (no flag prefix), falling back to the
+	 * code itself for unknown codes. Used where a flag emoji would be noise — e.g.
+	 * the translator's `{source_lang}`/`{target_lang}` prompt labels.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function name( string $code ): string {
+		$index = self::config_index();
+		return isset( $index[ $code ] ) ? (string) $index[ $code ]['name'] : $code;
+	}
+
+	/**
 	 * Registers the non-public language taxonomy and its term meta.
 	 *
 	 * Registered against posts and pages directly. Categories and tags carry

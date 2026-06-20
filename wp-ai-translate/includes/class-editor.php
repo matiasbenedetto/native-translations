@@ -24,6 +24,22 @@ class Wpait_Editor {
 	const TERM_TAXONOMIES = array( 'category', 'post_tag' );
 
 	/**
+	 * Languages handler (shared enabled/label helpers).
+	 *
+	 * @var Wpait_Languages
+	 */
+	private Wpait_Languages $languages;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param Wpait_Languages $languages Languages handler.
+	 */
+	public function __construct( Wpait_Languages $languages ) {
+		$this->languages = $languages;
+	}
+
+	/**
 	 * Registers hooks.
 	 *
 	 * @return void
@@ -47,19 +63,18 @@ class Wpait_Editor {
 	 * @return array<int,array<string,string>>
 	 */
 	private function enabled_languages(): array {
-		$settings = Wpait_Admin_Settings::get_settings();
-		$out      = array();
-		foreach ( $settings['languages'] as $lang ) {
-			if ( empty( $lang['enabled'] ) || empty( $lang['code'] ) ) {
-				continue;
-			}
-			$out[] = array(
-				'code'   => (string) $lang['code'],
-				'name'   => (string) ( $lang['name'] ?? $lang['code'] ),
-				'native' => (string) ( $lang['native'] ?? '' ),
-			);
-		}
-		return $out;
+		// Delegates to the shared enabled-language helper (M4), projecting to the
+		// code/name/native shape the JS clients expect.
+		return array_map(
+			static function ( $lang ) {
+				return array(
+					'code'   => (string) $lang['code'],
+					'name'   => (string) $lang['name'],
+					'native' => (string) $lang['native'],
+				);
+			},
+			$this->languages->enabled()
+		);
 	}
 
 	/**
