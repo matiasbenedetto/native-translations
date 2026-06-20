@@ -69,6 +69,13 @@ final class Wpait_Plugin {
 	private Wpait_Admin_List $admin_list;
 
 	/**
+	 * Front-end blocks + shared resolver.
+	 *
+	 * @var Wpait_Frontend
+	 */
+	private Wpait_Frontend $frontend;
+
+	/**
 	 * Returns the singleton instance.
 	 *
 	 * @return Wpait_Plugin
@@ -91,6 +98,7 @@ final class Wpait_Plugin {
 		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator );
 		$this->editor     = new Wpait_Editor();
 		$this->admin_list = new Wpait_Admin_List( $this->store, $this->languages );
+		$this->frontend   = new Wpait_Frontend( $this->store, $this->languages );
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
@@ -99,6 +107,7 @@ final class Wpait_Plugin {
 		$this->settings->register_hooks();
 		$this->rest->register_hooks();
 		$this->editor->register_hooks();
+		$this->frontend->register_hooks();
 
 		if ( is_admin() ) {
 			$this->admin_list->register_hooks();
@@ -170,5 +179,14 @@ final class Wpait_Plugin {
 	 */
 	public function admin_list(): Wpait_Admin_List {
 		return $this->admin_list;
+	}
+
+	/**
+	 * Returns the front-end blocks/resolver integration.
+	 *
+	 * @return Wpait_Frontend
+	 */
+	public function frontend(): Wpait_Frontend {
+		return $this->frontend;
 	}
 }
