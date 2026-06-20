@@ -227,6 +227,12 @@ class Wpait_Admin_List {
 			$ids = $this->untranslated_ids( $screen->post_type );
 			// Force an empty result set when nothing is untranslated.
 			$query->set( 'post__in', ! empty( $ids ) ? $ids : array( 0 ) );
+			// Surface the same N6 truncation warning the Overview shows, so a
+			// silently-capped filtered list on a large site is not mistaken for
+			// "everything is translated".
+			if ( $this->scan_truncated ) {
+				add_action( 'admin_notices', array( $this, 'render_truncation_notice' ) );
+			}
 			return;
 		}
 
@@ -268,8 +274,10 @@ class Wpait_Admin_List {
 				'fields'                 => 'ids',
 				'posts_per_page'         => self::MAX_SCAN,
 				'no_found_rows'          => true,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
+				// present_codes() reads each post's language (object terms) and group
+				// (post meta), so prime both caches here to avoid an N+1 per candidate.
+				'update_post_meta_cache' => true,
+				'update_post_term_cache' => true,
 				'ignore_sticky_posts'    => true,
 			)
 		);
@@ -432,13 +440,7 @@ class Wpait_Admin_List {
 
 		if ( $this->scan_truncated ) {
 			echo '<div class="notice notice-warning inline"><p>'
-				. esc_html(
-					sprintf(
-						/* translators: %d: scan limit. */
-						__( 'Only the most recent %d items per type were scanned; the list may be incomplete. Use the by-language filter for older content.', 'wp-ai-translate' ),
-						self::MAX_SCAN
-					)
-				) . '</p></div>';
+				. esc_html( $this->truncation_message() ) . '</p></div>';
 		}
 		?>
 		<table class="widefat striped">
@@ -486,21 +488,29 @@ class Wpait_Admin_List {
 	 * @return void
 	 */
 	private function render_by_language( string $code, int $paged, string $base_url ): void {
-		$query = new WP_Query(
-			array(
-				'post_type'      => Wpait_Languages::OBJECT_TYPES,
-				'post_status'    => 'any',
-				'posts_per_page' => self::PER_PAGE,
-				'paged'          => $paged,
-				'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
-					array(
-						'taxonomy' => Wpait_Languages::TAXONOMY,
-						'field'    => 'slug',
-						'terms'    => $code,
-					),
+		$args = array(
+			'post_type'      => Wpait_Languages::OBJECT_TYPES,
+			'post_status'    => 'any',
+			'posts_per_page' => self::PER_PAGE,
+			'paged'          => $paged,
+			'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+				array(
+					'taxonomy' => Wpait_Languages::TAXONOMY,
+					'field'    => 'slug',
+					'terms'    => $code,
 				),
-			)
+			),
 		);
+		$query = new WP_Query( $args );
+
+		// Clamp a stale out-of-range ?paged to the last page so it shows real items
+		// instead of an empty table while content exists on earlier pages (mirrors
+		// the clamp in render_missing()).
+		if ( $paged > 1 && $query->max_num_pages > 0 && $paged > $query->max_num_pages ) {
+			$paged         = (int) $query->max_num_pages;
+			$args['paged'] = $paged;
+			$query         = new WP_Query( $args );
+		}
 		?>
 		<table class="widefat striped">
 			<thead>
@@ -576,6 +586,30 @@ class Wpait_Admin_List {
 		echo '</div></div>';
 	}
 
+	/**
+	 * Emits the N6 scan-truncation warning as a top-level admin notice (used on the
+	 * edit.php "Untranslated" filter, where there is no inline notice slot).
+	 *
+	 * @return void
+	 */
+	public function render_truncation_notice(): void {
+		echo '<div class="notice notice-warning"><p>'
+			. esc_html( $this->truncation_message() ) . '</p></div>';
+	}
+
+	/**
+	 * The shared scan-truncation warning text.
+	 *
+	 * @return string
+	 */
+	private function truncation_message(): string {
+		return sprintf(
+			/* translators: %d: scan limit. */
+			__( 'Only the most recent %d items per type were scanned; the list may be incomplete. Use the by-language filter for older content.', 'wp-ai-translate' ),
+			self::MAX_SCAN
+		);
+	}
+
 	/* ---------------------------------------------------------------------
 	 * Language label helpers
 	 * ------------------------------------------------------------------- */
@@ -606,11 +640,7 @@ class Wpait_Admin_List {
 	 * @return string
 	 */
 	private function short_label( string $code ): string {
-		foreach ( $this->languages->configured() as $lang ) {
-			if ( $lang['code'] === $code && '' !== $lang['flag'] ) {
-				return (string) $lang['flag'];
-			}
-		}
-		return strtoupper( $code );
+		$flag = $this->languages->flag( $code );
+		return '' !== $flag ? $flag : strtoupper( $code );
 	}
 }

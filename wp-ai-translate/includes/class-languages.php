@@ -134,6 +134,17 @@ class Wpait_Languages {
 	}
 
 	/**
+	 * The configured flag for a code (e.g. "🇪🇸"), or '' if none is set / unknown.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function flag( string $code ): string {
+		$index = self::config_index();
+		return isset( $index[ $code ] ) ? (string) $index[ $code ]['flag'] : '';
+	}
+
+	/**
 	 * Registers the non-public language taxonomy and its term meta.
 	 *
 	 * Registered against posts and pages directly. Categories and tags carry
