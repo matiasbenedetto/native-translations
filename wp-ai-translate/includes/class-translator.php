@@ -26,10 +26,11 @@ class Wpait_Translator {
 	const DEFAULT_TIMEOUT = 60.0;
 
 	/**
-	 * Default generation temperature. Low for faithful, deterministic
-	 * translation. Filterable via `wpait_temperature`. (No model UI — N4.)
+	 * Temperature is left unset by default and only sent when a site opts in via
+	 * the `wpait_temperature` filter: newer models (e.g. Claude Opus 4.8) reject
+	 * a `temperature` parameter entirely, so omitting it is the safe default for a
+	 * provider-agnostic integration. (No model/temperature UI — N4.)
 	 */
-	const DEFAULT_TEMPERATURE = 0.2;
 
 	/**
 	 * Translation store (single writer for language + group meta).
@@ -98,19 +99,46 @@ class Wpait_Translator {
 		$system_prompt = isset( $opts['system_prompt'] ) && is_string( $opts['system_prompt'] )
 			? $opts['system_prompt']
 			: $this->build_system_prompt( $type, $from, $to );
-		$temperature   = isset( $opts['temperature'] )
-			? (float) $opts['temperature']
-			: (float) apply_filters( 'wpait_temperature', self::DEFAULT_TEMPERATURE );
+		/**
+		 * Filters the generation temperature. Return null (the default) to omit
+		 * the parameter entirely — required for models that reject it.
+		 *
+		 * @param float|null $temperature Temperature, or null to omit.
+		 * @param string     $type        'post' | 'term'.
+		 * @param string     $to          Target language code.
+		 */
+		$temperature = $opts['temperature'] ?? apply_filters( 'wpait_temperature', null, $type, $to );
+		$temperature = ( null === $temperature || '' === $temperature ) ? null : (float) $temperature;
 
 		$user_prompt = $this->wrap_untrusted( $text, $from, $to );
 
+		/**
+		 * Filters the ordered list of preferred model IDs (most preferred first).
+		 *
+		 * Model is not a free-text UI field (N4): the connector's typed selection
+		 * APIs are used. An empty list leaves model selection to the connector's
+		 * own default; a non-empty list maps to `using_model_preference()`. Use
+		 * this when the connector's default model is not available to the site's
+		 * provider account (e.g. select an accessible Claude model).
+		 *
+		 * @param string[] $models  Ordered preferred model IDs. Default empty.
+		 * @param string   $type    'post' | 'term'.
+		 * @param string   $to      Target language code.
+		 */
+		$models = array_values( array_filter( (array) apply_filters( 'wpait_model_preference', array(), $type, $to ) ) );
+
 		$result = $this->with_timeout(
 			(float) apply_filters( 'wpait_request_timeout', self::DEFAULT_TIMEOUT ),
-			static function () use ( $user_prompt, $system_prompt, $temperature ) {
-				return wp_ai_client_prompt( $user_prompt )
-					->using_system_instruction( $system_prompt )
-					->using_temperature( $temperature )
-					->generate_text();
+			static function () use ( $user_prompt, $system_prompt, $temperature, $models ) {
+				$builder = wp_ai_client_prompt( $user_prompt )
+					->using_system_instruction( $system_prompt );
+				if ( null !== $temperature ) {
+					$builder = $builder->using_temperature( $temperature );
+				}
+				if ( ! empty( $models ) ) {
+					$builder = $builder->using_model_preference( ...$models );
+				}
+				return $builder->generate_text();
 			}
 		);
 
