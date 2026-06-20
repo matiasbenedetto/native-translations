@@ -35,6 +35,13 @@ class Wpait_Admin_List {
 	const COLUMN = 'wpait_language';
 
 	/**
+	 * Taxonomies (terms) that carry a language via term meta.
+	 *
+	 * @var string[]
+	 */
+	const TERM_TAXONOMIES = array( 'category', 'post_tag' );
+
+	/**
 	 * Overview page slug.
 	 */
 	const OVERVIEW_SLUG = 'wp-ai-translate-overview';
@@ -56,6 +63,14 @@ class Wpait_Admin_List {
 	 * @var bool
 	 */
 	private bool $scan_truncated = false;
+
+	/**
+	 * Re-entrancy guard so the term-list `get_terms_args` filter never rewrites the
+	 * internal `get_terms()` calls it makes while computing the untranslated set.
+	 *
+	 * @var bool
+	 */
+	private bool $in_term_filter = false;
 
 	/**
 	 * Translation store.
@@ -96,6 +111,15 @@ class Wpait_Admin_List {
 		add_action( 'restrict_manage_posts', array( $this, 'render_filter' ) );
 		add_action( 'pre_get_posts', array( $this, 'filter_query' ) );
 		add_action( 'admin_menu', array( $this, 'add_overview_page' ) );
+
+		// Terms (categories/tags): language column on edit-tags.php, plus a
+		// language/untranslated filter applied through the term query (§6 for terms).
+		foreach ( self::TERM_TAXONOMIES as $taxonomy ) {
+			add_filter( "manage_edit-{$taxonomy}_columns", array( $this, 'add_term_column' ) );
+			add_filter( "manage_{$taxonomy}_custom_column", array( $this, 'render_term_column' ), 10, 3 );
+		}
+		add_filter( 'get_terms_args', array( $this, 'filter_terms_query' ), 10, 2 );
+		add_action( 'admin_footer-edit-tags.php', array( $this, 'render_term_filter' ) );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -246,6 +270,200 @@ class Wpait_Admin_List {
 	}
 
 	/* ---------------------------------------------------------------------
+	 * Term language column + filter (§6 for categories/tags)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Inserts the Language column into a term list table, before the post-count
+	 * "posts" column when present.
+	 *
+	 * @param array<string,string> $columns Existing columns.
+	 * @return array<string,string>
+	 */
+	public function add_term_column( array $columns ): array {
+		$out = array();
+		foreach ( $columns as $key => $label ) {
+			if ( 'posts' === $key ) {
+				$out[ self::COLUMN ] = __( 'Language', 'wp-ai-translate' );
+			}
+			$out[ $key ] = $label;
+		}
+		if ( ! isset( $out[ self::COLUMN ] ) ) {
+			$out[ self::COLUMN ] = __( 'Language', 'wp-ai-translate' );
+		}
+		return $out;
+	}
+
+	/**
+	 * Renders the term language cell: the term's own language plus small links to
+	 * its sibling translations. Term custom-column callbacks return their markup
+	 * (unlike post columns, which echo).
+	 *
+	 * @param string $content Existing cell content.
+	 * @param string $column  Column id.
+	 * @param int    $term_id Term id.
+	 * @return string
+	 */
+	public function render_term_column( $content, $column, $term_id ): string {
+		if ( self::COLUMN !== $column ) {
+			return $content;
+		}
+		$term_id = (int) $term_id;
+
+		$code = $this->store->get_language( 'term', $term_id );
+		if ( '' === $code ) {
+			return '<span aria-hidden="true">—</span><span class="screen-reader-text">'
+				. esc_html__( 'No language', 'wp-ai-translate' ) . '</span>';
+		}
+
+		$out      = '<strong>' . esc_html( $this->label( $code ) ) . '</strong>';
+		$siblings = $this->store->get_translations( 'term', $term_id );
+		if ( empty( $siblings ) ) {
+			return $out;
+		}
+
+		$links = array();
+		foreach ( $siblings as $sib_code => $sib_id ) {
+			$edit    = get_edit_term_link( (int) $sib_id );
+			$text    = $this->short_label( $sib_code );
+			$links[] = $edit
+				? '<a href="' . esc_url( $edit ) . '">' . esc_html( $text ) . '</a>'
+				: esc_html( $text );
+		}
+
+		return $out . '<br /><span class="description">' . wp_kses_post( implode( ', ', $links ) ) . '</span>';
+	}
+
+	/**
+	 * Applies the language / untranslated filter to the main term-list query on
+	 * edit-tags.php. Scoped tightly: admin term-list screen only, the screen's own
+	 * single-taxonomy query only, and guarded against re-entrancy so the internal
+	 * untranslated scan (which queries both taxonomies) is never rewritten.
+	 *
+	 * @param array<string,mixed> $args       Term query args.
+	 * @param array<int,string>   $taxonomies Queried taxonomies.
+	 * @return array<string,mixed>
+	 */
+	public function filter_terms_query( $args, $taxonomies ) {
+		if ( $this->in_term_filter || ! is_admin() ) {
+			return $args;
+		}
+
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || 'edit-tags' !== $screen->base
+			|| ! in_array( $screen->taxonomy, self::TERM_TAXONOMIES, true )
+			|| array( $screen->taxonomy ) !== (array) $taxonomies ) {
+			return $args;
+		}
+
+		// Only the main list-table query — never the parent-category / Quick-Edit
+		// dropdowns on the same screen, which query the same single taxonomy but
+		// (unlike the list table) always pass a `name` arg via wp_dropdown_categories.
+		if ( isset( $args['name'] ) ) {
+			return $args;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only list filter navigation.
+		$value = isset( $_GET[ self::QUERY_VAR ] ) ? sanitize_key( wp_unslash( $_GET[ self::QUERY_VAR ] ) ) : '';
+		if ( '' === $value ) {
+			return $args;
+		}
+
+		$this->in_term_filter = true;
+
+		if ( self::UNTRANSLATED === $value ) {
+			$ids             = $this->untranslated_term_ids( $screen->taxonomy );
+			$args['include'] = ! empty( $ids ) ? $ids : array( 0 );
+			if ( $this->scan_truncated ) {
+				add_action( 'admin_notices', array( $this, 'render_truncation_notice' ) );
+			}
+		} else {
+			$meta_query   = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : array();
+			$meta_query[] = array(
+				'key'   => Wpait_Translation_Store::META_LANGUAGE,
+				'value' => $value,
+			);
+			$args['meta_query'] = $meta_query; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+		}
+
+		$this->in_term_filter = false;
+
+		return $args;
+	}
+
+	/**
+	 * Injects the language filter dropdown into the term-list tablenav via a small
+	 * footer script (term list tables expose no server-side filter hook). Navigates
+	 * by setting the {@see QUERY_VAR} parameter.
+	 *
+	 * @return void
+	 */
+	public function render_term_filter(): void {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || 'edit-tags' !== $screen->base || ! in_array( $screen->taxonomy, self::TERM_TAXONOMIES, true ) ) {
+			return;
+		}
+
+		$languages = $this->enabled_languages();
+		if ( empty( $languages ) ) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only list filter navigation.
+		$current = isset( $_GET[ self::QUERY_VAR ] ) ? sanitize_key( wp_unslash( $_GET[ self::QUERY_VAR ] ) ) : '';
+
+		$options = array(
+			array( 'value' => '', 'label' => __( 'All languages', 'wp-ai-translate' ) ),
+			array( 'value' => self::UNTRANSLATED, 'label' => __( 'Untranslated', 'wp-ai-translate' ) ),
+		);
+		foreach ( $languages as $lang ) {
+			$options[] = array( 'value' => $lang['code'], 'label' => $lang['name'] );
+		}
+
+		$data = array(
+			'queryVar' => self::QUERY_VAR,
+			'current'  => $current,
+			'label'    => __( 'Filter by language', 'wp-ai-translate' ),
+			'options'  => $options,
+		);
+		?>
+		<script>
+		( function () {
+			var cfg = <?php echo wp_json_encode( $data ); ?>;
+			var nav = document.querySelector( '.tablenav.top .actions' );
+			if ( ! nav || document.getElementById( 'wpait-term-lang-filter' ) ) {
+				return;
+			}
+			var select = document.createElement( 'select' );
+			select.id = 'wpait-term-lang-filter';
+			select.setAttribute( 'aria-label', cfg.label );
+			select.style.marginRight = '6px';
+			cfg.options.forEach( function ( opt ) {
+				var o = document.createElement( 'option' );
+				o.value = opt.value;
+				o.textContent = opt.label;
+				if ( opt.value === cfg.current ) {
+					o.selected = true;
+				}
+				select.appendChild( o );
+			} );
+			select.addEventListener( 'change', function () {
+				var url = new URL( window.location.href );
+				if ( select.value ) {
+					url.searchParams.set( cfg.queryVar, select.value );
+				} else {
+					url.searchParams.delete( cfg.queryVar );
+				}
+				url.searchParams.delete( 'paged' );
+				window.location.href = url.toString();
+			} );
+			nav.insertBefore( select, nav.firstChild );
+		}() );
+		</script>
+		<?php
+	}
+
+	/* ---------------------------------------------------------------------
 	 * Untranslated computation (N6 — admin-only, capped, paginated)
 	 * ------------------------------------------------------------------- */
 
@@ -326,6 +544,87 @@ class Wpait_Admin_List {
 
 		if ( '' !== $this->store->get_group( 'post', $post_id ) ) {
 			$members = $this->store->get_translations( 'post', $post_id, array( 'include_self' => true ) );
+			foreach ( array_keys( $members ) as $code ) {
+				$present[ $code ] = true;
+			}
+		}
+
+		return array_keys( $present );
+	}
+
+	/**
+	 * Maps terms of a taxonomy missing at least one enabled language to the set of
+	 * language codes they already cover: `[ term_id => present_codes[] ]`. Bounded
+	 * by MAX_SCAN; sets {@see $scan_truncated} when the cap is reached (N6).
+	 *
+	 * @param string $taxonomy Taxonomy.
+	 * @return array<int,string[]>
+	 */
+	private function untranslated_term_map( string $taxonomy ): array {
+		$enabled = wp_list_pluck( $this->enabled_languages(), 'code' );
+		$count   = count( $enabled );
+		if ( $count <= 1 ) {
+			return array();
+		}
+
+		$this->in_term_filter = true;
+		$candidates           = get_terms(
+			array(
+				'taxonomy'               => $taxonomy,
+				'hide_empty'             => false,
+				'fields'                 => 'ids',
+				'number'                 => self::MAX_SCAN,
+				'update_term_meta_cache' => true,
+			)
+		);
+		$this->in_term_filter = false;
+
+		if ( is_wp_error( $candidates ) ) {
+			return array();
+		}
+		if ( count( $candidates ) >= self::MAX_SCAN ) {
+			$this->scan_truncated = true;
+		}
+
+		$out = array();
+		foreach ( $candidates as $term_id ) {
+			$term_id = (int) $term_id;
+			$present = $this->present_term_codes( $term_id );
+			if ( count( array_intersect( $present, $enabled ) ) < $count ) {
+				$out[ $term_id ] = $present;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Ids of terms of a taxonomy missing at least one enabled language.
+	 *
+	 * @param string $taxonomy Taxonomy.
+	 * @return int[]
+	 */
+	private function untranslated_term_ids( string $taxonomy ): array {
+		return array_map( 'intval', array_keys( $this->untranslated_term_map( $taxonomy ) ) );
+	}
+
+	/**
+	 * The set of language codes a term already covers: its own assigned language
+	 * plus every language present in its translation group.
+	 *
+	 * @param int $term_id Term id.
+	 * @return string[]
+	 */
+	private function present_term_codes( int $term_id ): array {
+		$present = array();
+
+		$own = $this->store->get_language( 'term', $term_id );
+		if ( '' !== $own ) {
+			$present[ $own ] = true;
+		}
+
+		if ( '' !== $this->store->get_group( 'term', $term_id ) ) {
+			$members = $this->store->get_translations( 'term', $term_id, array( 'include_self' => true ) );
 			foreach ( array_keys( $members ) as $code ) {
 				$present[ $code ] = true;
 			}
@@ -421,12 +720,22 @@ class Wpait_Admin_List {
 			return;
 		}
 
+		// Type-tagged rows: posts and terms share an id space (S5), so never key by
+		// bare id. Each row is [ type, id, missing[], taxonomy? ].
 		$rows = array();
 		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
 			foreach ( $this->untranslated_map( $post_type ) as $post_id => $present ) {
 				$missing = array_diff( $codes, $present );
 				if ( ! empty( $missing ) ) {
-					$rows[ $post_id ] = $missing;
+					$rows[] = array( 'type' => 'post', 'id' => (int) $post_id, 'missing' => $missing );
+				}
+			}
+		}
+		foreach ( self::TERM_TAXONOMIES as $taxonomy ) {
+			foreach ( $this->untranslated_term_map( $taxonomy ) as $term_id => $present ) {
+				$missing = array_diff( $codes, $present );
+				if ( ! empty( $missing ) ) {
+					$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
 				}
 			}
 		}
@@ -436,7 +745,7 @@ class Wpait_Admin_List {
 		// an empty table while items remain on earlier pages.
 		$pages     = max( 1, (int) ceil( $total / self::PER_PAGE ) );
 		$paged     = min( $paged, $pages );
-		$page_rows = array_slice( $rows, ( $paged - 1 ) * self::PER_PAGE, self::PER_PAGE, true );
+		$page_rows = array_slice( $rows, ( $paged - 1 ) * self::PER_PAGE, self::PER_PAGE );
 
 		if ( $this->scan_truncated ) {
 			echo '<div class="notice notice-warning inline"><p>'
@@ -447,28 +756,40 @@ class Wpait_Admin_List {
 			<thead>
 				<tr>
 					<th><?php esc_html_e( 'Title', 'wp-ai-translate' ); ?></th>
+					<th><?php esc_html_e( 'Type', 'wp-ai-translate' ); ?></th>
 					<th><?php esc_html_e( 'Language', 'wp-ai-translate' ); ?></th>
 					<th><?php esc_html_e( 'Missing', 'wp-ai-translate' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php if ( empty( $page_rows ) ) : ?>
-					<tr><td colspan="3"><?php esc_html_e( 'Nothing is missing translations.', 'wp-ai-translate' ); ?></td></tr>
+					<tr><td colspan="4"><?php esc_html_e( 'Nothing is missing translations.', 'wp-ai-translate' ); ?></td></tr>
 				<?php endif; ?>
-				<?php foreach ( $page_rows as $post_id => $missing ) : ?>
-					<?php
-					$edit = get_edit_post_link( $post_id );
-					$own  = $this->store->get_language( 'post', $post_id );
-					$miss = array_map( array( $this, 'label' ), $missing );
+				<?php
+				foreach ( $page_rows as $row ) :
+					if ( 'term' === $row['type'] ) {
+						$edit  = get_edit_term_link( $row['id'] );
+						$term  = get_term( $row['id'] );
+						$title = $term instanceof WP_Term ? $term->name : '';
+						$type  = $term instanceof WP_Term ? $term->taxonomy : 'term';
+						$own   = $this->store->get_language( 'term', $row['id'] );
+					} else {
+						$edit  = get_edit_post_link( $row['id'] );
+						$title = get_the_title( $row['id'] );
+						$type  = get_post_type( $row['id'] );
+						$own   = $this->store->get_language( 'post', $row['id'] );
+					}
+					$miss = array_map( array( $this, 'label' ), $row['missing'] );
 					?>
 					<tr>
 						<td>
 							<?php if ( $edit ) : ?>
-								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( get_the_title( $post_id ) ); ?></a>
+								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( $title ); ?></a>
 							<?php else : ?>
-								<?php echo esc_html( get_the_title( $post_id ) ); ?>
+								<?php echo esc_html( $title ); ?>
 							<?php endif; ?>
 						</td>
+						<td><?php echo esc_html( $type ); ?></td>
 						<td><?php echo esc_html( '' !== $own ? $this->label( $own ) : '—' ); ?></td>
 						<td><?php echo esc_html( implode( ', ', $miss ) ); ?></td>
 					</tr>
@@ -546,6 +867,68 @@ class Wpait_Admin_List {
 		<?php
 		$this->render_pagination( (int) $query->found_posts, $paged, add_query_arg( 'view', $code, $base_url ) );
 		wp_reset_postdata();
+
+		$this->render_terms_by_language( $code );
+	}
+
+	/**
+	 * Renders the categories/tags assigned to a language, below the posts table on
+	 * the by-language Overview view. Bounded; terms are typically few.
+	 *
+	 * @param string $code Language code.
+	 * @return void
+	 */
+	private function render_terms_by_language( string $code ): void {
+		$this->in_term_filter = true;
+		$terms                = get_terms(
+			array(
+				'taxonomy'   => self::TERM_TAXONOMIES,
+				'hide_empty' => false,
+				'number'     => self::MAX_SCAN,
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => Wpait_Translation_Store::META_LANGUAGE,
+						'value' => $code,
+					),
+				),
+			)
+		);
+		$this->in_term_filter = false;
+
+		if ( is_wp_error( $terms ) ) {
+			$terms = array();
+		}
+		?>
+		<h2><?php esc_html_e( 'Categories &amp; tags', 'wp-ai-translate' ); ?></h2>
+		<table class="widefat striped">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Name', 'wp-ai-translate' ); ?></th>
+					<th><?php esc_html_e( 'Taxonomy', 'wp-ai-translate' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php if ( empty( $terms ) ) : ?>
+					<tr><td colspan="2"><?php esc_html_e( 'No categories or tags in this language yet.', 'wp-ai-translate' ); ?></td></tr>
+				<?php endif; ?>
+				<?php
+				foreach ( $terms as $term ) :
+					$edit = get_edit_term_link( $term->term_id );
+					?>
+					<tr>
+						<td>
+							<?php if ( $edit ) : ?>
+								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( $term->name ); ?></a>
+							<?php else : ?>
+								<?php echo esc_html( $term->name ); ?>
+							<?php endif; ?>
+						</td>
+						<td><?php echo esc_html( $term->taxonomy ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
 	}
 
 	/**
