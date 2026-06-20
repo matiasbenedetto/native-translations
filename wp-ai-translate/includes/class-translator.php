@@ -26,6 +26,15 @@ class Wpait_Translator {
 	const DEFAULT_TIMEOUT = 60.0;
 
 	/**
+	 * Content longer than this many bytes is translated in chunks split on
+	 * top-level blocks (§4.2), so a long post stays within model limits and each
+	 * request carries balanced markup. Filterable via `wpait_chunk_threshold`;
+	 * `wpait_chunk_target` sets the per-chunk size aim. Defaults are conservative.
+	 */
+	const CHUNK_THRESHOLD = 16000;
+	const CHUNK_TARGET    = 12000;
+
+	/**
 	 * Temperature is left unset by default and only sent when a site opts in via
 	 * the `wpait_temperature` filter: newer models (e.g. Claude Opus 4.8) reject
 	 * a `temperature` parameter entirely, so omitting it is the safe default for a
@@ -463,7 +472,7 @@ class Wpait_Translator {
 		if ( is_wp_error( $title ) ) {
 			return $title;
 		}
-		$content = $this->translate_text( $source->post_content, $from, $to, $opts );
+		$content = $this->translate_long_content( $source->post_content, $from, $to, $opts );
 		if ( is_wp_error( $content ) ) {
 			return $content;
 		}
@@ -496,6 +505,81 @@ class Wpait_Translator {
 			'content' => $content,
 			'excerpt' => $excerpt,
 		);
+	}
+
+	/**
+	 * Translates block content, splitting very long content into chunks of whole
+	 * top-level blocks so each request stays within model limits and carries
+	 * balanced markup (§4.2). Short content takes the single-call path unchanged.
+	 *
+	 * @param string              $content Block markup.
+	 * @param string              $from    Source language label.
+	 * @param string              $to      Target language label.
+	 * @param array<string,mixed> $opts    translate_text() options.
+	 * @return string|WP_Error Translated content, or the first chunk's WP_Error.
+	 */
+	private function translate_long_content( string $content, string $from, string $to, array $opts ) {
+		/** Filters the byte length above which content is chunked. */
+		$threshold = (int) apply_filters( 'wpait_chunk_threshold', self::CHUNK_THRESHOLD );
+
+		if ( '' === trim( $content ) || strlen( $content ) <= $threshold ) {
+			return $this->translate_text( $content, $from, $to, $opts );
+		}
+
+		/** Filters the per-chunk target byte length. */
+		$target = (int) apply_filters( 'wpait_chunk_target', self::CHUNK_TARGET );
+		$chunks = $this->group_blocks( parse_blocks( $content ), max( 1, $target ) );
+
+		$out = '';
+		foreach ( $chunks as $chunk ) {
+			$translated = $this->translate_text( $chunk, $from, $to, $opts );
+			if ( is_wp_error( $translated ) ) {
+				return $translated;
+			}
+			// Re-join with a blank line, mirroring serialize_blocks()' top-level
+			// block separation, so reassembled markup parses the same.
+			$out .= ( '' === $out ? '' : "\n\n" ) . $translated;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Groups a parsed block list into serialized chunks, each at most ~$target
+	 * bytes, never splitting a single top-level block across chunks. A single block
+	 * larger than the target becomes its own (over-target) chunk rather than being
+	 * cut mid-markup.
+	 *
+	 * @param array<int,array<string,mixed>> $blocks parse_blocks() output.
+	 * @param int                            $target Target chunk byte length.
+	 * @return string[] Serialized block-markup chunks.
+	 */
+	private function group_blocks( array $blocks, int $target ): array {
+		$chunks  = array();
+		$current = '';
+
+		foreach ( $blocks as $block ) {
+			$piece = serialize_block( $block );
+			if ( '' === trim( $piece ) ) {
+				// Whitespace-only freeform node between blocks — keep it attached to
+				// the current chunk without counting toward the budget.
+				$current .= $piece;
+				continue;
+			}
+
+			if ( '' !== $current && ( strlen( $current ) + strlen( $piece ) ) > $target ) {
+				$chunks[] = $current;
+				$current  = '';
+			}
+
+			$current .= $piece;
+		}
+
+		if ( '' !== $current ) {
+			$chunks[] = $current;
+		}
+
+		return $chunks;
 	}
 
 	/**
@@ -675,16 +759,9 @@ class Wpait_Translator {
 	 * @return string
 	 */
 	private function language_label( string $code ): string {
-		if ( '' === $code ) {
-			return $code;
-		}
-		$settings = Wpait_Admin_Settings::get_settings();
-		foreach ( $settings['languages'] as $lang ) {
-			if ( isset( $lang['code'] ) && $lang['code'] === $code ) {
-				return ! empty( $lang['name'] ) ? $lang['name'] : $code;
-			}
-		}
-		return $code;
+		// Delegates to the shared, request-memoized language index (no flag prefix —
+		// these labels go into the AI prompt's {source_lang}/{target_lang}).
+		return $this->languages->name( $code );
 	}
 
 	/* ---------------------------------------------------------------------

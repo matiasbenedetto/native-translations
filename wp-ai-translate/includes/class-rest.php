@@ -340,11 +340,11 @@ class Wpait_Rest {
 	 * @return true|WP_Error
 	 */
 	private function validate_enabled_language( string $code ) {
-		$settings = Wpait_Admin_Settings::get_settings();
-		foreach ( $settings['languages'] as $lang ) {
-			if ( isset( $lang['code'] ) && $lang['code'] === $code && ! empty( $lang['enabled'] ) ) {
-				return true;
-			}
+		// Delegates to the shared enabled-language helper (M4) instead of re-looping
+		// the raw settings.
+		$codes = wp_list_pluck( $this->languages->enabled(), 'code' );
+		if ( in_array( $code, $codes, true ) ) {
+			return true;
 		}
 		return new WP_Error(
 			'wpait_invalid_language',
