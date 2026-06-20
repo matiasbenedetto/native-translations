@@ -1,0 +1,192 @@
+/**
+ * AI Translate — term edit-screen client.
+ *
+ * Categories/tags do not use the block editor, so this is a small vanilla-DOM
+ * client over the same wp-ai-translate/v1 REST endpoints the sidebar panel uses.
+ */
+( function ( wp ) {
+	'use strict';
+
+	if ( ! wp || ! wp.apiFetch || ! wp.domReady ) {
+		return;
+	}
+
+	var apiFetch = wp.apiFetch;
+	var __ = wp.i18n && wp.i18n.__ ? wp.i18n.__ : function ( s ) { return s; };
+	var sprintf = wp.i18n && wp.i18n.sprintf ? wp.i18n.sprintf : function ( s ) { return s; };
+	var cfg = window.wpaitTerm || {};
+
+	function el( tag, props, children ) {
+		var node = document.createElement( tag );
+		props = props || {};
+		Object.keys( props ).forEach( function ( key ) {
+			if ( 'text' === key ) {
+				node.textContent = props[ key ];
+			} else if ( 'onClick' === key ) {
+				node.addEventListener( 'click', props[ key ] );
+			} else {
+				node.setAttribute( key, props[ key ] );
+			}
+		} );
+		( children || [] ).forEach( function ( child ) {
+			if ( child ) {
+				node.appendChild( child );
+			}
+		} );
+		return node;
+	}
+
+	function request( path, body ) {
+		var opts = { path: '/' + cfg.namespace + '/' + path };
+		if ( body ) {
+			opts.method = 'POST';
+			opts.data = body;
+		}
+		return apiFetch( opts );
+	}
+
+	function TermPanel( mount ) {
+		this.mount = mount;
+		this.data = null;
+		this.error = '';
+		this.busy = '';
+		this.load();
+	}
+
+	TermPanel.prototype.load = function () {
+		var self = this;
+		request(
+			'translations?object_id=' + encodeURIComponent( cfg.termId ) + '&type=term'
+		)
+			.then( function ( res ) {
+				self.data = res;
+				self.error = '';
+				self.render();
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Could not load translations.', 'wp-ai-translate' );
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.act = function ( path, body, key ) {
+		var self = this;
+		self.busy = key;
+		self.error = '';
+		self.render();
+		return request( path, body )
+			.then( function ( res ) {
+				self.data = res;
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Request failed.', 'wp-ai-translate' );
+			} )
+			.finally( function () {
+				self.busy = '';
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.render = function () {
+		var self = this;
+		var mount = this.mount;
+		mount.innerHTML = '';
+
+		if ( this.error ) {
+			mount.appendChild( el( 'div', { 'class': 'notice notice-error inline' }, [ el( 'p', { text: this.error } ) ] ) );
+		}
+
+		if ( ! cfg.aiAvailable ) {
+			mount.appendChild(
+				el( 'p', { 'class': 'description', text: __( 'No AI provider is configured, so new translations cannot be generated.', 'wp-ai-translate' ) } )
+			);
+		}
+
+		if ( ! this.data ) {
+			mount.appendChild( el( 'p', { 'class': 'description', text: __( 'Loading translations…', 'wp-ai-translate' ) } ) );
+			return;
+		}
+
+		var currentLang = this.data.language || '';
+		var translations = this.data.translations || {};
+
+		// Language selector. The placeholder is only offered while the term has no
+		// language yet — set-language cannot clear one, so it is not selectable.
+		var select = el( 'select', {} );
+		if ( ! currentLang ) {
+			select.appendChild( el( 'option', { value: '', text: __( '— Not set —', 'wp-ai-translate' ) } ) );
+		}
+		( cfg.languages || [] ).forEach( function ( l ) {
+			var opt = el( 'option', { value: l.code, text: l.native ? l.name + ' (' + l.native + ')' : l.name } );
+			if ( l.code === currentLang ) {
+				opt.setAttribute( 'selected', 'selected' );
+			}
+			select.appendChild( opt );
+		} );
+		select.disabled = 'lang' === this.busy;
+		select.addEventListener( 'change', function () {
+			if ( ! select.value ) {
+				return;
+			}
+			self.act( 'set-language', { object_id: cfg.termId, code: select.value, type: 'term' }, 'lang' );
+		} );
+
+		mount.appendChild(
+			el( 'p', {}, [
+				el( 'label', { text: __( 'Language of this term', 'wp-ai-translate' ) + ' ' } ),
+				select,
+			] )
+		);
+
+		// Per-language actions.
+		( cfg.languages || [] ).forEach( function ( l ) {
+			if ( l.code === currentLang ) {
+				return;
+			}
+			var existing = translations[ l.code ];
+			var working = self.busy === l.code;
+			var row = el( 'p', {}, [ el( 'strong', { text: l.name + ' ' } ) ] );
+
+			if ( existing ) {
+				if ( existing.edit_link ) {
+					row.appendChild( el( 'a', { href: existing.edit_link, text: __( 'Edit', 'wp-ai-translate' ) } ) );
+					row.appendChild( document.createTextNode( ' ' ) );
+				}
+				var recreateBtn = el( 'button', {
+					'type': 'button',
+					'class': 'button button-secondary',
+					text: working ? __( 'Working…', 'wp-ai-translate' ) : __( 'Recreate', 'wp-ai-translate' ),
+				} );
+				recreateBtn.disabled = working || ! cfg.aiAvailable;
+				recreateBtn.addEventListener( 'click', function () {
+					self.act( 'recreate', { object_id: existing.id, type: 'term' }, l.code );
+				} );
+				row.appendChild( recreateBtn );
+			} else {
+				var translateBtn = el( 'button', {
+					'type': 'button',
+					'class': 'button button-primary',
+					text: working ? __( 'Working…', 'wp-ai-translate' ) : __( 'Translate', 'wp-ai-translate' ),
+				} );
+				translateBtn.disabled = working || ! cfg.aiAvailable || ! currentLang;
+				translateBtn.addEventListener( 'click', function () {
+					self.act( 'translate', { source_id: cfg.termId, target_code: l.code, type: 'term' }, l.code );
+				} );
+				row.appendChild( translateBtn );
+				if ( ! currentLang ) {
+					row.appendChild(
+						el( 'span', { 'class': 'description', text: ' ' + __( 'Set this term’s language first.', 'wp-ai-translate' ) } )
+					);
+				}
+			}
+			mount.appendChild( row );
+		} );
+	};
+
+	wp.domReady( function () {
+		var mount = document.getElementById( 'wpait-term-panel' );
+		if ( mount && cfg.termId ) {
+			new TermPanel( mount );
+		}
+	} );
+}( window.wp ) );

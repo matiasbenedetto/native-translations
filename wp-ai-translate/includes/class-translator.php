@@ -179,60 +179,10 @@ class Wpait_Translator {
 		}
 		$from_code = $check;
 
-		$from = $this->language_label( $from_code );
-		$to   = $this->language_label( $to_code );
-
-		// The system prompt is identical for every field; build it once.
-		$system = $this->build_system_prompt( 'post', $from_code, $to_code );
-
-		// --- Translate the text fields (C3: all connector work before any write). ---
-		$title = $this->translate_text(
-			$source->post_title,
-			$from,
-			$to,
-			array( 'type' => 'post', 'system_prompt' => $system )
-		);
-		if ( is_wp_error( $title ) ) {
-			return $title;
-		}
-
-		$content = $this->translate_text(
-			$source->post_content,
-			$from,
-			$to,
-			array( 'type' => 'post', 'system_prompt' => $system )
-		);
-		if ( is_wp_error( $content ) ) {
-			return $content;
-		}
-
-		$excerpt = $this->translate_text(
-			$source->post_excerpt,
-			$from,
-			$to,
-			array( 'type' => 'post', 'system_prompt' => $system )
-		);
-		if ( is_wp_error( $excerpt ) ) {
-			return $excerpt;
-		}
-
-		// --- Validate + sanitize the markup before any DB write (C4 / S1). ---
-		if ( ! $this->has_balanced_blocks( $content ) ) {
-			return new WP_Error(
-				'wpait_invalid_markup',
-				__( 'The translation returned unbalanced block markup and was discarded.', 'wp-ai-translate' )
-			);
-		}
-		$content = $this->kses_for_author( $content, (int) $source->post_author );
-		$title   = sanitize_text_field( $title );
-		$excerpt = $this->kses_for_author( $excerpt, (int) $source->post_author );
-
-		// A non-empty source title must survive translation (symmetric with terms).
-		if ( '' === $title && '' !== trim( $source->post_title ) ) {
-			return new WP_Error(
-				'wpait_empty_title',
-				__( 'The translated post title was empty and was discarded.', 'wp-ai-translate' )
-			);
+		// --- Translate + validate the text fields (C3/C4: all before any write). ---
+		$fields = $this->generate_post_fields( $source, $from_code, $to_code );
+		if ( is_wp_error( $fields ) ) {
+			return $fields;
 		}
 
 		// --- Only now create the draft (atomic). ---
@@ -240,11 +190,11 @@ class Wpait_Translator {
 			array(
 				'post_type'    => $source->post_type,
 				'post_status'  => 'draft',
-				'post_title'   => $title,
-				'post_content' => $content,
-				'post_excerpt' => $excerpt,
+				'post_title'   => $fields['title'],
+				'post_content' => $fields['content'],
+				'post_excerpt' => $fields['excerpt'],
 				'post_author'  => $source->post_author,
-				'post_name'    => $this->suffixed_slug( $source->post_name ? $source->post_name : $title, $to_code ),
+				'post_name'    => $this->suffixed_slug( $source->post_name ? $source->post_name : $fields['title'], $to_code ),
 				'menu_order'   => $source->menu_order,
 				'post_parent'  => $this->map_parent( (int) $source->post_parent, $to_code ),
 			),
@@ -353,6 +303,248 @@ class Wpait_Translator {
 		}
 
 		return $new_id;
+	}
+
+	/**
+	 * Regenerates an existing post translation in place (plan §7 /recreate).
+	 *
+	 * Keeps the target's id, status, slug, and comments. Per C4 the new markup is
+	 * validated before any write, and a revision is saved before overwriting so a
+	 * bad regeneration can be rolled back. The re-translation source is a sibling
+	 * in the same group (the default-language member if present, else any other).
+	 *
+	 * @param int $object_id Existing translation (target) post id.
+	 * @return int|WP_Error The same post id on success, or WP_Error.
+	 */
+	public function recreate_post( int $object_id ) {
+		$target = get_post( $object_id );
+		if ( ! $target instanceof WP_Post ) {
+			return new WP_Error( 'wpait_no_source', __( 'Translation post not found.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$to_code = $this->store->get_language( 'post', $object_id );
+		if ( '' === $to_code ) {
+			return new WP_Error( 'wpait_no_source_language', __( 'The translation has no language assigned.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		$source_id = $this->pick_source_sibling( 'post', $object_id, $to_code );
+		if ( is_wp_error( $source_id ) ) {
+			return $source_id;
+		}
+		$source = get_post( $source_id );
+		if ( ! $source instanceof WP_Post ) {
+			return new WP_Error( 'wpait_no_source', __( 'No source translation to recreate from.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$from_code = $this->store->get_language( 'post', $source_id );
+		if ( '' === $from_code ) {
+			$settings  = Wpait_Admin_Settings::get_settings();
+			$from_code = (string) $settings['default_language'];
+		}
+
+		// --- Translate + validate before touching the existing translation (C4). ---
+		$fields = $this->generate_post_fields( $source, $from_code, $to_code );
+		if ( is_wp_error( $fields ) ) {
+			return $fields;
+		}
+
+		// --- Snapshot the current content as a revision before overwriting (C4). ---
+		wp_save_post_revision( $object_id );
+
+		$updated = wp_update_post(
+			array(
+				'ID'           => $object_id,
+				'post_title'   => $fields['title'],
+				'post_content' => $fields['content'],
+				'post_excerpt' => $fields['excerpt'],
+			),
+			true
+		);
+		if ( is_wp_error( $updated ) ) {
+			return $updated;
+		}
+
+		return $object_id;
+	}
+
+	/**
+	 * Regenerates an existing term translation in place (plan §7 /recreate).
+	 *
+	 * Keeps the target term's id and slug; only the name + description are
+	 * overwritten with the re-translated values (validated first — C4). Terms have
+	 * no revision history, so there is nothing to snapshot.
+	 *
+	 * @param int $object_id Existing translation (target) term id.
+	 * @return int|WP_Error The same term id on success, or WP_Error.
+	 */
+	public function recreate_term( int $object_id ) {
+		$term = get_term( $object_id );
+		if ( ! $term instanceof WP_Term ) {
+			return new WP_Error( 'wpait_no_source', __( 'Translation term not found.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+		if ( ! in_array( $term->taxonomy, array( 'category', 'post_tag' ), true ) ) {
+			return new WP_Error( 'wpait_bad_taxonomy', __( 'Only categories and tags can be translated.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		$to_code = $this->store->get_language( 'term', $object_id );
+		if ( '' === $to_code ) {
+			return new WP_Error( 'wpait_no_source_language', __( 'The translation has no language assigned.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		$source_id = $this->pick_source_sibling( 'term', $object_id, $to_code );
+		if ( is_wp_error( $source_id ) ) {
+			return $source_id;
+		}
+		$source = get_term( $source_id );
+		if ( ! $source instanceof WP_Term ) {
+			return new WP_Error( 'wpait_no_source', __( 'No source translation to recreate from.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$from_code = $this->store->get_language( 'term', $source_id );
+		if ( '' === $from_code ) {
+			$settings  = Wpait_Admin_Settings::get_settings();
+			$from_code = (string) $settings['default_language'];
+		}
+
+		$from   = $this->language_label( $from_code );
+		$to     = $this->language_label( $to_code );
+		$system = $this->build_system_prompt( 'term', $from_code, $to_code );
+
+		$name = $this->translate_text( $source->name, $from, $to, array( 'type' => 'term', 'system_prompt' => $system ) );
+		if ( is_wp_error( $name ) ) {
+			return $name;
+		}
+		$description = $this->translate_text( $source->description, $from, $to, array( 'type' => 'term', 'system_prompt' => $system ) );
+		if ( is_wp_error( $description ) ) {
+			return $description;
+		}
+
+		$name        = sanitize_text_field( $name );
+		$description = wp_kses_post( $description );
+
+		if ( '' === $name ) {
+			return new WP_Error( 'wpait_empty_name', __( 'The translated term name was empty and was discarded.', 'wp-ai-translate' ) );
+		}
+
+		$updated = wp_update_term(
+			$object_id,
+			$term->taxonomy,
+			array(
+				'name'        => $name,
+				'description' => $description,
+			)
+		);
+		if ( is_wp_error( $updated ) ) {
+			return $updated;
+		}
+
+		return $object_id;
+	}
+
+	/**
+	 * Translates and validates a post's text fields, returning the ready-to-save
+	 * title/content/excerpt (C3/C4/S1). Shared by create and recreate so both
+	 * paths apply identical translation, validation, and author-scoped kses.
+	 *
+	 * @param WP_Post $source    Source post.
+	 * @param string  $from_code Source language code.
+	 * @param string  $to_code   Target language code.
+	 * @return array{title:string,content:string,excerpt:string}|WP_Error
+	 */
+	private function generate_post_fields( WP_Post $source, string $from_code, string $to_code ) {
+		$from = $this->language_label( $from_code );
+		$to   = $this->language_label( $to_code );
+
+		// The system prompt is identical for every field; build it once.
+		$system = $this->build_system_prompt( 'post', $from_code, $to_code );
+		$opts   = array( 'type' => 'post', 'system_prompt' => $system );
+
+		$title = $this->translate_text( $source->post_title, $from, $to, $opts );
+		if ( is_wp_error( $title ) ) {
+			return $title;
+		}
+		$content = $this->translate_text( $source->post_content, $from, $to, $opts );
+		if ( is_wp_error( $content ) ) {
+			return $content;
+		}
+		$excerpt = $this->translate_text( $source->post_excerpt, $from, $to, $opts );
+		if ( is_wp_error( $excerpt ) ) {
+			return $excerpt;
+		}
+
+		// --- Validate + sanitize the markup before any DB write (C4 / S1). ---
+		if ( ! $this->has_balanced_blocks( $content ) ) {
+			return new WP_Error(
+				'wpait_invalid_markup',
+				__( 'The translation returned unbalanced block markup and was discarded.', 'wp-ai-translate' )
+			);
+		}
+		$content = $this->kses_for_author( $content, (int) $source->post_author );
+		$title   = sanitize_text_field( $title );
+		$excerpt = $this->kses_for_author( $excerpt, (int) $source->post_author );
+
+		// A non-empty source title must survive translation (symmetric with terms).
+		if ( '' === $title && '' !== trim( $source->post_title ) ) {
+			return new WP_Error(
+				'wpait_empty_title',
+				__( 'The translated post title was empty and was discarded.', 'wp-ai-translate' )
+			);
+		}
+
+		return array(
+			'title'   => $title,
+			'content' => $content,
+			'excerpt' => $excerpt,
+		);
+	}
+
+	/**
+	 * Picks the sibling to re-translate from when regenerating a translation: the
+	 * site default-language member if present (and not the target itself),
+	 * otherwise any other member of the group.
+	 *
+	 * @param string $object_type 'post' | 'term'.
+	 * @param int    $object_id   Target object id (the translation being recreated).
+	 * @param string $to_code     Target language code (excluded as a source).
+	 * @return int|WP_Error Source object id, or WP_Error if the group has no sibling.
+	 */
+	private function pick_source_sibling( string $object_type, int $object_id, string $to_code ) {
+		$members = $this->store->get_translations( $object_type, $object_id, array( 'include_self' => true ) );
+
+		// Exclude the target itself and, for posts, any non-viable source (the
+		// group membership query includes every status, so trashed/auto-draft
+		// siblings would otherwise be re-translated from stale content).
+		$viable = array();
+		foreach ( $members as $code => $member_id ) {
+			$member_id = (int) $member_id;
+			if ( $member_id === $object_id ) {
+				continue;
+			}
+			if ( 'post' === $object_type ) {
+				$post = get_post( $member_id );
+				if ( ! $post instanceof WP_Post || in_array( $post->post_status, array( 'trash', 'auto-draft' ), true ) ) {
+					continue;
+				}
+			}
+			$viable[ $code ] = $member_id;
+		}
+
+		$settings = Wpait_Admin_Settings::get_settings();
+		$default  = (string) $settings['default_language'];
+
+		if ( '' !== $default && isset( $viable[ $default ] ) ) {
+			return $viable[ $default ];
+		}
+
+		foreach ( $viable as $member_id ) {
+			return $member_id;
+		}
+
+		return new WP_Error(
+			'wpait_no_source',
+			__( 'This translation has no sibling to regenerate from.', 'wp-ai-translate' ),
+			array( 'status' => 404 )
+		);
 	}
 
 	/**

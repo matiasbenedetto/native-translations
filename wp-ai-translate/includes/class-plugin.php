@@ -48,6 +48,20 @@ final class Wpait_Plugin {
 	private Wpait_Translator $translator;
 
 	/**
+	 * REST API controller.
+	 *
+	 * @var Wpait_Rest
+	 */
+	private Wpait_Rest $rest;
+
+	/**
+	 * Editor integration (sidebar panel + term meta box).
+	 *
+	 * @var Wpait_Editor
+	 */
+	private Wpait_Editor $editor;
+
+	/**
 	 * Returns the singleton instance.
 	 *
 	 * @return Wpait_Plugin
@@ -67,12 +81,16 @@ final class Wpait_Plugin {
 		$this->languages  = new Wpait_Languages();
 		$this->settings   = new Wpait_Admin_Settings( $this->languages );
 		$this->translator = new Wpait_Translator( $this->store, $this->languages );
+		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator );
+		$this->editor     = new Wpait_Editor();
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
 		$this->store->register_hooks();
 		$this->languages->register_hooks();
 		$this->settings->register_hooks();
+		$this->rest->register_hooks();
+		$this->editor->register_hooks();
 	}
 
 	/**
@@ -113,5 +131,23 @@ final class Wpait_Plugin {
 	 */
 	public function translator(): Wpait_Translator {
 		return $this->translator;
+	}
+
+	/**
+	 * Returns the REST controller.
+	 *
+	 * @return Wpait_Rest
+	 */
+	public function rest(): Wpait_Rest {
+		return $this->rest;
+	}
+
+	/**
+	 * Returns the editor integration.
+	 *
+	 * @return Wpait_Editor
+	 */
+	public function editor(): Wpait_Editor {
+		return $this->editor;
 	}
 }
