@@ -5,7 +5,10 @@
   "private": true,
   "license": "GPL-2.0-or-later",
   "scripts": {
-    "build": "wp-scripts build src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel",
+    "build": "npm run build:editor-panel && npm run build:post-links && npm run build:language-switcher",
+    "build:editor-panel": "wp-scripts build src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel",
+    "build:post-links": "wp-scripts build src/post-links/index.js --output-path=wp-ai-translate/build/post-links",
+    "build:language-switcher": "wp-scripts build src/language-switcher/index.js --output-path=wp-ai-translate/build/language-switcher",
     "start": "wp-scripts start src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel"
   },
   "devDependencies": {
