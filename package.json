@@ -1,0 +1,14 @@
+{
+  "name": "wp-ai-translate",
+  "version": "0.1.0",
+  "description": "Editor assets for the AI Translate plugin.",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "scripts": {
+    "build": "wp-scripts build src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel",
+    "start": "wp-scripts start src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^30.0.0"
+  }
+}
