@@ -62,6 +62,13 @@ final class Wpait_Plugin {
 	private Wpait_Editor $editor;
 
 	/**
+	 * Admin list-table integration (column, filters, overview).
+	 *
+	 * @var Wpait_Admin_List
+	 */
+	private Wpait_Admin_List $admin_list;
+
+	/**
 	 * Returns the singleton instance.
 	 *
 	 * @return Wpait_Plugin
@@ -83,6 +90,7 @@ final class Wpait_Plugin {
 		$this->translator = new Wpait_Translator( $this->store, $this->languages );
 		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator );
 		$this->editor     = new Wpait_Editor();
+		$this->admin_list = new Wpait_Admin_List( $this->store, $this->languages );
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
@@ -91,6 +99,10 @@ final class Wpait_Plugin {
 		$this->settings->register_hooks();
 		$this->rest->register_hooks();
 		$this->editor->register_hooks();
+
+		if ( is_admin() ) {
+			$this->admin_list->register_hooks();
+		}
 	}
 
 	/**
@@ -149,5 +161,14 @@ final class Wpait_Plugin {
 	 */
 	public function editor(): Wpait_Editor {
 		return $this->editor;
+	}
+
+	/**
+	 * Returns the admin list-table integration.
+	 *
+	 * @return Wpait_Admin_List
+	 */
+	public function admin_list(): Wpait_Admin_List {
+		return $this->admin_list;
 	}
 }

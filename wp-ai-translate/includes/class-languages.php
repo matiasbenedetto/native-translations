@@ -28,12 +28,120 @@ class Wpait_Languages {
 	const OBJECT_TYPES = array( 'post', 'page' );
 
 	/**
+	 * Request-scoped memo of the configured-language index, keyed by code.
+	 *
+	 * @var array<string,array<string,mixed>>|null
+	 */
+	private static ?array $config_index = null;
+
+	/**
 	 * Registers runtime hooks.
 	 *
 	 * @return void
 	 */
 	public function register_hooks(): void {
 		add_action( 'init', array( __CLASS__, 'register_taxonomy' ) );
+
+		// Drop the memoized language index when the settings option changes so a
+		// save followed by a render in the same request reflects the new list.
+		add_action( 'add_option_' . Wpait_Admin_Settings::OPTION, array( __CLASS__, 'flush_index' ) );
+		add_action( 'update_option_' . Wpait_Admin_Settings::OPTION, array( __CLASS__, 'flush_index' ) );
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Configured-language access (shared label/enabled helpers)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Returns the configured languages indexed by code, memoized per request.
+	 * Each row is `[ code, name, native, flag, enabled ]`.
+	 *
+	 * @return array<string,array<string,mixed>>
+	 */
+	private static function config_index(): array {
+		if ( null !== self::$config_index ) {
+			return self::$config_index;
+		}
+
+		$index    = array();
+		$settings = Wpait_Admin_Settings::get_settings();
+		foreach ( $settings['languages'] as $lang ) {
+			$code = isset( $lang['code'] ) ? (string) $lang['code'] : '';
+			if ( '' === $code ) {
+				continue;
+			}
+			$index[ $code ] = array(
+				'code'    => $code,
+				'name'    => ! empty( $lang['name'] ) ? (string) $lang['name'] : $code,
+				'native'  => isset( $lang['native'] ) ? (string) $lang['native'] : '',
+				'flag'    => isset( $lang['flag'] ) ? (string) $lang['flag'] : '',
+				'enabled' => ! empty( $lang['enabled'] ),
+			);
+		}
+
+		self::$config_index = $index;
+		return $index;
+	}
+
+	/**
+	 * Clears the memoized language index.
+	 *
+	 * @return void
+	 */
+	public static function flush_index(): void {
+		self::$config_index = null;
+	}
+
+	/**
+	 * All configured languages as a list of `[ code, name, native, flag, enabled ]`.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function configured(): array {
+		return array_values( self::config_index() );
+	}
+
+	/**
+	 * The enabled configured languages, same row shape as configured().
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function enabled(): array {
+		return array_values(
+			array_filter(
+				self::config_index(),
+				static function ( $lang ) {
+					return ! empty( $lang['enabled'] );
+				}
+			)
+		);
+	}
+
+	/**
+	 * Human-readable label for a code: "🇪🇸 Spanish" (flag prefix when set),
+	 * falling back to the code itself for unknown codes.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function label( string $code ): string {
+		$index = self::config_index();
+		if ( ! isset( $index[ $code ] ) ) {
+			return $code;
+		}
+		$flag = '' !== $index[ $code ]['flag'] ? $index[ $code ]['flag'] . ' ' : '';
+		return $flag . $index[ $code ]['name'];
+	}
+
+	/**
+	 * The configured flag for a code (e.g. "🇪🇸"), or '' if none is set / unknown.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function flag( string $code ): string {
+		$index = self::config_index();
+		return isset( $index[ $code ] ) ? (string) $index[ $code ]['flag'] : '';
 	}
 
 	/**
