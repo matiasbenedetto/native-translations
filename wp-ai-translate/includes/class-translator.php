@@ -823,6 +823,33 @@ class Wpait_Translator {
 	}
 
 	/**
+	 * Runs a trivial live translation to verify the AI provider actually works end
+	 * to end — a real round trip, so unlike {@see can_generate_text()} (metadata
+	 * only) it surfaces credential, model-access, and network failures. Used by the
+	 * settings page "Test connection" control.
+	 *
+	 * @return array{ok:bool,message:string,code:string,sample?:string}
+	 */
+	public function test_connection(): array {
+		$result = $this->translate_text( 'Hello', 'English', 'Spanish' );
+
+		if ( is_wp_error( $result ) ) {
+			return array(
+				'ok'      => false,
+				'code'    => (string) $result->get_error_code(),
+				'message' => (string) $result->get_error_message(),
+			);
+		}
+
+		return array(
+			'ok'      => true,
+			'code'    => 'ok',
+			'message' => __( 'Connected — a test translation succeeded.', 'wp-ai-translate' ),
+			'sample'  => (string) $result,
+		);
+	}
+
+	/**
 	 * The friendly, actionable "AI unavailable" error shown when no provider, or no
 	 * text-generation model, is configured (status 503, REST-friendly).
 	 *
