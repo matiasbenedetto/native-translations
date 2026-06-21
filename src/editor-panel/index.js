@@ -2,22 +2,16 @@
  * AI Translate — block editor sidebar panel.
  *
  * A thin client over the wp-ai-translate/v1 REST endpoints: shows the current
- * post's language, lets the author set it, and offers Translate / Recreate /
- * edit-link actions per configured language.
+ * post's language, lets the author set it, and manages its translations —
+ * Translate / Recreate (with confirmation) / View / Edit / Unlink / Delete — with
+ * success feedback.
  */
 
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/editor';
 import { useSelect } from '@wordpress/data';
 import { useState, useEffect, useCallback } from '@wordpress/element';
-import {
-	PanelRow,
-	SelectControl,
-	Button,
-	Spinner,
-	Notice,
-	ExternalLink,
-} from '@wordpress/components';
+import { PanelRow, SelectControl, Button, Spinner, Notice } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
@@ -28,6 +22,15 @@ const cfg = window.wpaitEditor || {
 	languages: [],
 	defaultLanguage: '',
 	aiAvailable: false,
+};
+
+const STATUS_LABELS = {
+	publish: __( 'Published', 'wp-ai-translate' ),
+	draft: __( 'Draft', 'wp-ai-translate' ),
+	pending: __( 'Pending', 'wp-ai-translate' ),
+	future: __( 'Scheduled', 'wp-ai-translate' ),
+	private: __( 'Private', 'wp-ai-translate' ),
+	trash: __( 'Trash', 'wp-ai-translate' ),
 };
 
 const TranslationsPanel = () => {
@@ -44,6 +47,9 @@ const TranslationsPanel = () => {
 	const [ loading, setLoading ] = useState( false );
 	const [ busy, setBusy ] = useState( '' );
 	const [ error, setError ] = useState( '' );
+	const [ notice, setNotice ] = useState( '' );
+	// Pending confirmation: { action: 'recreate'|'delete', id, code }.
+	const [ confirm, setConfirm ] = useState( null );
 
 	const load = useCallback( () => {
 		if ( ! postId ) {
@@ -52,10 +58,7 @@ const TranslationsPanel = () => {
 		setLoading( true );
 		setError( '' );
 		apiFetch( {
-			path: addQueryArgs( `/${ cfg.namespace }/translations`, {
-				object_id: postId,
-				type: 'post',
-			} ),
+			path: addQueryArgs( `/${ cfg.namespace }/translations`, { object_id: postId, type: 'post' } ),
 		} )
 			.then( ( res ) => setData( res ) )
 			.catch( ( e ) => setError( e.message || __( 'Could not load translations.', 'wp-ai-translate' ) ) )
@@ -66,32 +69,58 @@ const TranslationsPanel = () => {
 		load();
 	}, [ load ] );
 
-	const request = ( path, body, key ) => {
+	const request = ( path, body, key, opts = {} ) => {
 		setBusy( key );
 		setError( '' );
-		return apiFetch( {
-			path: `/${ cfg.namespace }/${ path }`,
-			method: 'POST',
-			data: body,
-		} )
-			.then( ( res ) => setData( res ) )
+		setNotice( '' );
+		setConfirm( null );
+		return apiFetch( { path: `/${ cfg.namespace }/${ path }`, method: 'POST', data: body } )
+			.then( ( res ) => {
+				if ( opts.reload ) {
+					load();
+				} else {
+					setData( res );
+				}
+				if ( opts.successMsg ) {
+					setNotice( opts.successMsg );
+				}
+			} )
 			.catch( ( e ) => setError( e.message || __( 'Request failed.', 'wp-ai-translate' ) ) )
 			.finally( () => setBusy( '' ) );
 	};
 
 	const setLanguage = ( code ) => {
-		// The store cannot clear a language; ignore the placeholder option.
 		if ( ! code ) {
 			return;
 		}
 		return request( 'set-language', { object_id: postId, code, type: 'post' }, 'lang' );
 	};
 
-	const translate = ( code ) =>
-		request( 'translate', { source_id: postId, target_code: code, type: 'post' }, code );
+	const translate = ( name, code ) =>
+		request( 'translate', { source_id: postId, target_code: code, type: 'post' }, code, {
+			/* translators: %s: language name. */
+			successMsg: sprintf( __( '%s translation created as a draft.', 'wp-ai-translate' ), name ),
+		} );
 
-	const recreate = ( id, code ) =>
-		request( 'recreate', { object_id: id, type: 'post' }, code );
+	const recreate = ( name, id, code ) =>
+		request( 'recreate', { object_id: id, type: 'post' }, code, {
+			/* translators: %s: language name. */
+			successMsg: sprintf( __( '%s translation regenerated.', 'wp-ai-translate' ), name ),
+		} );
+
+	const unlink = ( name, id, code ) =>
+		request( 'unlink', { object_id: id, type: 'post' }, 'unlink-' + code, {
+			reload: true,
+			/* translators: %s: language name. */
+			successMsg: sprintf( __( '%s translation unlinked from this group.', 'wp-ai-translate' ), name ),
+		} );
+
+	const del = ( name, id, code ) =>
+		request( 'delete', { object_id: id, type: 'post' }, 'del-' + code, {
+			reload: true,
+			/* translators: %s: language name. */
+			successMsg: sprintf( __( '%s translation moved to Trash.', 'wp-ai-translate' ), name ),
+		} );
 
 	// Only post/page screens enqueue this script, but guard defensively.
 	if ( ! postId || ( postType !== 'post' && postType !== 'page' ) ) {
@@ -100,9 +129,6 @@ const TranslationsPanel = () => {
 
 	const currentLang = data ? data.language : '';
 	const translations = data ? data.translations : {};
-	// A grouped object's own language is fixed: changing it would drop its slot
-	// from the group (and mislabel this content). The selector is locked once the
-	// content has sibling translations; the server enforces this too.
 	const siblingsExist = hasSiblings( translations );
 
 	const languageOptions = buildLanguageOptions(
@@ -111,15 +137,19 @@ const TranslationsPanel = () => {
 		__( '— Not set —', 'wp-ai-translate' )
 	);
 
+	const isConfirming = ( action, code ) => confirm && confirm.action === action && confirm.code === code;
+
 	return (
-		<PluginDocumentSettingPanel
-			name="wpait-translations"
-			title={ __( 'Translations', 'wp-ai-translate' ) }
-			icon="translation"
-		>
+		<PluginDocumentSettingPanel name="wpait-translations" title={ __( 'Translations', 'wp-ai-translate' ) } icon="translation">
 			{ error && (
 				<Notice status="error" isDismissible onRemove={ () => setError( '' ) }>
 					{ error }
+				</Notice>
+			) }
+
+			{ notice && (
+				<Notice status="success" isDismissible onRemove={ () => setNotice( '' ) }>
+					{ notice }
 				</Notice>
 			) }
 
@@ -160,43 +190,71 @@ const TranslationsPanel = () => {
 					.filter( ( l ) => l.code !== currentLang )
 					.map( ( l ) => {
 						const existing = translations[ l.code ];
-						const working = busy === l.code;
+						const working = busy === l.code || busy === 'unlink-' + l.code || busy === 'del-' + l.code;
 						return (
 							<PanelRow key={ l.code }>
 								<div style={ { width: '100%' } }>
 									<strong>{ l.name }</strong>
+									{ existing && existing.status && (
+										<span className="wpait-status-badge" style={ { marginLeft: '6px', fontSize: '11px', color: '#50575e' } }>
+											{ STATUS_LABELS[ existing.status ] || existing.status }
+										</span>
+									) }
 									{ existing ? (
-										<div style={ { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' } }>
-											{ existing.edit_link && (
-												<ExternalLink href={ existing.edit_link }>
-													{ existing.status
-														? sprintf(
-															/* translators: %s: post status. */
-															__( 'Edit (%s)', 'wp-ai-translate' ),
-															existing.status
-														)
-														: __( 'Edit', 'wp-ai-translate' ) }
-												</ExternalLink>
-											) }
-											<Button
-												variant="secondary"
-												isSmall
-												isBusy={ working }
-												disabled={ working || ! cfg.aiAvailable }
-												onClick={ () => recreate( existing.id, l.code ) }
-											>
-												{ __( 'Recreate', 'wp-ai-translate' ) }
-											</Button>
-										</div>
+										isConfirming( 'recreate', l.code ) ? (
+											<div style={ { marginTop: '4px' } }>
+												<p className="description" style={ { margin: '0 0 4px' } }>
+													{ sprintf(
+														/* translators: %s: language name. */
+														__( 'This overwrites the current %s translation. A revision is saved first so you can restore it. Continue?', 'wp-ai-translate' ),
+														l.name
+													) }
+												</p>
+												<Button variant="primary" isSmall isBusy={ working } onClick={ () => recreate( l.name, existing.id, l.code ) }>
+													{ __( 'Yes, regenerate', 'wp-ai-translate' ) }
+												</Button>{ ' ' }
+												<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
+													{ __( 'Cancel', 'wp-ai-translate' ) }
+												</Button>
+											</div>
+										) : isConfirming( 'delete', l.code ) ? (
+											<div style={ { marginTop: '4px' } }>
+												<p className="description" style={ { margin: '0 0 4px' } }>
+													{ sprintf(
+														/* translators: %s: language name. */
+														__( 'Move the %s translation to Trash and unlink it from this group?', 'wp-ai-translate' ),
+														l.name
+													) }
+												</p>
+												<Button variant="primary" isDestructive isSmall isBusy={ working } onClick={ () => del( l.name, existing.id, l.code ) }>
+													{ __( 'Yes, trash it', 'wp-ai-translate' ) }
+												</Button>{ ' ' }
+												<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
+													{ __( 'Cancel', 'wp-ai-translate' ) }
+												</Button>
+											</div>
+										) : (
+											<div style={ { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' } }>
+												{ existing.edit_link && (
+													<Button variant="link" href={ existing.edit_link }>{ __( 'Edit', 'wp-ai-translate' ) }</Button>
+												) }
+												{ existing.view_link && (
+													<Button variant="link" href={ existing.view_link }>{ __( 'View', 'wp-ai-translate' ) }</Button>
+												) }
+												<Button variant="secondary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable } onClick={ () => setConfirm( { action: 'recreate', id: existing.id, code: l.code } ) }>
+													{ __( 'Recreate', 'wp-ai-translate' ) }
+												</Button>
+												<Button variant="link" isBusy={ busy === 'unlink-' + l.code } onClick={ () => unlink( l.name, existing.id, l.code ) }>
+													{ __( 'Unlink', 'wp-ai-translate' ) }
+												</Button>
+												<Button variant="link" isDestructive onClick={ () => setConfirm( { action: 'delete', id: existing.id, code: l.code } ) }>
+													{ __( 'Delete', 'wp-ai-translate' ) }
+												</Button>
+											</div>
+										)
 									) : (
 										<div style={ { marginTop: '4px' } }>
-											<Button
-												variant="primary"
-												isSmall
-												isBusy={ working }
-												disabled={ working || ! cfg.aiAvailable || ! currentLang || isNew }
-												onClick={ () => translate( l.code ) }
-											>
+											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || ! currentLang || isNew } onClick={ () => translate( l.name, l.code ) }>
 												{ __( 'Translate', 'wp-ai-translate' ) }
 											</Button>
 											{ ! currentLang && (
