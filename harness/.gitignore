@@ -1,3 +1,6 @@
+# local secrets for the E2E provider (OPENROUTER_API_KEY) — never committed.
+.env.local
+.env
 # harness runtime state — never committed. The whole .state/ dir is scratch:
 # recorded site-dir, mounts, server pid/pgid/port/logs, the wp-cli phar, cookies.
 .state/
