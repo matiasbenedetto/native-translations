@@ -185,6 +185,10 @@ const TranslationsPanel = () => {
 
 			{ loading && ! data ? (
 				<PanelRow><Spinner /></PanelRow>
+			) : ! currentLang ? (
+				<Notice status="info" isDismissible={ false }>
+					{ __( 'Set the language of this content above to generate translations.', 'wp-ai-translate' ) }
+				</Notice>
 			) : (
 				cfg.languages
 					.filter( ( l ) => l.code !== currentLang )
@@ -254,12 +258,12 @@ const TranslationsPanel = () => {
 										)
 									) : (
 										<div style={ { marginTop: '4px' } }>
-											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || ! currentLang || isNew } onClick={ () => translate( l.name, l.code ) }>
+											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || isNew } onClick={ () => translate( l.name, l.code ) }>
 												{ __( 'Translate', 'wp-ai-translate' ) }
 											</Button>
-											{ ! currentLang && (
+											{ isNew && (
 												<p className="description" style={ { margin: '4px 0 0' } }>
-													{ __( 'Set this content’s language first.', 'wp-ai-translate' ) }
+													{ __( 'Save this content before translating.', 'wp-ai-translate' ) }
 												</p>
 											) }
 										</div>

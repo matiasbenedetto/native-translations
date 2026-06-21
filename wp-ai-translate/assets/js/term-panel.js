@@ -163,6 +163,17 @@
 			);
 		}
 
+		// With no language yet, show a single prompt instead of one disabled Translate
+		// row (with duplicated help) per language.
+		if ( ! currentLang ) {
+			mount.appendChild(
+				el( 'div', { 'class': 'notice notice-info inline' }, [
+					el( 'p', { text: __( 'Set the language of this term above to generate translations.', 'wp-ai-translate' ) } ),
+				] )
+			);
+			return;
+		}
+
 		// Per-language actions.
 		( cfg.languages || [] ).forEach( function ( l ) {
 			if ( l.code === currentLang ) {
@@ -243,16 +254,11 @@
 					'class': 'button button-primary',
 					text: working ? __( 'Working…', 'wp-ai-translate' ) : __( 'Translate', 'wp-ai-translate' ),
 				} );
-				translateBtn.disabled = working || ! cfg.aiAvailable || ! currentLang;
+				translateBtn.disabled = working || ! cfg.aiAvailable;
 				translateBtn.addEventListener( 'click', function () {
 					self.act( 'translate', { source_id: cfg.termId, target_code: l.code, type: 'term' }, l.code );
 				} );
 				row.appendChild( translateBtn );
-				if ( ! currentLang ) {
-					row.appendChild(
-						el( 'span', { 'class': 'description', text: ' ' + __( 'Set this term’s language first.', 'wp-ai-translate' ) } )
-					);
-				}
 			}
 			mount.appendChild( row );
 		} );
