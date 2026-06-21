@@ -111,6 +111,7 @@ class Wpait_Admin_List {
 		add_action( 'restrict_manage_posts', array( $this, 'render_filter' ) );
 		add_action( 'pre_get_posts', array( $this, 'filter_query' ) );
 		add_action( 'admin_menu', array( $this, 'add_overview_page' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_overview_assets' ) );
 
 		// Terms (categories/tags): language column on edit-tags.php, plus a
 		// language/untranslated filter applied through the term query (§6 for terms).
@@ -659,6 +660,20 @@ class Wpait_Admin_List {
 	}
 
 	/**
+	 * Enqueues wp-api-fetch on the Overview page so the per-row quick-Translate
+	 * actions can call the REST endpoint (apiFetch wires the REST root + nonce).
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_overview_assets( $hook_suffix ): void {
+		if ( 'settings_page_' . self::OVERVIEW_SLUG !== $hook_suffix ) {
+			return;
+		}
+		wp_enqueue_script( 'wp-api-fetch' );
+	}
+
+	/**
 	 * Renders the Overview page: missing-translations list (default) or a
 	 * by-language list, both paginated.
 	 *
@@ -678,14 +693,35 @@ class Wpait_Admin_List {
 		$codes      = wp_list_pluck( $languages, 'code' );
 		$is_lang    = in_array( $view, $codes, true );
 		$base_url   = admin_url( 'options-general.php?page=' . self::OVERVIEW_SLUG );
+
+		// Computed once so the "Missing" tab can show a live count on every view and
+		// the table (when shown) reuses it rather than re-scanning.
+		$missing_rows  = $this->missing_rows( $codes );
+		$missing_count = count( $missing_rows );
+
+		// Quick-Translate actions need a usable AI model; mirror the editor's gating.
+		$ai_ok = Wpait_Translator::can_generate_text();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'AI Translate Overview', 'wp-ai-translate' ); ?></h1>
+
+			<?php if ( ! $ai_ok ) : ?>
+				<div class="notice notice-warning inline"><p>
+					<?php
+					printf(
+						/* translators: %s: settings page URL. */
+						wp_kses_post( __( 'AI translation is unavailable, so quick-Translate actions are disabled. Check the <a href="%s">AI provider status</a>.', 'wp-ai-translate' ) ),
+						esc_url( admin_url( 'options-general.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ) )
+					);
+					?>
+				</p></div>
+			<?php endif; ?>
 
 			<ul class="subsubsub">
 				<li>
 					<a href="<?php echo esc_url( $base_url ); ?>" class="<?php echo $is_lang ? '' : 'current'; ?>">
 						<?php esc_html_e( 'Missing translations', 'wp-ai-translate' ); ?>
+						<span class="count">(<?php echo (int) $missing_count; ?>)</span>
 					</a><?php echo $languages ? ' |' : ''; ?>
 				</li>
 				<?php foreach ( $languages as $i => $lang ) : ?>
@@ -693,6 +729,7 @@ class Wpait_Admin_List {
 						<a href="<?php echo esc_url( add_query_arg( 'view', $lang['code'], $base_url ) ); ?>"
 							class="<?php echo ( $view === $lang['code'] ) ? 'current' : ''; ?>">
 							<?php echo esc_html( $lang['name'] ); ?>
+							<span class="count">(<?php echo (int) $this->count_in_language( $lang['code'] ); ?>)</span>
 						</a><?php echo ( $i < count( $languages ) - 1 ) ? ' |' : ''; ?>
 					</li>
 				<?php endforeach; ?>
@@ -703,30 +740,28 @@ class Wpait_Admin_List {
 			if ( $is_lang ) {
 				$this->render_by_language( $view, $paged, $base_url );
 			} else {
-				$this->render_missing( $codes, $paged, $base_url );
+				$this->render_missing( $codes, $missing_rows, $paged, $base_url, $ai_ok );
 			}
 			?>
 		</div>
 		<?php
+		$this->render_overview_script();
 	}
 
 	/**
-	 * Renders the paginated "missing translations" table across posts and pages.
+	 * Builds the type-tagged "missing translations" rows across posts and terms:
+	 * each `[ type, id, missing[], taxonomy? ]`. Posts and terms share an id space
+	 * (S5), so rows are never keyed by bare id. Sets {@see $scan_truncated} via the
+	 * underlying bounded scans (N6).
 	 *
-	 * @param string[] $codes    Enabled language codes.
-	 * @param int      $paged    Current page (1-based).
-	 * @param string   $base_url Page base URL.
-	 * @return void
+	 * @param string[] $codes Enabled language codes.
+	 * @return array<int,array<string,mixed>>
 	 */
-	private function render_missing( array $codes, int $paged, string $base_url ): void {
-		$count = count( $codes );
-		if ( $count <= 1 ) {
-			echo '<p>' . esc_html__( 'Configure at least two languages to track missing translations.', 'wp-ai-translate' ) . '</p>';
-			return;
+	private function missing_rows( array $codes ): array {
+		if ( count( $codes ) <= 1 ) {
+			return array();
 		}
 
-		// Type-tagged rows: posts and terms share an id space (S5), so never key by
-		// bare id. Each row is [ type, id, missing[], taxonomy? ].
 		$rows = array();
 		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
 			foreach ( $this->untranslated_map( $post_type ) as $post_id => $present ) {
@@ -743,6 +778,121 @@ class Wpait_Admin_List {
 					$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
 				}
 			}
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Counts published-or-any content (posts/pages + categories/tags) assigned to a
+	 * language, for the by-language tab badge.
+	 *
+	 * @param string $code Language code.
+	 * @return int
+	 */
+	private function count_in_language( string $code ): int {
+		$query = new WP_Query(
+			array(
+				'post_type'      => Wpait_Languages::OBJECT_TYPES,
+				'post_status'    => 'any',
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'ignore_sticky_posts' => true,
+				'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+					array(
+						'taxonomy' => Wpait_Languages::TAXONOMY,
+						'field'    => 'slug',
+						'terms'    => $code,
+					),
+				),
+			)
+		);
+		$posts = (int) $query->found_posts;
+
+		$this->in_term_filter = true;
+		$terms                = get_terms(
+			array(
+				'taxonomy'   => self::TERM_TAXONOMIES,
+				'hide_empty' => false,
+				'fields'     => 'count',
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => Wpait_Translation_Store::META_LANGUAGE,
+						'value' => $code,
+					),
+				),
+			)
+		);
+		$this->in_term_filter = false;
+
+		return $posts + ( is_wp_error( $terms ) ? 0 : (int) $terms );
+	}
+
+	/**
+	 * Inline script powering the Overview's per-row quick-Translate buttons via the
+	 * REST endpoint (apiFetch supplies the nonce). On success the button is marked
+	 * done; on failure the connector's friendly message is shown inline.
+	 *
+	 * @return void
+	 */
+	private function render_overview_script(): void {
+		$strings = array(
+			'working' => __( 'Translating…', 'wp-ai-translate' ),
+			'done'    => __( '✓ Translated', 'wp-ai-translate' ),
+			'failed'  => __( 'Translation failed.', 'wp-ai-translate' ),
+			'noFetch' => __( 'Could not run the request in this browser.', 'wp-ai-translate' ),
+		);
+		?>
+		<script>
+		( function () {
+			var ns = <?php echo wp_json_encode( Wpait_Rest::NS ); ?>;
+			var strings = <?php echo wp_json_encode( $strings ); ?>;
+			document.addEventListener( 'click', function ( e ) {
+				var btn = e.target.closest( '.wpait-ov-translate' );
+				if ( ! btn ) { return; }
+				e.preventDefault();
+				var result = btn.parentNode.querySelector( '.wpait-ov-result' );
+				if ( ! window.wp || ! wp.apiFetch ) {
+					if ( result ) { result.textContent = strings.noFetch; }
+					return;
+				}
+				btn.disabled = true;
+				if ( result ) { result.textContent = strings.working; }
+				wp.apiFetch( {
+					path: '/' + ns + '/translate',
+					method: 'POST',
+					data: {
+						source_id: parseInt( btn.getAttribute( 'data-id' ), 10 ),
+						target_code: btn.getAttribute( 'data-code' ),
+						type: btn.getAttribute( 'data-type' )
+					}
+				} ).then( function () {
+					btn.replaceWith( document.createTextNode( strings.done + ' ' ) );
+					if ( result ) { result.textContent = ''; }
+				} ).catch( function ( err ) {
+					btn.disabled = false;
+					if ( result ) { result.textContent = ( err && err.message ) ? err.message : strings.failed; }
+				} );
+			} );
+		}() );
+		</script>
+		<?php
+	}
+
+	/**
+	 * Renders the paginated "missing translations" table across posts and pages.
+	 *
+	 * @param string[]                       $codes    Enabled language codes.
+	 * @param array<int,array<string,mixed>> $rows     Precomputed missing rows.
+	 * @param int                            $paged    Current page (1-based).
+	 * @param string                         $base_url Page base URL.
+	 * @param bool                           $ai_ok    Whether quick-Translate is available.
+	 * @return void
+	 */
+	private function render_missing( array $codes, array $rows, int $paged, string $base_url, bool $ai_ok ): void {
+		if ( count( $codes ) <= 1 ) {
+			echo '<p>' . esc_html__( 'Configure at least two languages to track missing translations.', 'wp-ai-translate' ) . '</p>';
+			return;
 		}
 
 		$total = count( $rows );
@@ -784,7 +934,6 @@ class Wpait_Admin_List {
 						$type  = get_post_type( $row['id'] );
 						$own   = $this->store->get_language( 'post', $row['id'] );
 					}
-					$miss = array_map( array( $this, 'label' ), $row['missing'] );
 					?>
 					<tr>
 						<td>
@@ -796,7 +945,27 @@ class Wpait_Admin_List {
 						</td>
 						<td><?php echo esc_html( $type ); ?></td>
 						<td><?php echo esc_html( '' !== $own ? $this->label( $own ) : '—' ); ?></td>
-						<td><?php echo esc_html( implode( ', ', $miss ) ); ?></td>
+						<td>
+							<?php foreach ( $row['missing'] as $miss_code ) : ?>
+								<?php if ( $ai_ok ) : ?>
+									<button type="button" class="button button-small wpait-ov-translate"
+										data-id="<?php echo esc_attr( (string) $row['id'] ); ?>"
+										data-type="<?php echo esc_attr( (string) $row['type'] ); ?>"
+										data-code="<?php echo esc_attr( (string) $miss_code ); ?>">
+										<?php
+										printf(
+											/* translators: %s: target language label. */
+											esc_html__( 'Translate to %s', 'wp-ai-translate' ),
+											esc_html( $this->label( $miss_code ) )
+										);
+										?>
+									</button>
+								<?php else : ?>
+									<span class="wpait-missing-lang"><?php echo esc_html( $this->label( $miss_code ) ); ?></span>
+								<?php endif; ?>
+							<?php endforeach; ?>
+							<span class="wpait-ov-result" aria-live="polite"></span>
+						</td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
