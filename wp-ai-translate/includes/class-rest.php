@@ -157,6 +157,16 @@ class Wpait_Rest {
 				),
 			)
 		);
+
+		register_rest_route(
+			self::NS,
+			'/test-connection',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_test_connection' ),
+				'permission_callback' => array( $this, 'permission_manage' ),
+			)
+		);
 	}
 
 	/* ---------------------------------------------------------------------
@@ -327,6 +337,29 @@ class Wpait_Rest {
 		}
 
 		return rest_ensure_response( $this->payload( $type, $object_id ) );
+	}
+
+	/**
+	 * `POST /test-connection` — runs a trivial live translation so an admin can
+	 * verify, from the settings page, that the AI provider actually works (a real
+	 * round trip, so it catches credential/model/network failures the metadata-only
+	 * availability probe cannot). Admin-only.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function handle_test_connection() {
+		$result = $this->translator->test_connection();
+		return rest_ensure_response( $result );
+	}
+
+	/**
+	 * Permission for site-level diagnostics (`/test-connection`): the same
+	 * capability that gates the settings page itself.
+	 *
+	 * @return bool
+	 */
+	public function permission_manage(): bool {
+		return current_user_can( 'manage_options' );
 	}
 
 	/* ---------------------------------------------------------------------

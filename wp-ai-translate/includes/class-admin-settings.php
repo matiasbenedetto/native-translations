@@ -48,6 +48,21 @@ class Wpait_Admin_Settings {
 	public function register_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_setting' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Enqueues wp-api-fetch on the settings page so the "Test connection" control
+	 * can call the REST probe (apiFetch wires the REST root + nonce automatically).
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_assets( $hook_suffix ): void {
+		if ( 'settings_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+			return;
+		}
+		wp_enqueue_script( 'wp-api-fetch' );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -279,6 +294,50 @@ class Wpait_Admin_Settings {
 		<div class="wrap">
 			<h1><?php esc_html_e( 'AI Translate', 'wp-ai-translate' ); ?></h1>
 			<?php settings_errors( self::OPTION ); ?>
+
+			<?php
+			$ai_supported = function_exists( 'wp_supports_ai' ) && wp_supports_ai();
+			$ai_usable    = Wpait_Translator::can_generate_text();
+			if ( $ai_usable ) {
+				$badge_class = 'wpait-ai-ok';
+				$badge_text  = __( 'Available', 'wp-ai-translate' );
+				$status_line = __( 'An AI provider with a text-generation model is available. Translations can be generated.', 'wp-ai-translate' );
+			} elseif ( $ai_supported ) {
+				$badge_class = 'wpait-ai-warn';
+				$badge_text  = __( 'No usable model', 'wp-ai-translate' );
+				$status_line = __( 'An AI provider is present, but no text-generation model is available, so translations will fail. Configure a text-generation model for this site’s AI provider.', 'wp-ai-translate' );
+			} else {
+				$badge_class = 'wpait-ai-bad';
+				$badge_text  = __( 'Not configured', 'wp-ai-translate' );
+				$status_line = __( 'No AI provider is configured for this site, so translations cannot be generated.', 'wp-ai-translate' );
+			}
+			?>
+			<h2><?php esc_html_e( 'AI provider', 'wp-ai-translate' ); ?></h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Status', 'wp-ai-translate' ); ?></th>
+					<td>
+						<span class="wpait-ai-badge <?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( $badge_text ); ?></span>
+						<p class="description" style="margin-top:6px"><?php echo esc_html( $status_line ); ?></p>
+						<p>
+							<button type="button" class="button" id="wpait-test-connection"><?php esc_html_e( 'Test connection', 'wp-ai-translate' ); ?></button>
+							<span id="wpait-test-result" role="status" aria-live="polite" style="margin-left:8px"></span>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'Translations use this site’s default WordPress AI model; the model and temperature are intentionally not configurable here. AI providers are configured for the site (WordPress 7.0 AI), not in this plugin.', 'wp-ai-translate' ); ?>
+						</p>
+					</td>
+				</tr>
+			</table>
+			<style>
+				.wpait-ai-badge { display:inline-block; padding:2px 10px; border-radius:10px; font-weight:600; color:#fff; }
+				.wpait-ai-ok { background:#198754; }
+				.wpait-ai-warn { background:#b88600; }
+				.wpait-ai-bad { background:#b32d2e; }
+				#wpait-test-result.is-ok { color:#198754; }
+				#wpait-test-result.is-bad { color:#b32d2e; }
+			</style>
+
 			<form method="post" action="options.php">
 				<?php settings_fields( 'wpait_settings_group' ); ?>
 
@@ -458,6 +517,42 @@ class Wpait_Admin_Settings {
 					var row = btn.closest( '.wpait-language-row' );
 					if ( row ) { row.parentNode.removeChild( row ); }
 					refreshEmptyState();
+				} );
+			}
+
+			// "Test connection": live AI round trip via the REST probe.
+			var testBtn = document.getElementById( 'wpait-test-connection' );
+			var testOut = document.getElementById( 'wpait-test-result' );
+			var strings = <?php echo wp_json_encode(
+				array(
+					'testing' => __( 'Testing…', 'wp-ai-translate' ),
+					'failed'  => __( 'Test failed.', 'wp-ai-translate' ),
+					'noFetch' => __( 'Could not run the test in this browser.', 'wp-ai-translate' ),
+				)
+			); ?>;
+			if ( testBtn && testOut ) {
+				testBtn.addEventListener( 'click', function () {
+					// Checked at click time: wp-api-fetch is enqueued in the footer, so
+					// it is available by the time an admin can click, even though this
+					// inline script runs earlier in the page body.
+					if ( ! window.wp || ! wp.apiFetch ) {
+						testOut.className = 'is-bad';
+						testOut.textContent = strings.noFetch;
+						return;
+					}
+					testBtn.disabled = true;
+					testOut.className = '';
+					testOut.textContent = strings.testing;
+					wp.apiFetch( { path: '/<?php echo esc_js( Wpait_Rest::NS ); ?>/test-connection', method: 'POST' } )
+						.then( function ( res ) {
+							testOut.className = res && res.ok ? 'is-ok' : 'is-bad';
+							testOut.textContent = ( res && res.message ) ? res.message : strings.failed;
+						} )
+						.catch( function ( e ) {
+							testOut.className = 'is-bad';
+							testOut.textContent = ( e && e.message ) ? e.message : strings.failed;
+						} )
+						.finally( function () { testBtn.disabled = false; } );
 				} );
 			}
 		}() );
