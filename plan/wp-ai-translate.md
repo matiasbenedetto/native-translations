@@ -299,9 +299,14 @@ Standard cookie-auth + REST nonce applies.
 ### 8.2 Language switcher block (`wp-ai-translate/language-switcher`)
 - Dynamic block, site-wide.
 - Lists configured (enabled) languages; switching navigates to the **translation of the
-  current page** when one exists, otherwise to that language's latest content /
-  home (configurable). On non-singular pages, links to home.
-- Only renders languages that resolve to a viewable target (hide missing per decision).
+  current view** when one genuinely exists: the sibling post on a singular view, the
+  translated category/tag archive on a term archive.
+- On views with no per-content translation target (home, search, post-type/date/author
+  archives) it renders **nothing** rather than a row of identical, non-switching home
+  links — a switcher that cannot switch reads as broken (revised per #16; supersedes the
+  original "links to home" behaviour).
+- Only renders languages that resolve to a real, viewable target, and only when there is
+  at least one language to switch *to* (hide missing / hide-when-nothing per decision).
 
 ### 8.3 Shared front-end resolver (`includes/class-frontend.php`) — S6/S7
 - Both blocks call one resolver so behaviour is identical.

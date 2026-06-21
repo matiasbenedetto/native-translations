@@ -124,6 +124,25 @@ class Wpait_Frontend {
 	 * ------------------------------------------------------------------- */
 
 	/**
+	 * Resolves the category/tag whose translations the switcher should offer on a
+	 * term archive, context-safely: only a genuine category/tag archive's queried
+	 * term counts (never a term guessed from some other context). Returns 0
+	 * elsewhere (home, search, post-type/date/author archives, singular).
+	 *
+	 * @return int Term id, or 0 when the current view is not a category/tag archive.
+	 */
+	public function resolve_term_id(): int {
+		if ( ! is_category() && ! is_tag() ) {
+			return 0;
+		}
+		$obj = get_queried_object();
+		if ( $obj instanceof WP_Term && in_array( $obj->taxonomy, array( 'category', 'post_tag' ), true ) ) {
+			return (int) $obj->term_id;
+		}
+		return 0;
+	}
+
+	/**
 	 * Resolves the post whose translations a block should show, context-safely.
 	 *
 	 * Prefers an explicit block `postId` context (set inside query loops, template
@@ -202,17 +221,48 @@ class Wpait_Frontend {
 	}
 
 	/**
-	 * Fallback rows for non-singular contexts (home, archives): every enabled
-	 * language linking to the site home, since there is no per-item translation to
-	 * resolve (plan §8.2).
+	 * Language links for a category/tag archive: one row per enabled language that
+	 * resolves to a real term archive (the term itself for its own language; a
+	 * translated sibling term otherwise). Languages whose term has no translation
+	 * are omitted, mirroring the singular behaviour (§1 / S7) — so the switcher only
+	 * offers links that actually switch language in context, never dead home links.
 	 *
-	 * @return array<int,array<string,mixed>>
+	 * @param int  $term_id         Current term id.
+	 * @param bool $include_current Include the term's own language row.
+	 * @return array<int,array<string,mixed>> Rows of { code, name, native, flag, url, is_current }.
 	 */
-	public function links_home(): array {
+	public function links_for_term( int $term_id, bool $include_current ): array {
+		if ( $term_id <= 0 ) {
+			return array();
+		}
+
+		$own      = $this->store->get_language( 'term', $term_id );
+		$siblings = $this->store->get_translations( 'term', $term_id );
+
 		$rows = array();
 		foreach ( $this->languages->enabled() as $lang ) {
-			$rows[] = $this->row( $lang, home_url( '/' ), false );
+			$code = (string) $lang['code'];
+
+			if ( $code === $own ) {
+				if ( ! $include_current ) {
+					continue;
+				}
+				$url        = get_term_link( $term_id );
+				$is_current = true;
+			} elseif ( isset( $siblings[ $code ] ) ) {
+				$url        = get_term_link( (int) $siblings[ $code ] );
+				$is_current = false;
+			} else {
+				continue;
+			}
+
+			if ( is_wp_error( $url ) || ! $url ) {
+				continue;
+			}
+
+			$rows[] = $this->row( $lang, (string) $url, $is_current );
 		}
+
 		return $rows;
 	}
 
@@ -286,9 +336,12 @@ class Wpait_Frontend {
 	}
 
 	/**
-	 * Renders the `language-switcher` block: site-wide list of enabled languages
-	 * that switches to the current page's translation when one exists, else the
-	 * site home; on non-singular views, links every language to home (plan §8.2).
+	 * Renders the `language-switcher` block: a list of enabled languages that
+	 * switches to the current view's translation when one genuinely exists — the
+	 * sibling post on a singular view, the translated term archive on a category/tag
+	 * archive. On views with no per-content translation target (home, search,
+	 * post-type/date/author archives) it renders nothing rather than a row of
+	 * identical, non-switching home links (§8.2 revised — see #16).
 	 *
 	 * @param array<string,mixed> $attributes Block attributes.
 	 * @param string              $content    Inner content (unused, dynamic).
@@ -296,12 +349,25 @@ class Wpait_Frontend {
 	 * @return string
 	 */
 	public function render_language_switcher( $attributes, $content = '', $block = null ): string {
-		$post_id = $this->resolve_post_id( $block );
-
 		$show_current = ! isset( $attributes['showCurrent'] ) || ! empty( $attributes['showCurrent'] );
-		$rows         = $post_id > 0 ? $this->links_for_post( $post_id, $show_current ) : $this->links_home();
 
-		if ( empty( $rows ) ) {
+		$post_id = $this->resolve_post_id( $block );
+		if ( $post_id > 0 ) {
+			$rows = $this->links_for_post( $post_id, $show_current );
+		} else {
+			$term_id = $this->resolve_term_id();
+			$rows    = $term_id > 0 ? $this->links_for_term( $term_id, $show_current ) : array();
+		}
+
+		// Nothing real to switch to (or only the current language with showCurrent
+		// off) — render nothing instead of a switcher that cannot switch.
+		$other = array_filter(
+			$rows,
+			static function ( $r ) {
+				return empty( $r['is_current'] );
+			}
+		);
+		if ( empty( $other ) ) {
 			return '';
 		}
 
