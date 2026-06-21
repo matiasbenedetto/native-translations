@@ -170,6 +170,34 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/unlink',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_unlink' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/delete',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_delete' ),
+				'permission_callback' => array( $this, 'permission_delete_target' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/overview-visibility',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -387,6 +415,76 @@ class Wpait_Rest {
 	}
 
 	/**
+	 * `POST /unlink` — removes a translation from its group (keeps the content).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function handle_unlink( WP_REST_Request $request ) {
+		$this->store->unlink_translation(
+			(string) $request->get_param( 'type' ),
+			(int) $request->get_param( 'object_id' )
+		);
+		return rest_ensure_response( array( 'ok' => true ) );
+	}
+
+	/**
+	 * `POST /delete` — removes a translation: unlinks it from its group, then trashes
+	 * the post (recoverable) or deletes the term. Gated on delete capability.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_delete( WP_REST_Request $request ) {
+		$type      = (string) $request->get_param( 'type' );
+		$object_id = (int) $request->get_param( 'object_id' );
+
+		// Leave the group first so it never references a trashed/removed member.
+		$this->store->unlink_translation( $type, $object_id );
+
+		if ( 'term' === $type ) {
+			$term = get_term( $object_id );
+			if ( $term instanceof WP_Term ) {
+				wp_delete_term( $object_id, $term->taxonomy );
+			}
+			return rest_ensure_response( array( 'ok' => true, 'deleted' => 'term' ) );
+		}
+
+		$trashed = wp_trash_post( $object_id );
+		if ( ! $trashed ) {
+			return new WP_Error( 'wpait_delete_failed', __( 'The translation could not be trashed.', 'wp-ai-translate' ), array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'ok' => true, 'deleted' => 'post' ) );
+	}
+
+	/**
+	 * Permission for `/delete`: the user must be able to delete that target object
+	 * (post: `delete_post`; term: the taxonomy's `delete_terms`).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return true|WP_Error
+	 */
+	public function permission_delete_target( WP_REST_Request $request ) {
+		$type      = (string) $request->get_param( 'type' );
+		$object_id = (int) $request->get_param( 'object_id' );
+
+		if ( 'term' === $type ) {
+			$term = get_term( $object_id );
+			if ( ! $term instanceof WP_Term ) {
+				return $this->not_found();
+			}
+			$tax = get_taxonomy( $term->taxonomy );
+			return ( $tax && current_user_can( $tax->cap->delete_terms ) ) ? true : $this->forbidden();
+		}
+
+		$post = get_post( $object_id );
+		if ( ! $post instanceof WP_Post ) {
+			return $this->not_found();
+		}
+		return current_user_can( 'delete_post', $object_id ) ? true : $this->forbidden();
+	}
+
+	/**
 	 * Permission for site-level diagnostics (`/test-connection`): the same
 	 * capability that gates the settings page itself.
 	 *
@@ -454,21 +552,30 @@ class Wpait_Rest {
 	 */
 	private function describe( string $type, int $object_id ): array {
 		if ( 'term' === $type ) {
-			$term = get_term( $object_id );
+			$term      = get_term( $object_id );
+			$view_link = get_term_link( $object_id );
 			return array(
 				'id'        => $object_id,
 				'label'     => $term instanceof WP_Term ? $term->name : '',
 				'status'    => '', // Terms have no status.
 				'edit_link' => get_edit_term_link( $object_id ),
+				'view_link' => is_wp_error( $view_link ) ? '' : (string) $view_link,
 			);
 		}
 
-		$post = get_post( $object_id );
+		$post   = get_post( $object_id );
+		$status = $post instanceof WP_Post ? $post->post_status : '';
+		// Published content links to its permalink; unpublished to a preview URL.
+		$view_link = '';
+		if ( $post instanceof WP_Post ) {
+			$view_link = 'publish' === $status ? (string) get_permalink( $object_id ) : (string) get_preview_post_link( $object_id );
+		}
 		return array(
 			'id'        => $object_id,
 			'label'     => $post instanceof WP_Post ? get_the_title( $post ) : '',
-			'status'    => $post instanceof WP_Post ? $post->post_status : '',
+			'status'    => $status,
 			'edit_link' => get_edit_post_link( $object_id, 'raw' ),
+			'view_link' => $view_link,
 		);
 	}
 

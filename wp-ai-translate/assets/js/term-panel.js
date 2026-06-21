@@ -49,7 +49,9 @@
 		this.mount = mount;
 		this.data = null;
 		this.error = '';
+		this.notice = '';
 		this.busy = '';
+		this.confirm = null;
 		this.load();
 	}
 
@@ -69,14 +71,24 @@
 			} );
 	};
 
-	TermPanel.prototype.act = function ( path, body, key ) {
+	TermPanel.prototype.act = function ( path, body, key, opts ) {
 		var self = this;
+		opts = opts || {};
 		self.busy = key;
 		self.error = '';
+		self.notice = '';
+		self.confirm = null;
 		self.render();
 		return request( path, body )
 			.then( function ( res ) {
-				self.data = res;
+				if ( opts.reload ) {
+					self.load();
+				} else {
+					self.data = res;
+				}
+				if ( opts.successMsg ) {
+					self.notice = opts.successMsg;
+				}
 			} )
 			.catch( function ( e ) {
 				self.error = ( e && e.message ) || __( 'Request failed.', 'wp-ai-translate' );
@@ -94,6 +106,10 @@
 
 		if ( this.error ) {
 			mount.appendChild( el( 'div', { 'class': 'notice notice-error inline' }, [ el( 'p', { text: this.error } ) ] ) );
+		}
+
+		if ( this.notice ) {
+			mount.appendChild( el( 'div', { 'class': 'notice notice-success inline' }, [ el( 'p', { text: this.notice } ) ] ) );
 		}
 
 		if ( ! cfg.aiAvailable ) {
@@ -153,12 +169,49 @@
 				return;
 			}
 			var existing = translations[ l.code ];
-			var working = self.busy === l.code;
+			var working = self.busy === l.code || self.busy === 'unlink-' + l.code || self.busy === 'del-' + l.code;
 			var row = el( 'p', {}, [ el( 'strong', { text: l.name + ' ' } ) ] );
 
 			if ( existing ) {
+				var confirming = self.confirm && self.confirm.code === l.code ? self.confirm.action : '';
+
+				if ( 'recreate' === confirming ) {
+					row.appendChild( el( 'span', { 'class': 'description', text: sprintf( __( 'Overwrite the %s translation? A revision is saved first. ', 'wp-ai-translate' ), l.name ) } ) );
+					var rYes = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Yes, regenerate', 'wp-ai-translate' ) } );
+					rYes.disabled = working;
+					rYes.addEventListener( 'click', function () {
+						self.act( 'recreate', { object_id: existing.id, type: 'term' }, l.code, { successMsg: sprintf( __( '%s translation regenerated.', 'wp-ai-translate' ), l.name ) } );
+					} );
+					var rNo = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'wp-ai-translate' ) } );
+					rNo.addEventListener( 'click', function () { self.confirm = null; self.render(); } );
+					row.appendChild( rYes );
+					row.appendChild( document.createTextNode( ' ' ) );
+					row.appendChild( rNo );
+					mount.appendChild( row );
+					return;
+				}
+				if ( 'delete' === confirming ) {
+					row.appendChild( el( 'span', { 'class': 'description', text: sprintf( __( 'Delete the %s translation and unlink it? ', 'wp-ai-translate' ), l.name ) } ) );
+					var dYes = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Yes, delete', 'wp-ai-translate' ) } );
+					dYes.disabled = working;
+					dYes.addEventListener( 'click', function () {
+						self.act( 'delete', { object_id: existing.id, type: 'term' }, 'del-' + l.code, { reload: true, successMsg: sprintf( __( '%s translation deleted.', 'wp-ai-translate' ), l.name ) } );
+					} );
+					var dNo = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'wp-ai-translate' ) } );
+					dNo.addEventListener( 'click', function () { self.confirm = null; self.render(); } );
+					row.appendChild( dYes );
+					row.appendChild( document.createTextNode( ' ' ) );
+					row.appendChild( dNo );
+					mount.appendChild( row );
+					return;
+				}
+
 				if ( existing.edit_link ) {
 					row.appendChild( el( 'a', { href: existing.edit_link, text: __( 'Edit', 'wp-ai-translate' ) } ) );
+					row.appendChild( document.createTextNode( ' ' ) );
+				}
+				if ( existing.view_link ) {
+					row.appendChild( el( 'a', { href: existing.view_link, text: __( 'View', 'wp-ai-translate' ) } ) );
 					row.appendChild( document.createTextNode( ' ' ) );
 				}
 				var recreateBtn = el( 'button', {
@@ -168,9 +221,22 @@
 				} );
 				recreateBtn.disabled = working || ! cfg.aiAvailable;
 				recreateBtn.addEventListener( 'click', function () {
-					self.act( 'recreate', { object_id: existing.id, type: 'term' }, l.code );
+					self.confirm = { action: 'recreate', code: l.code }; self.render();
 				} );
 				row.appendChild( recreateBtn );
+				row.appendChild( document.createTextNode( ' ' ) );
+				var unlinkBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: __( 'Unlink', 'wp-ai-translate' ) } );
+				unlinkBtn.addEventListener( 'click', function () {
+					self.act( 'unlink', { object_id: existing.id, type: 'term' }, 'unlink-' + l.code, { reload: true, successMsg: sprintf( __( '%s translation unlinked.', 'wp-ai-translate' ), l.name ) } );
+				} );
+				row.appendChild( unlinkBtn );
+				row.appendChild( document.createTextNode( ' ' ) );
+				var deleteBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: __( 'Delete', 'wp-ai-translate' ) } );
+				deleteBtn.style.color = '#b32d2e';
+				deleteBtn.addEventListener( 'click', function () {
+					self.confirm = { action: 'delete', code: l.code }; self.render();
+				} );
+				row.appendChild( deleteBtn );
 			} else {
 				var translateBtn = el( 'button', {
 					'type': 'button',
