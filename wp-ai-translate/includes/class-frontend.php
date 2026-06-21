@@ -90,6 +90,19 @@ class Wpait_Frontend {
 				$dir,
 				array( 'render_callback' => $callbacks[ $name ] )
 			);
+
+			// Shared front-end stylesheet, enqueued only on pages that use the block
+			// (both blocks render the same .wpait-language-list markup). Without this
+			// the list rendered as theme-default bullets at the entry-content size (#25).
+			wp_enqueue_block_style(
+				'wp-ai-translate/' . $name,
+				array(
+					'handle' => 'wpait-frontend',
+					'src'    => WPAIT_PLUGIN_URL . 'assets/css/frontend.css',
+					'path'   => WPAIT_PLUGIN_DIR . 'assets/css/frontend.css',
+					'ver'    => WPAIT_VERSION,
+				)
+			);
 		}
 	}
 
