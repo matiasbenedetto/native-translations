@@ -1,4 +1,6 @@
 /node_modules/
+/vendor/
+/.phpunit.result.cache
 *.log
 .DS_Store
 /shot.mjs

@@ -9,6 +9,8 @@
 #                                            (the plugin is always mounted; pass extra
 #                                            mounts, e.g. a test theme, as args)
 #   playground.sh wp -- <wp-cli args>        run wp-cli against the same site + mounts
+#   playground.sh test                       run the unit suites (PHP + JS); pass
+#                                            `php` or `js` to run only one layer
 #   playground.sh seed [--force]            seed example posts/cats/tags (en_US + es_AR)
 #   playground.sh shot -- <shot.mjs args>    take a screenshot (see shot.mjs)
 #   playground.sh cast -- <cast.mjs args>    record a screencast (see cast.mjs)
@@ -270,6 +272,29 @@ cmd_reset() {
   echo "reset done — run 'playground.sh bootstrap' (or ./harness/up.sh) for a fresh site."
 }
 
+cmd_test() {
+  # Runs the assertion-based unit suites. These are DB-free / browser-free and do
+  # not need a running Playground site, so they work in CI and locally alike.
+  local which="${1:-all}"
+  local rc=0
+
+  if [ "$which" = "all" ] || [ "$which" = "php" ]; then
+    echo "== PHP unit tests =="
+    if [ ! -f "$REPO_DIR/vendor/bin/phpunit" ]; then
+      ( cd "$REPO_DIR" && composer install --no-interaction ) || die "composer install failed"
+    fi
+    ( cd "$REPO_DIR" && composer test ) || rc=1
+  fi
+
+  if [ "$which" = "all" ] || [ "$which" = "js" ]; then
+    echo "== JS unit tests =="
+    ( cd "$REPO_DIR" && npm run test:js ) || rc=1
+  fi
+
+  [ "$rc" -eq 0 ] || die "tests failed"
+  echo "All requested test suites passed."
+}
+
 cmd_seed() {
   [ -s "$HARNESS_DIR/seed-content.php" ] || die "seed script missing: $HARNESS_DIR/seed-content.php"
   # Copy into the mounted state dir so the file is visible inside the VFS at /host/.
@@ -281,6 +306,7 @@ case "${1:-}" in
   bootstrap) shift; cmd_bootstrap "$@";;
   ensure)    shift; cmd_ensure "$@";;
   wp)        shift; cmd_wp "$@";;
+  test)      shift; cmd_test "$@";;
   seed)      shift; cmd_seed "$@";;
   shot)      shift; run_browser_script "$HARNESS_DIR/shot.mjs" "$@";;
   cast)      shift; run_browser_script "$HARNESS_DIR/cast.mjs" "$@";;
