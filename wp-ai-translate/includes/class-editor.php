@@ -80,10 +80,15 @@ class Wpait_Editor {
 	/**
 	 * Whether the site has a usable AI provider (gates the translate buttons).
 	 *
+	 * Delegates to the translator's capability probe, which requires not just a
+	 * supported provider but at least one text-generation model — so the panel does
+	 * not advertise a feature that would fail on every click (see
+	 * {@see Wpait_Translator::can_generate_text()}).
+	 *
 	 * @return bool
 	 */
 	private function ai_available(): bool {
-		return function_exists( 'wp_supports_ai' ) && wp_supports_ai();
+		return Wpait_Translator::can_generate_text();
 	}
 
 	/**
