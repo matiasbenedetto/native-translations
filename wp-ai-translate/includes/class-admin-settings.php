@@ -78,6 +78,7 @@ class Wpait_Admin_Settings {
 		return array(
 			'languages'        => array(),
 			'default_language' => '',
+			'model'            => '',
 			'instructions'     => array(
 				'global'       => '',
 				'post'         => '',
@@ -263,6 +264,10 @@ class Wpait_Admin_Settings {
 		$default = isset( $input['default_language'] ) ? sanitize_key( $input['default_language'] ) : '';
 		$settings['default_language'] = in_array( $default, $codes, true ) ? $default : ( $codes[0] ?? '' );
 
+		// --- Preferred AI model (a typed selection; '' = connector default). Kept as
+		// entered so a valid pinned id isn't lost if it's absent from a stale list. ---
+		$settings['model'] = isset( $input['model'] ) ? sanitize_text_field( wp_unslash( $input['model'] ) ) : '';
+
 		// --- Instructions ---
 		$instructions = isset( $input['instructions'] ) && is_array( $input['instructions'] ) ? $input['instructions'] : array();
 		$settings['instructions']['global'] = isset( $instructions['global'] ) ? sanitize_textarea_field( $instructions['global'] ) : '';
@@ -379,7 +384,7 @@ class Wpait_Admin_Settings {
 							<span id="wpait-test-result" role="status" aria-live="polite" style="margin-left:8px"></span>
 						</p>
 						<p class="description">
-							<?php esc_html_e( 'Translations use this site’s default WordPress AI model; the model and temperature are intentionally not configurable here. AI providers are configured for the site (WordPress 7.0 AI), not in this plugin.', 'wp-ai-translate' ); ?>
+							<?php esc_html_e( 'Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin.', 'wp-ai-translate' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -485,6 +490,48 @@ class Wpait_Admin_Settings {
 						</option>
 					<?php endforeach; ?>
 				</select>
+
+				<h2><?php esc_html_e( 'AI model', 'wp-ai-translate' ); ?></h2>
+				<?php
+				$current_model = (string) $settings['model'];
+				$models        = $ai_usable ? Wpait_Translator::available_models() : array();
+				// Group by provider, and make sure a previously-saved model still shows
+				// as the selection even if it's absent from the (possibly cached) list.
+				$grouped     = array();
+				$model_ids   = array();
+				foreach ( $models as $m ) {
+					$grouped[ $m['provider'] ][] = $m;
+					$model_ids[]                 = $m['id'];
+				}
+				?>
+				<p class="description">
+					<?php esc_html_e( 'Which model to use for translations. “Automatic” lets the provider choose — pick a specific model if the provider rejects the default (e.g. Anthropic’s “Claude Fable 5 is not available, use Opus 4.8”).', 'wp-ai-translate' ); ?>
+				</p>
+				<select name="<?php echo esc_attr( $option . '[model]' ); ?>">
+					<option value=""><?php esc_html_e( 'Automatic (provider default)', 'wp-ai-translate' ); ?></option>
+					<?php if ( '' !== $current_model && ! in_array( $current_model, $model_ids, true ) ) : ?>
+						<option value="<?php echo esc_attr( $current_model ); ?>" selected>
+							<?php
+							/* translators: %s: model id. */
+							echo esc_html( sprintf( __( '%s (currently set)', 'wp-ai-translate' ), $current_model ) );
+							?>
+						</option>
+					<?php endif; ?>
+					<?php foreach ( $grouped as $provider => $provider_models ) : ?>
+						<optgroup label="<?php echo esc_attr( $provider ); ?>">
+							<?php foreach ( $provider_models as $m ) : ?>
+								<option value="<?php echo esc_attr( $m['id'] ); ?>" <?php selected( $current_model, $m['id'] ); ?>>
+									<?php echo esc_html( $m['label'] . ' — ' . $m['id'] ); ?>
+								</option>
+							<?php endforeach; ?>
+						</optgroup>
+					<?php endforeach; ?>
+				</select>
+				<?php if ( $ai_usable && empty( $models ) ) : ?>
+					<p class="description"><?php esc_html_e( 'Could not list models from the provider; “Automatic” will be used.', 'wp-ai-translate' ); ?></p>
+				<?php elseif ( ! $ai_usable ) : ?>
+					<p class="description"><?php esc_html_e( 'Connect an AI provider (see status above) to choose a model.', 'wp-ai-translate' ); ?></p>
+				<?php endif; ?>
 
 				<h2><?php esc_html_e( 'Translation instructions', 'wp-ai-translate' ); ?></h2>
 				<p class="description">

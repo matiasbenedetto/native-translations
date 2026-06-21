@@ -43,6 +43,12 @@ class Wpait_Translator {
 	const CAP_CACHE_TTL = 300;
 
 	/**
+	 * Transient caching the provider's advertised text-generation models for the
+	 * settings model picker (a network/metadata lookup; refreshed hourly).
+	 */
+	const MODELS_CACHE_KEY = 'wpait_available_models';
+
+	/**
 	 * Temperature is left unset by default and only sent when a site opts in via
 	 * the `wpait_temperature` filter: newer models (e.g. Claude Opus 4.8) reject
 	 * a `temperature` parameter entirely, so omitting it is the safe default for a
@@ -125,20 +131,27 @@ class Wpait_Translator {
 
 		$user_prompt = $this->wrap_untrusted( $text, $from, $to );
 
+		// The admin-selected model (Settings → AI provider) is the default preference,
+		// so a site whose provider rejects the connector's auto-picked model (e.g. the
+		// Anthropic "Claude Fable 5 is not available, use Opus 4.8" 404 — #32) can pin
+		// an accessible one without code. The filter still layers on top.
+		$settings  = Wpait_Admin_Settings::get_settings();
+		$preferred = isset( $settings['model'] ) && '' !== $settings['model'] ? array( (string) $settings['model'] ) : array();
+
 		/**
 		 * Filters the ordered list of preferred model IDs (most preferred first).
 		 *
 		 * Model is not a free-text UI field (N4): the connector's typed selection
-		 * APIs are used. An empty list leaves model selection to the connector's
-		 * own default; a non-empty list maps to `using_model_preference()`. Use
-		 * this when the connector's default model is not available to the site's
-		 * provider account (e.g. select an accessible Claude model).
+		 * APIs are used (the settings model picker, or this filter). The default is
+		 * the admin-selected model (empty = connector default); a non-empty list maps
+		 * to `using_model_preference()`. Use this to override per request, or when the
+		 * connector's default model is not available to the site's provider account.
 		 *
-		 * @param string[] $models  Ordered preferred model IDs. Default empty.
+		 * @param string[] $models  Ordered preferred model IDs. Default: the configured model.
 		 * @param string   $type    'post' | 'term'.
 		 * @param string   $to      Target language code.
 		 */
-		$models = array_values( array_filter( (array) apply_filters( 'wpait_model_preference', array(), $type, $to ) ) );
+		$models = array_values( array_filter( (array) apply_filters( 'wpait_model_preference', $preferred, $type, $to ) ) );
 
 		$result = $this->with_timeout(
 			(float) apply_filters( 'wpait_request_timeout', self::DEFAULT_TIMEOUT ),
@@ -847,6 +860,50 @@ class Wpait_Translator {
 			'message' => __( 'Connected — a test translation succeeded.', 'wp-ai-translate' ),
 			'sample'  => (string) $result,
 		);
+	}
+
+	/**
+	 * Lists the text-generation models the configured provider(s) actually advertise,
+	 * as `[ ['id'=>…, 'label'=>…, 'provider'=>…], … ]`, for the settings model picker.
+	 * Cached (a network/metadata lookup); empty when no usable provider. Kept here so
+	 * all connector access stays behind the translator.
+	 *
+	 * @return array<int,array{id:string,label:string,provider:string}>
+	 */
+	public static function available_models(): array {
+		if ( ! self::can_generate_text() ) {
+			return array();
+		}
+
+		$cached = get_transient( self::MODELS_CACHE_KEY );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$models = array();
+		try {
+			$req = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements(
+				array( \WordPress\AiClient\Providers\Models\Enums\CapabilityEnum::textGeneration() ),
+				array()
+			);
+			$list = \WordPress\AiClient\AiClient::defaultRegistry()->findModelsMetadataForSupport( $req );
+			foreach ( $list as $provider_models ) {
+				$provider = $provider_models->getProvider()->getName();
+				foreach ( $provider_models->getModels() as $model ) {
+					$models[] = array(
+						'id'       => (string) $model->getId(),
+						'label'    => (string) $model->getName(),
+						'provider' => (string) $provider,
+					);
+				}
+			}
+		} catch ( \Throwable $e ) {
+			return array(); // Don't cache a transient lookup failure.
+		}
+
+		set_transient( self::MODELS_CACHE_KEY, $models, HOUR_IN_SECONDS );
+
+		return $models;
 	}
 
 	/**
