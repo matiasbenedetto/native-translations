@@ -167,6 +167,24 @@ class Wpait_Rest {
 				'permission_callback' => array( $this, 'permission_manage' ),
 			)
 		);
+
+		register_rest_route(
+			self::NS,
+			'/overview-visibility',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_overview_visibility' ),
+				'permission_callback' => array( $this, 'permission_manage' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+					'hidden'    => array(
+						'type'    => 'boolean',
+						'required' => true,
+					),
+				),
+			)
+		);
 	}
 
 	/* ---------------------------------------------------------------------
@@ -350,6 +368,22 @@ class Wpait_Rest {
 	public function handle_test_connection() {
 		$result = $this->translator->test_connection();
 		return rest_ensure_response( $result );
+	}
+
+	/**
+	 * `POST /overview-visibility` — hides or unhides an item from the Overview's
+	 * missing-translations list (#21 per-item curation). Admin-only.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function handle_overview_visibility( WP_REST_Request $request ) {
+		Wpait_Plugin::instance()->admin_list()->set_overview_hidden(
+			(string) $request->get_param( 'type' ),
+			(int) $request->get_param( 'object_id' ),
+			(bool) $request->get_param( 'hidden' )
+		);
+		return rest_ensure_response( array( 'ok' => true ) );
 	}
 
 	/**
