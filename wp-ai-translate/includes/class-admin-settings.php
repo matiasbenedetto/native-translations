@@ -111,6 +111,32 @@ class Wpait_Admin_Settings {
 	}
 
 	/**
+	 * A representative set of WordPress locales offered as datalist suggestions for
+	 * the Locale field. Suggestions only — any `xx_YY`-format value is still allowed.
+	 *
+	 * @return string[]
+	 */
+	public static function common_locales(): array {
+		return array(
+			'en_US', 'en_GB', 'es_ES', 'es_AR', 'es_MX', 'pt_BR', 'pt_PT', 'fr_FR',
+			'fr_CA', 'de_DE', 'it_IT', 'nl_NL', 'pl_PL', 'ru_RU', 'uk', 'sv_SE',
+			'da_DK', 'nb_NO', 'fi', 'cs_CZ', 'el', 'tr_TR', 'ar', 'he_IL', 'hi_IN',
+			'id_ID', 'ja', 'ko_KR', 'th', 'vi', 'zh_CN', 'zh_TW',
+		);
+	}
+
+	/**
+	 * Whether a locale string matches the WordPress `xx`/`xx_YY` shape. An empty
+	 * locale is allowed (the field is optional).
+	 *
+	 * @param string $locale Locale string.
+	 * @return bool
+	 */
+	public static function is_valid_locale( string $locale ): bool {
+		return '' === $locale || 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2,3})?$/', $locale );
+	}
+
+	/**
 	 * Returns the stored settings merged with defaults.
 	 *
 	 * @return array<string,mixed>
@@ -174,25 +200,52 @@ class Wpait_Admin_Settings {
 		$settings = self::defaults();
 
 		// --- Languages ---
-		$languages = array();
-		$rows      = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
+		$languages        = array();
+		$invalid_locales  = array();
+		$rows             = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
 		foreach ( $rows as $row ) {
 			$code = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
 			if ( '' === $code ) {
 				continue;
 			}
+			$locale = isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '';
+			if ( ! self::is_valid_locale( $locale ) ) {
+				$invalid_locales[] = $code;
+			}
+			// Flags are emoji; keep the value but cap its length so a stray paste of
+			// long text can't land in a field meant for one glyph (subdivision flags
+			// can be several code points, so the cap is generous).
+			$flag = isset( $row['flag'] ) ? sanitize_text_field( $row['flag'] ) : '';
+			if ( function_exists( 'mb_substr' ) ) {
+				$flag = mb_substr( $flag, 0, 12 );
+			}
 			$languages[ $code ] = array(
 				'code'    => $code,
-				'locale'  => isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '',
+				'locale'  => $locale,
 				'name'    => isset( $row['name'] ) && '' !== trim( (string) $row['name'] )
 					? sanitize_text_field( $row['name'] )
 					: $code,
 				'native'  => isset( $row['native'] ) ? sanitize_text_field( $row['native'] ) : '',
-				'flag'    => isset( $row['flag'] ) ? sanitize_text_field( $row['flag'] ) : '',
+				'flag'    => $flag,
 				'enabled' => ! empty( $row['enabled'] ),
 			);
 		}
 		$languages = array_values( $languages );
+
+		// Warn (don't discard) on malformed locales so the admin can correct them
+		// without losing what they typed.
+		if ( ! empty( $invalid_locales ) && ! self::$reconcile_notified ) {
+			add_settings_error(
+				self::OPTION,
+				'wpait_invalid_locale',
+				sprintf(
+					/* translators: %s: comma-separated language codes. */
+					__( 'These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them.', 'wp-ai-translate' ),
+					implode( ', ', $invalid_locales )
+				),
+				'warning'
+			);
+		}
 
 		// --- Reconcile terms (creates/updates terms, blocks unsafe deletes). ---
 		// register_setting's sanitize callback can fire more than once per
@@ -293,9 +346,11 @@ class Wpait_Admin_Settings {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'AI Translate', 'wp-ai-translate' ); ?></h1>
-			<?php settings_errors( self::OPTION ); ?>
-
 			<?php
+			// This page is served by wp-admin/options-general.php, whose
+			// options-head.php already calls settings_errors(); calling it again here
+			// would render every notice twice, so we intentionally do not.
+
 			$ai_supported = function_exists( 'wp_supports_ai' ) && wp_supports_ai();
 			$ai_usable    = Wpait_Translator::can_generate_text();
 			if ( $ai_usable ) {
@@ -345,6 +400,14 @@ class Wpait_Admin_Settings {
 				<p class="description">
 					<?php esc_html_e( 'A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead.', 'wp-ai-translate' ); ?>
 				</p>
+				<p class="description">
+					<?php esc_html_e( 'Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: an optional emoji shown beside the name — leave blank to show the name only.', 'wp-ai-translate' ); ?>
+				</p>
+				<datalist id="wpait-locales">
+					<?php foreach ( self::common_locales() as $loc ) : ?>
+						<option value="<?php echo esc_attr( $loc ); ?>"></option>
+					<?php endforeach; ?>
+				</datalist>
 				<table class="widefat striped" style="max-width:980px">
 					<thead>
 						<tr>
@@ -374,10 +437,10 @@ class Wpait_Admin_Settings {
 										<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'In use — code locked', 'wp-ai-translate' ); ?>"></span>
 									<?php endif; ?>
 								</td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[locale]' ); ?>" value="<?php echo esc_attr( $row['locale'] ); ?>" placeholder="es_ES" size="8" /></td>
+								<td><input type="text" name="<?php echo esc_attr( $base . '[locale]' ); ?>" value="<?php echo esc_attr( $row['locale'] ); ?>" placeholder="es_ES" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
 								<td><input type="text" name="<?php echo esc_attr( $base . '[name]' ); ?>" value="<?php echo esc_attr( $row['name'] ); ?>" placeholder="Spanish" /></td>
 								<td><input type="text" name="<?php echo esc_attr( $base . '[native]' ); ?>" value="<?php echo esc_attr( $row['native'] ); ?>" placeholder="Español" /></td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="3" /></td>
+								<td><input type="text" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="3" placeholder="🇦🇷" title="<?php esc_attr_e( 'Optional emoji flag shown next to the name. Leave blank to show the name only.', 'wp-ai-translate' ); ?>" /></td>
 								<td><input type="checkbox" name="<?php echo esc_attr( $base . '[enabled]' ); ?>" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?> /></td>
 								<td>
 									<?php if ( $in_use ) : ?>
@@ -404,10 +467,10 @@ class Wpait_Admin_Settings {
 				<template id="wpait-language-row-template">
 					<tr class="wpait-language-row wpait-new-language-row">
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][code]" value="" placeholder="<?php esc_attr_e( 'e.g. fr', 'wp-ai-translate' ); ?>" size="6" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][locale]" value="" placeholder="<?php esc_attr_e( 'e.g. fr_FR', 'wp-ai-translate' ); ?>" size="8" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][locale]" value="" placeholder="<?php esc_attr_e( 'e.g. fr_FR', 'wp-ai-translate' ); ?>" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][name]" value="" placeholder="<?php esc_attr_e( 'e.g. French', 'wp-ai-translate' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][native]" value="" placeholder="<?php esc_attr_e( 'e.g. Français', 'wp-ai-translate' ); ?>" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="3" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="3" placeholder="🇫🇷" title="<?php esc_attr_e( 'Optional emoji flag shown next to the name. Leave blank to show the name only.', 'wp-ai-translate' ); ?>" /></td>
 						<td><input type="checkbox" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][enabled]" value="1" checked /></td>
 						<td><button type="button" class="button-link wpait-remove-language" aria-label="<?php esc_attr_e( 'Remove this new language', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button></td>
 					</tr>
