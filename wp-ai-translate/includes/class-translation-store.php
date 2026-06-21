@@ -104,13 +104,14 @@ class Wpait_Translation_Store {
 			return new WP_Error( 'wpait_invalid_language', __( 'A language code is required.', 'wp-ai-translate' ) );
 		}
 
-		// Enforce the one-member-per-language invariant (C2): if this object is
-		// already in a group, refuse a code that another member already holds,
-		// otherwise the group→members map would silently collapse two members
-		// onto the same language key.
+		// Group invariants. Only relevant when this object is already in a group.
 		$group = $this->get_group( $object_type, $object_id );
 		if ( '' !== $group ) {
 			$members = $this->get_group_members( $object_type, $group );
+
+			// One-member-per-language (C2): refuse a code that another member already
+			// holds, otherwise the group→members map would silently collapse two
+			// members onto the same language key.
 			if ( isset( $members[ $code ] ) && $members[ $code ] !== $object_id ) {
 				return new WP_Error(
 					'wpait_language_exists',
@@ -118,8 +119,28 @@ class Wpait_Translation_Store {
 						/* translators: %s: language code. */
 						__( 'This translation group already has a member in language "%s".', 'wp-ai-translate' ),
 						$code
-					)
+					),
+					array( 'status' => 409 )
 				);
+			}
+
+			// Data integrity: changing a grouped object's own language would abandon
+			// the slot it currently fills, silently dropping that language from a group
+			// that other members rely on and mislabeling this object. Refuse while the
+			// group has any sibling; the object must be unlinked first. (A lone member
+			// has no slot to orphan, so relabeling it is allowed — same as an ungrouped
+			// object.)
+			$current = $this->get_language( $object_type, $object_id );
+			if ( '' !== $current && $current !== $code ) {
+				foreach ( $members as $member_id ) {
+					if ( (int) $member_id !== $object_id ) {
+						return new WP_Error(
+							'wpait_language_reassign',
+							__( 'This content belongs to a translation group as its current language. Unlink it from the group before changing its language, so the group does not lose that language.', 'wp-ai-translate' ),
+							array( 'status' => 409 )
+						);
+					}
+				}
 			}
 		}
 
