@@ -47,6 +47,11 @@ class Wpait_Admin_List {
 	const OVERVIEW_SLUG = 'wp-ai-translate-overview';
 
 	/**
+	 * Meta flag marking an item as hidden from the Overview's missing list.
+	 */
+	const HIDE_META = '_wpait_exclude_from_overview';
+
+	/**
 	 * Defensive scan bound for the untranslated cross-join (N6). Larger sites
 	 * should lean on the by-language filter; this keeps the admin query bounded.
 	 */
@@ -689,14 +694,18 @@ class Wpait_Admin_List {
 		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : 'missing';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin view navigation.
 		$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin view navigation.
+		$show_hidden = ! empty( $_GET['show_hidden'] );
 
 		$codes      = wp_list_pluck( $languages, 'code' );
 		$is_lang    = in_array( $view, $codes, true );
 		$base_url   = admin_url( 'options-general.php?page=' . self::OVERVIEW_SLUG );
 
 		// Computed once so the "Missing" tab can show a live count on every view and
-		// the table (when shown) reuses it rather than re-scanning.
-		$missing_rows  = $this->missing_rows( $codes );
+		// the table (when shown) reuses it rather than re-scanning. Default WordPress
+		// content (Sample Page / Privacy Policy / Uncategorized) and admin-hidden items
+		// are excluded so the list surfaces real content gaps (#21).
+		$missing_rows  = $this->missing_rows( $codes, $show_hidden );
 		$missing_count = count( $missing_rows );
 
 		// Quick-Translate actions need a usable AI model; mirror the editor's gating.
@@ -740,7 +749,17 @@ class Wpait_Admin_List {
 			if ( $is_lang ) {
 				$this->render_by_language( $view, $paged, $base_url );
 			} else {
-				$this->render_missing( $codes, $missing_rows, $paged, $base_url, $ai_ok );
+				if ( count( $codes ) > 1 ) {
+					$toggle_url = $show_hidden ? $base_url : add_query_arg( 'show_hidden', '1', $base_url );
+					printf(
+						'<p><a href="%1$s">%2$s</a></p>',
+						esc_url( $toggle_url ),
+						$show_hidden
+							? esc_html__( 'Hide excluded items', 'wp-ai-translate' )
+							: esc_html__( 'Show hidden / default items', 'wp-ai-translate' )
+					);
+				}
+				$this->render_missing( $codes, $missing_rows, $paged, $base_url, $ai_ok, $show_hidden );
 			}
 			?>
 		</div>
@@ -754,10 +773,11 @@ class Wpait_Admin_List {
 	 * (S5), so rows are never keyed by bare id. Sets {@see $scan_truncated} via the
 	 * underlying bounded scans (N6).
 	 *
-	 * @param string[] $codes Enabled language codes.
+	 * @param string[] $codes       Enabled language codes.
+	 * @param bool     $show_hidden Include items the admin has hidden from the list.
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function missing_rows( array $codes ): array {
+	private function missing_rows( array $codes, bool $show_hidden = false ): array {
 		if ( count( $codes ) <= 1 ) {
 			return array();
 		}
@@ -766,21 +786,124 @@ class Wpait_Admin_List {
 		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
 			foreach ( $this->untranslated_map( $post_type ) as $post_id => $present ) {
 				$missing = array_diff( $codes, $present );
-				if ( ! empty( $missing ) ) {
-					$rows[] = array( 'type' => 'post', 'id' => (int) $post_id, 'missing' => $missing );
+				if ( empty( $missing ) || $this->skip_in_overview( 'post', (int) $post_id, $show_hidden ) ) {
+					continue;
 				}
+				$rows[] = array( 'type' => 'post', 'id' => (int) $post_id, 'missing' => $missing );
 			}
 		}
 		foreach ( self::TERM_TAXONOMIES as $taxonomy ) {
 			foreach ( $this->untranslated_term_map( $taxonomy ) as $term_id => $present ) {
 				$missing = array_diff( $codes, $present );
-				if ( ! empty( $missing ) ) {
-					$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
+				if ( empty( $missing ) || $this->skip_in_overview( 'term', (int) $term_id, $show_hidden ) ) {
+					continue;
 				}
+				$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
 			}
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * Whether an item should be left out of the missing-translations list: it has
+	 * been hidden by the admin, or it is default WordPress content the admin almost
+	 * certainly doesn't intend to translate (Sample Page / Privacy Policy / the
+	 * default Uncategorized category) and has not been edited. Edited defaults are
+	 * shown — once you touch it, it's "real" content.
+	 *
+	 * @param string $type        'post' | 'term'.
+	 * @param int    $id          Object id.
+	 * @param bool   $show_hidden When true, admin-hidden items are NOT skipped.
+	 * @return bool
+	 */
+	private function skip_in_overview( string $type, int $id, bool $show_hidden ): bool {
+		// "Show hidden / default items" reveals everything that is normally filtered.
+		if ( $show_hidden ) {
+			return false;
+		}
+
+		if ( '' !== (string) $this->get_overview_meta( $type, $id ) ) {
+			return true;
+		}
+
+		$skip = $this->is_default_noise( $type, $id );
+
+		/**
+		 * Filters whether an item is omitted from the Overview's missing list.
+		 *
+		 * @param bool   $skip Whether to skip the item.
+		 * @param string $type 'post' | 'term'.
+		 * @param int    $id   Object id.
+		 */
+		return (bool) apply_filters( 'wpait_overview_skip', $skip, $type, $id );
+	}
+
+	/**
+	 * Detects unedited default WordPress content (Sample Page, Privacy Policy page,
+	 * the default category) so it doesn't dominate a fresh install's missing list.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @return bool
+	 */
+	private function is_default_noise( string $type, int $id ): bool {
+		if ( 'term' === $type ) {
+			return $id === (int) get_option( 'default_category' );
+		}
+
+		$post = get_post( $id );
+		if ( ! $post instanceof WP_Post || 'page' !== $post->post_type ) {
+			return false;
+		}
+
+		$is_default_page = in_array( $post->post_name, array( 'sample-page', 'privacy-policy' ), true )
+			|| $id === (int) get_option( 'wp_page_for_privacy_policy' );
+		if ( ! $is_default_page ) {
+			return false;
+		}
+
+		// "Unedited" = never modified after creation (WP stamps both equal on insert).
+		return $post->post_modified_gmt === $post->post_date_gmt;
+	}
+
+	/**
+	 * Reads the per-item "hidden from Overview" flag.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @return string '1' when hidden, '' otherwise.
+	 */
+	private function get_overview_meta( string $type, int $id ): string {
+		$value = 'term' === $type
+			? get_term_meta( $id, self::HIDE_META, true )
+			: get_post_meta( $id, self::HIDE_META, true );
+		return is_string( $value ) ? $value : '';
+	}
+
+	/**
+	 * Sets or clears the per-item "hidden from Overview" flag. Used by the Overview's
+	 * Hide / Unhide actions (REST → {@see Wpait_Rest}).
+	 *
+	 * @param string $type   'post' | 'term'.
+	 * @param int    $id     Object id.
+	 * @param bool   $hidden Whether to hide the item.
+	 * @return void
+	 */
+	public function set_overview_hidden( string $type, int $id, bool $hidden ): void {
+		if ( 'term' === $type ) {
+			if ( $hidden ) {
+				update_term_meta( $id, self::HIDE_META, '1' );
+			} else {
+				delete_term_meta( $id, self::HIDE_META );
+			}
+			return;
+		}
+		if ( $hidden ) {
+			update_post_meta( $id, self::HIDE_META, '1' );
+		} else {
+			delete_post_meta( $id, self::HIDE_META );
+		}
 	}
 
 	/**
@@ -841,6 +964,8 @@ class Wpait_Admin_List {
 			'done'    => __( '✓ Translated', 'wp-ai-translate' ),
 			'failed'  => __( 'Translation failed.', 'wp-ai-translate' ),
 			'noFetch' => __( 'Could not run the request in this browser.', 'wp-ai-translate' ),
+			'hide'    => __( 'Hide', 'wp-ai-translate' ),
+			'unhide'  => __( 'Unhide', 'wp-ai-translate' ),
 		);
 		?>
 		<script>
@@ -874,6 +999,35 @@ class Wpait_Admin_List {
 					if ( result ) { result.textContent = ( err && err.message ) ? err.message : strings.failed; }
 				} );
 			} );
+
+			// Hide / Unhide a row from the missing list.
+			document.addEventListener( 'click', function ( e ) {
+				var btn = e.target.closest( '.wpait-ov-hide' );
+				if ( ! btn ) { return; }
+				e.preventDefault();
+				if ( ! window.wp || ! wp.apiFetch ) { return; }
+				var row = btn.closest( 'tr' );
+				var willHide = btn.getAttribute( 'data-hidden' ) !== '1';
+				btn.disabled = true;
+				wp.apiFetch( {
+					path: '/' + ns + '/overview-visibility',
+					method: 'POST',
+					data: {
+						object_id: parseInt( btn.getAttribute( 'data-id' ), 10 ),
+						type: btn.getAttribute( 'data-type' ),
+						hidden: willHide
+					}
+				} ).then( function () {
+					if ( willHide && row ) {
+						// Hiding removes it from the current (non-"show hidden") view.
+						row.parentNode.removeChild( row );
+					} else {
+						btn.setAttribute( 'data-hidden', willHide ? '1' : '0' );
+						btn.textContent = willHide ? strings.unhide : strings.hide;
+						btn.disabled = false;
+					}
+				} ).catch( function () { btn.disabled = false; } );
+			} );
 		}() );
 		</script>
 		<?php
@@ -884,12 +1038,13 @@ class Wpait_Admin_List {
 	 *
 	 * @param string[]                       $codes    Enabled language codes.
 	 * @param array<int,array<string,mixed>> $rows     Precomputed missing rows.
-	 * @param int                            $paged    Current page (1-based).
-	 * @param string                         $base_url Page base URL.
-	 * @param bool                           $ai_ok    Whether quick-Translate is available.
+	 * @param int                            $paged       Current page (1-based).
+	 * @param string                         $base_url    Page base URL.
+	 * @param bool                           $ai_ok       Whether quick-Translate is available.
+	 * @param bool                           $show_hidden Whether hidden/default items are shown.
 	 * @return void
 	 */
-	private function render_missing( array $codes, array $rows, int $paged, string $base_url, bool $ai_ok ): void {
+	private function render_missing( array $codes, array $rows, int $paged, string $base_url, bool $ai_ok, bool $show_hidden = false ): void {
 		if ( count( $codes ) <= 1 ) {
 			echo '<p>' . esc_html__( 'Configure at least two languages to track missing translations.', 'wp-ai-translate' ) . '</p>';
 			return;
@@ -914,11 +1069,12 @@ class Wpait_Admin_List {
 					<th><?php esc_html_e( 'Type', 'wp-ai-translate' ); ?></th>
 					<th><?php esc_html_e( 'Language', 'wp-ai-translate' ); ?></th>
 					<th><?php esc_html_e( 'Missing', 'wp-ai-translate' ); ?></th>
+					<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php if ( empty( $page_rows ) ) : ?>
-					<tr><td colspan="4"><?php esc_html_e( 'Nothing is missing translations.', 'wp-ai-translate' ); ?></td></tr>
+					<tr><td colspan="5"><?php esc_html_e( 'Nothing is missing translations.', 'wp-ai-translate' ); ?></td></tr>
 				<?php endif; ?>
 				<?php
 				foreach ( $page_rows as $row ) :
@@ -965,6 +1121,15 @@ class Wpait_Admin_List {
 								<?php endif; ?>
 							<?php endforeach; ?>
 							<span class="wpait-ov-result" aria-live="polite"></span>
+						</td>
+						<?php $hidden = $show_hidden && '' !== $this->get_overview_meta( $row['type'], (int) $row['id'] ); ?>
+						<td>
+							<button type="button" class="button-link wpait-ov-hide"
+								data-id="<?php echo esc_attr( (string) $row['id'] ); ?>"
+								data-type="<?php echo esc_attr( (string) $row['type'] ); ?>"
+								data-hidden="<?php echo $hidden ? '1' : '0'; ?>">
+								<?php echo $hidden ? esc_html__( 'Unhide', 'wp-ai-translate' ) : esc_html__( 'Hide', 'wp-ai-translate' ); ?>
+							</button>
 						</td>
 					</tr>
 				<?php endforeach; ?>
