@@ -39,8 +39,8 @@ final class Wpait_Test_State {
 	/** @var array<string,mixed>|null The recorded builder calls from the last generate_text(). */
 	public static ?array $last_request = null;
 
-	/** @var string Configured "preferred model" returned by the settings stub. */
-	public static string $settings_model = '';
+	/** @var array<string,mixed> WP options store (get_option). */
+	public static array $options = array();
 
 	public static function reset(): void {
 		self::$supports_ai      = true;
@@ -49,7 +49,7 @@ final class Wpait_Test_State {
 		self::$filters          = array();
 		self::$connector_result = 'Hola';
 		self::$last_request     = null;
-		self::$settings_model   = '';
+		self::$options          = array();
 	}
 }
 
@@ -177,42 +177,81 @@ function sanitize_title( $title ) {
 	return trim( (string) $title, '-' );
 }
 
-/* -------------------------------------------------------------------------
- * Collaborators the Translator's constructor type-hints. The unit tests pass an
- * explicit system prompt so the prompt-building path (which would use these) is
- * never exercised; empty stand-ins satisfy the signatures.
- * ---------------------------------------------------------------------- */
+function sanitize_key( $key ) {
+	return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
+}
 
+function sanitize_text_field( $str ) {
+	return trim( preg_replace( '/[\r\n\t ]+/', ' ', (string) $str ) );
+}
+
+function sanitize_textarea_field( $str ) {
+	return trim( (string) $str );
+}
+
+function wp_unslash( $value ) {
+	return is_string( $value ) ? stripslashes( $value ) : $value;
+}
+
+function get_option( $name, $default = false ) {
+	return Wpait_Test_State::$options[ $name ] ?? $default;
+}
+
+function wp_list_pluck( $list, $field ) {
+	return array_map( static fn( $row ) => is_array( $row ) ? ( $row[ $field ] ?? null ) : ( $row->$field ?? null ), (array) $list );
+}
+
+function add_action( ...$args ) {
+	return true;
+}
+
+/* Term/taxonomy no-ops sufficient for Wpait_Admin_Settings::sanitize() ->
+ * Wpait_Languages::reconcile() in the add-languages path (no removals). */
+function taxonomy_exists( $taxonomy ) {
+	return true;
+}
+
+function get_term_by( $field, $value, $taxonomy = '' ) {
+	return false;
+}
+
+function wp_insert_term( $term, $taxonomy, $args = array() ) {
+	static $next = 1000;
+	return array( 'term_id' => ++$next, 'term_taxonomy_id' => $next );
+}
+
+function update_term_meta( $term_id, $key, $value ) {
+	return true;
+}
+
+function add_settings_error( ...$args ) {
+	return true;
+}
+
+// Minimal WP_Term shim (Wpait_Languages::get_term_for_code return type).
+if ( ! class_exists( 'WP_Term' ) ) {
+	class WP_Term {
+		public $term_id = 0;
+		public $name = '';
+		public $slug = '';
+		public $taxonomy = '';
+	}
+}
+
+// The Translation Store is a heavy WP_Query/term-meta integration; the units tested
+// here don't drive it, so an empty stand-in satisfies the Translator's constructor
+// type-hint. (Store behaviour is covered end-to-end by the E2E suite.)
 if ( ! class_exists( 'Wpait_Translation_Store' ) ) {
-	class Wpait_Translation_Store {}
-}
-if ( ! class_exists( 'Wpait_Languages' ) ) {
-	class Wpait_Languages {
-		/** Flag-free label used in AI prompts; the code itself is a fine test stub. */
-		public function name( string $code ): string {
-			return $code;
-		}
-	}
-}
-if ( ! class_exists( 'Wpait_Admin_Settings' ) ) {
-	class Wpait_Admin_Settings {
-		/** @return array<string,mixed> */
-		public static function get_settings(): array {
-			return array(
-				'default_language' => 'en',
-				'model'            => \Wpait_Test_State::$settings_model,
-				'instructions'     => array( 'global' => '', 'post' => '', 'term' => '', 'per_language' => array() ),
-			);
-		}
-		/** @return array<string,string> */
-		public static function instruction_defaults(): array {
-			return array( 'global' => 'G', 'post' => 'P', 'term' => 'T' );
-		}
+	class Wpait_Translation_Store {
+		const META_LANGUAGE = '_wpait_language';
+		const META_GROUP    = '_wpait_group';
 	}
 }
 
 /* -------------------------------------------------------------------------
- * Load the (dependency-light) units under test.
+ * Load the real units under test (these only touch the WP functions stubbed above).
  * ---------------------------------------------------------------------- */
 
+require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-settings.php';
+require_once __DIR__ . '/../../wp-ai-translate/includes/class-languages.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-translator.php';

@@ -21,6 +21,7 @@ final class TranslatorTest extends TestCase {
 
 	protected function setUp(): void {
 		Wpait_Test_State::reset();
+		Wpait_Languages::flush_index();
 		$this->translator = new Wpait_Translator( new Wpait_Translation_Store(), new Wpait_Languages() );
 	}
 
@@ -76,13 +77,13 @@ final class TranslatorTest extends TestCase {
 	public function test_configured_settings_model_is_used_as_the_default(): void {
 		// #32: the admin-selected model is sent so the connector doesn't fall back to a
 		// model the provider rejects (e.g. "Claude Fable 5 is not available").
-		Wpait_Test_State::$settings_model = 'claude-opus-4-8';
+		Wpait_Test_State::$options['wpait_settings'] = array( 'model' => 'claude-opus-4-8' );
 		$this->translate();
 		$this->assertSame( array( 'claude-opus-4-8' ), Wpait_Test_State::$last_request['models'] );
 	}
 
 	public function test_filter_overrides_the_configured_model(): void {
-		Wpait_Test_State::$settings_model                    = 'claude-opus-4-8';
+		Wpait_Test_State::$options['wpait_settings']         = array( 'model' => 'claude-opus-4-8' );
 		Wpait_Test_State::$filters['wpait_model_preference'] = array( 'claude-sonnet-4-6' );
 		$this->translate();
 		$this->assertSame( array( 'claude-sonnet-4-6' ), Wpait_Test_State::$last_request['models'] );
