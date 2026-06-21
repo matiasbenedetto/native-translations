@@ -39,6 +39,9 @@ final class Wpait_Test_State {
 	/** @var array<string,mixed>|null The recorded builder calls from the last generate_text(). */
 	public static ?array $last_request = null;
 
+	/** @var string Configured "preferred model" returned by the settings stub. */
+	public static string $settings_model = '';
+
 	public static function reset(): void {
 		self::$supports_ai      = true;
 		self::$is_supported     = true;
@@ -46,6 +49,7 @@ final class Wpait_Test_State {
 		self::$filters          = array();
 		self::$connector_result = 'Hola';
 		self::$last_request     = null;
+		self::$settings_model   = '';
 	}
 }
 
@@ -196,6 +200,7 @@ if ( ! class_exists( 'Wpait_Admin_Settings' ) ) {
 		public static function get_settings(): array {
 			return array(
 				'default_language' => 'en',
+				'model'            => \Wpait_Test_State::$settings_model,
 				'instructions'     => array( 'global' => '', 'post' => '', 'term' => '', 'per_language' => array() ),
 			);
 		}
