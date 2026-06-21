@@ -35,6 +35,14 @@ class Wpait_Translator {
 	const CHUNK_TARGET    = 12000;
 
 	/**
+	 * Transient key + TTL caching the text-generation capability probe so it is
+	 * not recomputed on every editor/admin render. Short TTL so a newly-configured
+	 * provider/model is picked up quickly without a manual cache flush.
+	 */
+	const CAP_CACHE_KEY = 'wpait_text_generation_supported';
+	const CAP_CACHE_TTL = 300;
+
+	/**
 	 * Temperature is left unset by default and only sent when a site opts in via
 	 * the `wpait_temperature` filter: newer models (e.g. Claude Opus 4.8) reject
 	 * a `temperature` parameter entirely, so omitting it is the safe default for a
@@ -91,12 +99,8 @@ class Wpait_Translator {
 	 * @return string|WP_Error Translated text, or WP_Error on failure.
 	 */
 	public function translate_text( string $text, string $from, string $to, array $opts = array() ) {
-		if ( ! function_exists( 'wp_supports_ai' ) || ! wp_supports_ai() ) {
-			return new WP_Error(
-				'wpait_ai_unavailable',
-				__( 'The site does not have an AI provider configured.', 'wp-ai-translate' ),
-				array( 'status' => 503 )
-			);
+		if ( ! self::can_generate_text() ) {
+			return self::ai_unavailable_error();
 		}
 
 		// Nothing to translate — avoid a pointless connector round trip.
@@ -152,7 +156,14 @@ class Wpait_Translator {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			// A provider can be "supported" yet expose no text-generation model, in
+			// which case the connector returns a raw, cryptic
+			// `prompt_invalid_argument — No models found that support text_generation`
+			// error. The capability probe above normally catches this before any
+			// call, but map it here too (stale cache, a model-preference filter that
+			// resolves to nothing) so the UI always shows the friendly, actionable
+			// notice instead of the connector's internal wording.
+			return self::is_no_model_error( $result ) ? self::ai_unavailable_error() : $result;
 		}
 
 		if ( ! is_string( $result ) ) {
@@ -767,6 +778,77 @@ class Wpait_Translator {
 	/* ---------------------------------------------------------------------
 	 * Connector + validation helpers (C3 / C4)
 	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Whether the site can actually generate text right now: a provider is
+	 * supported *and* at least one model advertises the text-generation
+	 * capability.
+	 *
+	 * `wp_supports_ai()` alone is insufficient — it can return true while no
+	 * usable text-generation model exists (e.g. a provider registered without a
+	 * configured model). On such a site the connector accepts the request and then
+	 * fails every call with a raw `No models found that support text_generation`
+	 * error, so the editor must not advertise the feature, and the translate
+	 * buttons must stay disabled, on the strength of `wp_supports_ai()` alone.
+	 *
+	 * The capability check is metadata-only (no network round trip), but the result
+	 * is cached in a short-lived transient so repeated editor/admin renders stay
+	 * cheap. Static so UI code can gate on it without taking a translator dependency.
+	 *
+	 * @return bool
+	 */
+	public static function can_generate_text(): bool {
+		if ( ! function_exists( 'wp_supports_ai' ) || ! wp_supports_ai() || ! function_exists( 'wp_ai_client_prompt' ) ) {
+			return false;
+		}
+
+		$cached = get_transient( self::CAP_CACHE_KEY );
+		if ( false !== $cached ) {
+			return '1' === $cached;
+		}
+
+		try {
+			// A short text prompt makes the connector infer the text-generation
+			// capability; is_supported() returns false when no model can fulfil it.
+			$supported = ( true === wp_ai_client_prompt( 'ping' )->is_supported() );
+		} catch ( \Throwable $e ) {
+			// A connector build without is_supported(): fall back to the
+			// provider-level signal rather than blocking translation outright.
+			$supported = true;
+		}
+
+		set_transient( self::CAP_CACHE_KEY, $supported ? '1' : '0', self::CAP_CACHE_TTL );
+
+		return $supported;
+	}
+
+	/**
+	 * The friendly, actionable "AI unavailable" error shown when no provider, or no
+	 * text-generation model, is configured (status 503, REST-friendly).
+	 *
+	 * @return WP_Error
+	 */
+	private static function ai_unavailable_error(): WP_Error {
+		return new WP_Error(
+			'wpait_ai_unavailable',
+			__( 'AI translation is unavailable: this site has no AI provider with a text-generation model configured. Configure one and try again.', 'wp-ai-translate' ),
+			array( 'status' => 503 )
+		);
+	}
+
+	/**
+	 * Whether a connector WP_Error is the "no text-generation model" case (a
+	 * supported provider exposing no usable model), so it can be mapped to the
+	 * friendly {@see ai_unavailable_error()} instead of surfaced raw.
+	 *
+	 * @param mixed $error Candidate error.
+	 * @return bool
+	 */
+	private static function is_no_model_error( $error ): bool {
+		return $error instanceof WP_Error
+			&& 'prompt_invalid_argument' === $error->get_error_code()
+			&& false !== stripos( $error->get_error_message(), 'No models found' );
+	}
 
 	/**
 	 * Runs a connector call with a bounded request timeout (C3). The core filter
