@@ -100,15 +100,46 @@ Layers:
   connector `WP_Error`s (incl. the "no models" case) are surfaced cleanly.
 - **JS unit** (`src/**/*.test.js`) — `@wordpress/scripts` (Jest) over the editor/front-end
   helpers.
-- **CI** — `.github/workflows/tests.yml` runs both on every PR (and also lints all plugin
-  PHP and checks the committed `build/` bundle is up to date).
+- **E2E** (`harness/e2e/translate-flow.php`) — the **real** generation flow against a live
+  provider (see next section).
+- **CI** — `.github/workflows/tests.yml` runs the unit suites on every PR (and also lints all
+  plugin PHP and checks the committed `build/` bundle is up to date). The E2E layer needs a key
+  + network and is run locally, not in CI.
 
-**Playground / AI caveat (be honest about it):** Playground has **no AI provider**
-(`wp_supports_ai()` is false / no usable model), so the live *generation* flow cannot run
-here. The unit suite covers the connector contract by mocking it; true end-to-end generation
-must be run against a configured-AI host (e.g. the local Apache site in `AGENTS.local.md`).
-End-to-end coverage of the create/translate/recreate flow against such a host is tracked as a
-follow-up (see the issues filed from #34).
+### E2E against a real provider (OpenRouter / GLM-5.2) — issue #38
+
+Playground's stock site has **no AI provider** (`wp_supports_ai()` is false), so the connector
+contract is otherwise only covered by the mocked unit suite. The harness can wire a **real**
+provider into the disposable site so the full create → translate → recreate flow runs for real
+— and, de-risked first, **Playground's PHP-WASM runtime *can* make the outbound HTTPS call** to
+the provider.
+
+Setup (one time): create a **gitignored** `harness/.env.local` with your key:
+
+```sh
+echo 'OPENROUTER_API_KEY=sk-or-v1-…' > harness/.env.local   # never committed (.gitignore)
+```
+
+Then:
+
+```sh
+./harness/up.sh                       # provisions the provider automatically when the key is present
+./harness/playground.sh test e2e      # runs the live translation-flow assertions
+```
+
+`up.sh` / `playground.sh provision-ai` install the [`ai-provider-for-openrouter`](https://wordpress.org/plugins/ai-provider-for-openrouter/)
+plugin, store the key in the `connectors_ai_openrouter_api_key` option (the WordPress `ai`-plugin
+convention), and drop `harness/e2e/mu-openrouter.php` into the site's mu-plugins — which injects
+the key into the AI Client registry and pins `z-ai/glm-5.2` via wp-ai-translate's
+`wpait_model_preference` filter.
+
+**The key never touches the plugin or the repo.** `wp-ai-translate` only ever calls the WP 7.0
+AI connector; the credential lives one layer down (the option + the registry), provided by the
+harness. The E2E test branches on capability — **with no `.env.local` key it SKIPs cleanly**
+(exit 0), it never asserts on the key value, and it deletes everything it creates.
+
+The same flow also works against a configured-AI host like the local Apache site in
+`AGENTS.local.md` (run the script there via `wp eval-file`).
 
 ## Screenshots
 

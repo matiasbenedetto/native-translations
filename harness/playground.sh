@@ -9,8 +9,11 @@
 #                                            (the plugin is always mounted; pass extra
 #                                            mounts, e.g. a test theme, as args)
 #   playground.sh wp -- <wp-cli args>        run wp-cli against the same site + mounts
-#   playground.sh test                       run the unit suites (PHP + JS); pass
-#                                            `php` or `js` to run only one layer
+#   playground.sh test [php|js|e2e]          run test suites: php/js unit (default
+#                                            both), or `e2e` for the live translation
+#                                            flow against the configured AI provider
+#   playground.sh provision-ai               wire OpenRouter into the site from
+#                                            harness/.env.local (no-op without a key)
 #   playground.sh seed [--force]            seed example posts/cats/tags (en_US + es_AR)
 #   playground.sh shot -- <shot.mjs args>    take a screenshot (see shot.mjs)
 #   playground.sh cast -- <cast.mjs args>    record a screencast (see cast.mjs)
@@ -291,8 +294,55 @@ cmd_test() {
     ( cd "$REPO_DIR" && npm run test:js ) || rc=1
   fi
 
+  if [ "$which" = "e2e" ]; then
+    echo "== E2E translation flow (live site) =="
+    [ -s "$HARNESS_DIR/e2e/translate-flow.php" ] || die "e2e script missing"
+    cp "$HARNESS_DIR/e2e/translate-flow.php" "$STATE/e2e-translate-flow.php"
+    cmd_wp -- eval-file /host/e2e-translate-flow.php || rc=1
+  fi
+
   [ "$rc" -eq 0 ] || die "tests failed"
   echo "All requested test suites passed."
+}
+
+cmd_provision_ai() {
+  # Make the disposable site able to run REAL translations against OpenRouter, when
+  # harness/.env.local supplies a key (issue #38). No-ops cleanly otherwise so the
+  # site stays no-AI and the E2E generation tests skip. The key only ever lands in
+  # the disposable site's DB option + a mu-plugin in the (gitignored) site dir — never
+  # in the repo.
+  local env_file="$HARNESS_DIR/.env.local"
+  if [ ! -f "$env_file" ]; then
+    echo "provision-ai: no harness/.env.local — leaving the site without an AI provider (E2E generation will skip)."
+    return 0
+  fi
+  # shellcheck disable=SC1090
+  set -a; . "$env_file"; set +a
+  if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+    echo "provision-ai: harness/.env.local has no OPENROUTER_API_KEY — E2E generation will skip."
+    return 0
+  fi
+
+  # OpenRouter provider plugin (not built in). Idempotent.
+  if ! cmd_wp -- plugin is-installed ai-provider-for-openrouter >/dev/null 2>&1; then
+    cmd_wp -- plugin install ai-provider-for-openrouter --activate >/dev/null
+  else
+    cmd_wp -- plugin activate ai-provider-for-openrouter >/dev/null 2>&1 || true
+  fi
+
+  # Store the key the WordPress-ai-plugin way; the value is not echoed.
+  cmd_wp -- option update connectors_ai_openrouter_api_key "$OPENROUTER_API_KEY" >/dev/null
+
+  # Drop the harness mu-plugin into the live site so the key + model pin apply on
+  # every request (front end, REST, editor) — not just one eval.
+  local mu_dir; mu_dir="$(site_dir)/wp-content/mu-plugins"
+  mkdir -p "$mu_dir"
+  cp "$HARNESS_DIR/e2e/mu-openrouter.php" "$mu_dir/wpait-e2e-openrouter.php"
+
+  # Bust the plugin's cached capability probe so it re-detects the now-usable model.
+  cmd_wp -- transient delete wpait_text_generation_supported >/dev/null 2>&1 || true
+
+  echo "provision-ai: OpenRouter provider configured (model z-ai/glm-5.2)."
 }
 
 cmd_seed() {
@@ -305,9 +355,10 @@ cmd_seed() {
 case "${1:-}" in
   bootstrap) shift; cmd_bootstrap "$@";;
   ensure)    shift; cmd_ensure "$@";;
-  wp)        shift; cmd_wp "$@";;
-  test)      shift; cmd_test "$@";;
-  seed)      shift; cmd_seed "$@";;
+  wp)          shift; cmd_wp "$@";;
+  test)        shift; cmd_test "$@";;
+  provision-ai) shift; cmd_provision_ai "$@";;
+  seed)        shift; cmd_seed "$@";;
   shot)      shift; run_browser_script "$HARNESS_DIR/shot.mjs" "$@";;
   cast)      shift; run_browser_script "$HARNESS_DIR/cast.mjs" "$@";;
   status)    shift; cmd_status "$@";;

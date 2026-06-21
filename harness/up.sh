@@ -33,6 +33,10 @@ if [ "$SEED" = 1 ]; then
   "$PG" seed
 fi
 
+# Wire a real AI provider (OpenRouter) when harness/.env.local supplies a key, so the
+# disposable site can run real translations for the E2E suite. No-ops without a key.
+"$PG" provision-ai
+
 # Flush so the language taxonomy + permalinks are clean.
 "$PG" wp -- rewrite flush >/dev/null 2>&1 || true
 "$PG" wp -- cache flush >/dev/null 2>&1 || true
