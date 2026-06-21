@@ -99,6 +99,10 @@ const TranslationsPanel = () => {
 
 	const currentLang = data ? data.language : '';
 	const translations = data ? data.translations : {};
+	// A grouped object's own language is fixed: changing it would drop its slot
+	// from the group (and mislabel this content). The selector is locked once the
+	// content has sibling translations; the server enforces this too.
+	const hasSiblings = Object.keys( translations ).length > 0;
 
 	const languageOptions = [
 		// Only offer the placeholder while the content has no language yet — the
@@ -135,14 +139,21 @@ const TranslationsPanel = () => {
 			) }
 
 			<PanelRow>
-				<SelectControl
-					label={ __( 'Language of this content', 'wp-ai-translate' ) }
-					value={ currentLang || '' }
-					options={ languageOptions }
-					disabled={ loading || busy === 'lang' }
-					onChange={ setLanguage }
-					__nextHasNoMarginBottom
-				/>
+				<div style={ { width: '100%' } }>
+					<SelectControl
+						label={ __( 'Language of this content', 'wp-ai-translate' ) }
+						value={ currentLang || '' }
+						options={ languageOptions }
+						disabled={ loading || busy === 'lang' || hasSiblings }
+						onChange={ setLanguage }
+						__nextHasNoMarginBottom
+					/>
+					{ hasSiblings && (
+						<p className="description" style={ { margin: '4px 0 0' } }>
+							{ __( 'This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'wp-ai-translate' ) }
+						</p>
+					) }
+				</div>
 			</PanelRow>
 
 			{ loading && ! data ? (

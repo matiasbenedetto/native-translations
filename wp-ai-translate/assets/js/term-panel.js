@@ -109,6 +109,10 @@
 
 		var currentLang = this.data.language || '';
 		var translations = this.data.translations || {};
+		// A grouped term's own language is fixed: changing it would drop its slot
+		// from the group (and mislabel it). Lock the selector once the term has
+		// sibling translations; the server enforces this too.
+		var hasSiblings = Object.keys( translations ).length > 0;
 
 		// Language selector. The placeholder is only offered while the term has no
 		// language yet — set-language cannot clear one, so it is not selectable.
@@ -123,7 +127,7 @@
 			}
 			select.appendChild( opt );
 		} );
-		select.disabled = 'lang' === this.busy;
+		select.disabled = 'lang' === this.busy || hasSiblings;
 		select.addEventListener( 'change', function () {
 			if ( ! select.value ) {
 				return;
@@ -131,12 +135,17 @@
 			self.act( 'set-language', { object_id: cfg.termId, code: select.value, type: 'term' }, 'lang' );
 		} );
 
-		mount.appendChild(
-			el( 'p', {}, [
-				el( 'label', { text: __( 'Language of this term', 'wp-ai-translate' ) + ' ' } ),
-				select,
-			] )
-		);
+		var langRow = el( 'p', {}, [
+			el( 'label', { text: __( 'Language of this term', 'wp-ai-translate' ) + ' ' } ),
+			select,
+		] );
+		mount.appendChild( langRow );
+
+		if ( hasSiblings ) {
+			mount.appendChild(
+				el( 'p', { 'class': 'description', text: __( 'This term belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'wp-ai-translate' ) } )
+			);
+		}
 
 		// Per-language actions.
 		( cfg.languages || [] ).forEach( function ( l ) {
