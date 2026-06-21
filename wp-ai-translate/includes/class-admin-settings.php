@@ -272,18 +272,9 @@ class Wpait_Admin_Settings {
 		$instr_defaults  = self::instruction_defaults();
 		$option          = self::OPTION;
 
-		// Add blank rows for adding new languages.
+		// Existing languages only; new rows are appended on demand via the
+		// "Add language" button (no always-present blank rows — see #17).
 		$rows = $languages;
-		for ( $i = 0; $i < 2; $i++ ) {
-			$rows[] = array(
-				'code'    => '',
-				'locale'  => '',
-				'name'    => '',
-				'native'  => '',
-				'flag'    => '',
-				'enabled' => true,
-			);
-		}
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'AI Translate', 'wp-ai-translate' ); ?></h1>
@@ -304,21 +295,22 @@ class Wpait_Admin_Settings {
 							<th><?php esc_html_e( 'Native name', 'wp-ai-translate' ); ?></th>
 							<th><?php esc_html_e( 'Flag', 'wp-ai-translate' ); ?></th>
 							<th><?php esc_html_e( 'Enabled', 'wp-ai-translate' ); ?></th>
+							<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody id="wpait-languages-rows">
 						<?php foreach ( $rows as $index => $row ) : ?>
 							<?php
 							$existing = '' !== $row['code'];
 							$in_use   = $existing && $this->languages->language_has_content( $row['code'] );
 							$base     = $option . '[languages][' . (int) $index . ']';
 							?>
-							<tr>
+							<tr class="wpait-language-row">
 								<td>
 									<input type="text" name="<?php echo esc_attr( $base . '[code]' ); ?>"
 										value="<?php echo esc_attr( $row['code'] ); ?>"
-										<?php echo $existing ? 'readonly' : ''; ?>
-										placeholder="es" size="6" />
+										readonly
+										size="6" />
 									<?php if ( $in_use ) : ?>
 										<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'In use — code locked', 'wp-ai-translate' ); ?>"></span>
 									<?php endif; ?>
@@ -328,10 +320,39 @@ class Wpait_Admin_Settings {
 								<td><input type="text" name="<?php echo esc_attr( $base . '[native]' ); ?>" value="<?php echo esc_attr( $row['native'] ); ?>" placeholder="Español" /></td>
 								<td><input type="text" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="3" /></td>
 								<td><input type="checkbox" name="<?php echo esc_attr( $base . '[enabled]' ); ?>" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?> /></td>
+								<td>
+									<?php if ( $in_use ) : ?>
+										<span class="description" title="<?php esc_attr_e( 'This language has content and cannot be removed. Disable it instead, or reassign/delete its content first.', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'In use', 'wp-ai-translate' ); ?></span>
+									<?php else : ?>
+										<button type="button" class="button-link wpait-remove-language" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: language code. */ __( 'Remove language %s', 'wp-ai-translate' ), $row['code'] ) ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button>
+									<?php endif; ?>
+								</td>
 							</tr>
 						<?php endforeach; ?>
+						<tr class="wpait-no-languages" <?php echo empty( $rows ) ? '' : 'style="display:none"'; ?>>
+							<td colspan="7"><?php esc_html_e( 'No languages configured yet. Use “Add language” to create one.', 'wp-ai-translate' ); ?></td>
+						</tr>
 					</tbody>
 				</table>
+				<p>
+					<button type="button" class="button" id="wpait-add-language">
+						<span class="dashicons dashicons-plus" style="vertical-align:text-bottom"></span>
+						<?php esc_html_e( 'Add language', 'wp-ai-translate' ); ?>
+					</button>
+				</p>
+
+				<?php // Template for a new, editable language row (cloned by JS on "Add language"). ?>
+				<template id="wpait-language-row-template">
+					<tr class="wpait-language-row wpait-new-language-row">
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][code]" value="" placeholder="<?php esc_attr_e( 'e.g. fr', 'wp-ai-translate' ); ?>" size="6" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][locale]" value="" placeholder="<?php esc_attr_e( 'e.g. fr_FR', 'wp-ai-translate' ); ?>" size="8" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][name]" value="" placeholder="<?php esc_attr_e( 'e.g. French', 'wp-ai-translate' ); ?>" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][native]" value="" placeholder="<?php esc_attr_e( 'e.g. Français', 'wp-ai-translate' ); ?>" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="3" /></td>
+						<td><input type="checkbox" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][enabled]" value="1" checked /></td>
+						<td><button type="button" class="button-link wpait-remove-language" aria-label="<?php esc_attr_e( 'Remove this new language', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button></td>
+					</tr>
+				</template>
 
 				<h2><?php esc_html_e( 'Default language', 'wp-ai-translate' ); ?></h2>
 				<select name="<?php echo esc_attr( $option . '[default_language]' ); ?>">
@@ -398,6 +419,47 @@ class Wpait_Admin_Settings {
 					if ( ta ) { ta.value = ta.getAttribute( 'data-wpait-default' ); }
 				} );
 			} );
+
+			// Add / remove language rows. New rows get fresh, monotonically increasing
+			// indices (never reused) so removing a row can't collide a later add. The
+			// server skips rows with a blank code, and reconcile() removes any existing
+			// language whose row is no longer submitted (unless it still has content).
+			var tbody    = document.getElementById( 'wpait-languages-rows' );
+			var template = document.getElementById( 'wpait-language-row-template' );
+			var addBtn   = document.getElementById( 'wpait-add-language' );
+			var nextIndex = <?php echo (int) count( $languages ); ?>;
+
+			function refreshEmptyState() {
+				var empty = tbody.querySelector( '.wpait-no-languages' );
+				if ( ! empty ) { return; }
+				var hasRows = !! tbody.querySelector( '.wpait-language-row' );
+				empty.style.display = hasRows ? 'none' : '';
+			}
+
+			if ( addBtn && tbody && template && 'content' in template ) {
+				addBtn.addEventListener( 'click', function () {
+					var html = template.innerHTML.replace( /__INDEX__/g, String( nextIndex++ ) );
+					var tmp = document.createElement( 'tbody' );
+					tmp.innerHTML = html.trim();
+					var row = tmp.firstElementChild;
+					var empty = tbody.querySelector( '.wpait-no-languages' );
+					if ( empty ) { tbody.insertBefore( row, empty ); } else { tbody.appendChild( row ); }
+					var code = row.querySelector( 'input[type="text"]' );
+					if ( code ) { code.focus(); }
+					refreshEmptyState();
+				} );
+			}
+
+			if ( tbody ) {
+				tbody.addEventListener( 'click', function ( e ) {
+					var btn = e.target.closest( '.wpait-remove-language' );
+					if ( ! btn ) { return; }
+					e.preventDefault();
+					var row = btn.closest( '.wpait-language-row' );
+					if ( row ) { row.parentNode.removeChild( row ); }
+					refreshEmptyState();
+				} );
+			}
 		}() );
 		</script>
 		<?php
