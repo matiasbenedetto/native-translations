@@ -1,0 +1,50 @@
+/**
+ * Front-end styles for the wp-ai-translate blocks (post-links + language-switcher).
+ *
+ * Shared because both blocks render the same `.wpait-language-list` markup. Enqueued
+ * per-block via wp_enqueue_block_style() so it only loads on pages that use a block.
+ * Deliberately minimal and theme-overridable (everything keys off the wpait-* hooks):
+ * turn the default bulleted <ul> into a tidy inline row of chip-style links.
+ */
+
+.wpait-language-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
+}
+
+.wpait-language-item {
+	margin: 0;
+	padding: 0;
+}
+
+.wpait-language-item a,
+.wpait-language-item > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding: 0.2em 0.7em;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	line-height: 1.5;
+	text-decoration: none;
+}
+
+.wpait-language-item a:hover,
+.wpait-language-item a:focus {
+	text-decoration: underline;
+}
+
+/* Current language: marked, not a link. */
+.wpait-language-item.is-current > span {
+	font-weight: 600;
+	opacity: 0.85;
+}
+
+.wpait-flag {
+	font-size: 1.1em;
+	line-height: 1;
+}
