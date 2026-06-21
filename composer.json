@@ -1,0 +1,18 @@
+{
+    "name": "wp-ai-translate/wp-ai-translate",
+    "description": "AI-powered translation for WordPress (developer tooling: test suite).",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5 || ^11.0"
+    },
+    "scripts": {
+        "test": "phpunit --configuration phpunit.xml.dist"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

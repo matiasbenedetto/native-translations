@@ -21,6 +21,7 @@ import {
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
+import { buildLanguageOptions, hasSiblings } from './language-options';
 
 const cfg = window.wpaitEditor || {
 	namespace: 'wp-ai-translate/v1',
@@ -102,17 +103,13 @@ const TranslationsPanel = () => {
 	// A grouped object's own language is fixed: changing it would drop its slot
 	// from the group (and mislabel this content). The selector is locked once the
 	// content has sibling translations; the server enforces this too.
-	const hasSiblings = Object.keys( translations ).length > 0;
+	const siblingsExist = hasSiblings( translations );
 
-	const languageOptions = [
-		// Only offer the placeholder while the content has no language yet — the
-		// store cannot unset one, so it must not be a selectable action.
-		...( currentLang ? [] : [ { label: __( '— Not set —', 'wp-ai-translate' ), value: '' } ] ),
-		...cfg.languages.map( ( l ) => ( {
-			label: l.native ? `${ l.name } (${ l.native })` : l.name,
-			value: l.code,
-		} ) ),
-	];
+	const languageOptions = buildLanguageOptions(
+		cfg.languages,
+		currentLang,
+		__( '— Not set —', 'wp-ai-translate' )
+	);
 
 	return (
 		<PluginDocumentSettingPanel
@@ -144,11 +141,11 @@ const TranslationsPanel = () => {
 						label={ __( 'Language of this content', 'wp-ai-translate' ) }
 						value={ currentLang || '' }
 						options={ languageOptions }
-						disabled={ loading || busy === 'lang' || hasSiblings }
+						disabled={ loading || busy === 'lang' || siblingsExist }
 						onChange={ setLanguage }
 						__nextHasNoMarginBottom
 					/>
-					{ hasSiblings && (
+					{ siblingsExist && (
 						<p className="description" style={ { margin: '4px 0 0' } }>
 							{ __( 'This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'wp-ai-translate' ) }
 						</p>

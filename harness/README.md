@@ -58,6 +58,7 @@ content), `./harness/up.sh --reset` (wipe first).
 | `bootstrap` | One-time: create a Playground site, record its dir in `.state/site-dir`. |
 | `ensure [host:vfs …]` | Converge to a running server. The plugin is always mounted; pass extra mounts (e.g. a test theme) as `./my-theme:/wordpress/wp-content/themes/my-theme`. Safe to re-run blindly; restarts only if the mount set changed. |
 | `wp -- <wp-cli args>` | Run wp-cli against the same site + mounts. `--allow-root --path=/wordpress` is injected for you. |
+| `test [php\|js]` | Run the automated unit suites (PHP + JS). No site needed. |
 | `shot -- <args>` | Take a screenshot (see `shot.mjs`). |
 | `cast -- <args>` | Record a screencast (see `cast.mjs`). |
 | `status` | Print harness state + live URL. |
@@ -69,6 +70,45 @@ The live URL always comes from `harness/.state/server.port` — never read `site
 from the Playground DB (it stores a junk ephemeral port). Frontend `curl` checks need
 a cookie jar (Playground's one-time 302 sets a session cookie); the harness manages
 that jar at `harness/.state/cookies` and feeds it to the browser tools.
+
+## Automated tests
+
+The harness runs assertion-based unit suites in addition to the screenshot/screencast
+tooling (issue #34). They are **database-free and browser-free** — no Playground site,
+MySQL, or Docker required — so they run identically locally and in CI:
+
+```sh
+./harness/playground.sh test            # PHP + JS unit suites
+./harness/playground.sh test php         # PHP only (composer + PHPUnit)
+./harness/playground.sh test js          # JS only (wp-scripts / Jest)
+```
+
+Equivalent direct commands:
+
+```sh
+composer install && composer test        # PHP — tests/php/, config in phpunit.xml.dist
+npm ci && npm run test:js                # JS — *.test.js under src/
+```
+
+Layers:
+
+- **PHP unit** (`tests/php/`) — exercise `wp-ai-translate/includes/` logic with lightweight
+  WordPress stubs (`tests/php/bootstrap.php`) and a **recording fake of the WP 7.0 AI
+  connector**, so a test can assert exactly which model/temperature a request would use.
+  This is where the bug **#32** regression is guarded: `TranslatorTest` asserts a pinned
+  `wpait_model_preference` is sent to the connector and never silently dropped, and that
+  connector `WP_Error`s (incl. the "no models" case) are surfaced cleanly.
+- **JS unit** (`src/**/*.test.js`) — `@wordpress/scripts` (Jest) over the editor/front-end
+  helpers.
+- **CI** — `.github/workflows/tests.yml` runs both on every PR (and also lints all plugin
+  PHP and checks the committed `build/` bundle is up to date).
+
+**Playground / AI caveat (be honest about it):** Playground has **no AI provider**
+(`wp_supports_ai()` is false / no usable model), so the live *generation* flow cannot run
+here. The unit suite covers the connector contract by mocking it; true end-to-end generation
+must be run against a configured-AI host (e.g. the local Apache site in `AGENTS.local.md`).
+End-to-end coverage of the create/translate/recreate flow against such a host is tracked as a
+follow-up (see the issues filed from #34).
 
 ## Screenshots
 

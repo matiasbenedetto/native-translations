@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    branches: [ trunk ]
+  pull_request:
+
+jobs:
+  php:
+    name: PHP unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Lint plugin PHP
+        run: find wp-ai-translate -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+      - name: Run PHPUnit
+        run: composer test
+
+  js:
+    name: JS unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Jest
+        run: npm run test:js
+      - name: Verify the editor-panel bundle is up to date
+        run: |
+          npm run build:editor-panel
+          git diff --exit-code wp-ai-translate/build/editor-panel \
+            || (echo "::error::Built bundle is out of date — run 'npm run build' and commit the result." && exit 1)
