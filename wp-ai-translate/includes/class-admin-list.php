@@ -182,11 +182,7 @@ class Wpait_Admin_List {
 
 		$links = array();
 		foreach ( $siblings as $sib_code => $sib_id ) {
-			$edit = get_edit_post_link( (int) $sib_id );
-			$text = $this->short_label( $sib_code );
-			$links[] = $edit
-				? '<a href="' . esc_url( $edit ) . '">' . esc_html( $text ) . '</a>'
-				: esc_html( $text );
+			$links[] = $this->sibling_link( get_edit_post_link( (int) $sib_id ), (string) $sib_code );
 		}
 
 		echo '<br /><span class="description">'
@@ -330,11 +326,7 @@ class Wpait_Admin_List {
 
 		$links = array();
 		foreach ( $siblings as $sib_code => $sib_id ) {
-			$edit    = get_edit_term_link( (int) $sib_id );
-			$text    = $this->short_label( $sib_code );
-			$links[] = $edit
-				? '<a href="' . esc_url( $edit ) . '">' . esc_html( $text ) . '</a>'
-				: esc_html( $text );
+			$links[] = $this->sibling_link( get_edit_term_link( (int) $sib_id ), (string) $sib_code );
 		}
 
 		return $out . '<br /><span class="description">' . wp_kses_post( implode( ', ', $links ) ) . '</span>';
@@ -1356,13 +1348,37 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Compact label for sibling links: the flag if set, else the uppercased code.
+	 * Builds an accessible "edit the sibling translation" link for the Language
+	 * column. The flag (if any) is decorative (aria-hidden) with the language name
+	 * carried as screen-reader text and a hover `title`/`aria-label`, so the link is
+	 * meaningful on hover, to assistive tech, and where flag emoji don't render. With
+	 * no flag, the uppercased code is the visible label (#24).
 	 *
-	 * @param string $code Language code.
+	 * @param string|false|null $edit_url Edit URL, or falsey when not editable.
+	 * @param string            $code     Sibling language code.
 	 * @return string
 	 */
-	private function short_label( string $code ): string {
+	private function sibling_link( $edit_url, string $code ): string {
 		$flag = $this->languages->flag( $code );
-		return '' !== $flag ? $flag : strtoupper( $code );
+		$name = $this->languages->name( $code );
+		$label = sprintf(
+			/* translators: %s: language name. */
+			__( 'Edit the %s translation', 'wp-ai-translate' ),
+			'' !== $name ? $name : strtoupper( $code )
+		);
+
+		if ( '' !== $flag ) {
+			$inner = '<span class="wpait-flag" aria-hidden="true">' . esc_html( $flag ) . '</span>'
+				. '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
+		} else {
+			$inner = esc_html( strtoupper( $code ) );
+		}
+
+		if ( ! $edit_url ) {
+			return $inner;
+		}
+
+		return '<a href="' . esc_url( $edit_url ) . '" title="' . esc_attr( $label ) . '" aria-label="' . esc_attr( $label ) . '">'
+			. $inner . '</a>';
 	}
 }
