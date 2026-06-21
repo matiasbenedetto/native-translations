@@ -356,10 +356,15 @@ class Wpait_Admin_List {
 			return $args;
 		}
 
-		// Only the main list-table query — never the parent-category / Quick-Edit
-		// dropdowns on the same screen, which query the same single taxonomy but
-		// (unlike the list table) always pass a `name` arg via wp_dropdown_categories.
-		if ( isset( $args['name'] ) ) {
+		// Only the main list-table query (and its pagination count) — never the
+		// parent-category / Quick-Edit dropdowns on the same screen, which must list
+		// every term regardless of the active filter. These cannot be told apart by
+		// `name`: wp_dropdown_categories() unsets `name` before calling get_terms(),
+		// so every term query on the screen arrives with WP_Term_Query's default
+		// `name => ''`. The dropdown calls do, however, carry dropdown-only args that
+		// wp_dropdown_categories() leaves in place (e.g. `value_field`), which the
+		// list-table query never sets — use that to skip them.
+		if ( isset( $args['value_field'] ) ) {
 			return $args;
 		}
 
