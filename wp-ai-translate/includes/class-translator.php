@@ -153,20 +153,27 @@ class Wpait_Translator {
 		 */
 		$models = array_values( array_filter( (array) apply_filters( 'wpait_model_preference', $preferred, $type, $to ) ) );
 
-		$result = $this->with_timeout(
-			(float) apply_filters( 'wpait_request_timeout', self::DEFAULT_TIMEOUT ),
-			static function () use ( $user_prompt, $system_prompt, $temperature, $models ) {
-				$builder = wp_ai_client_prompt( $user_prompt )
-					->using_system_instruction( $system_prompt );
-				if ( null !== $temperature ) {
-					$builder = $builder->using_temperature( $temperature );
-				}
-				if ( ! empty( $models ) ) {
-					$builder = $builder->using_model_preference( ...$models );
-				}
-				return $builder->generate_text();
+		$result = $this->run_generation( $user_prompt, $system_prompt, $temperature, $models );
+
+		// Self-healing (#32, take two): the connector's auto-picked model — or a pinned
+		// one the account can't access — 404s as "... is not available. Please use ...".
+		// The previous fix (#47) only let admins *avoid* this by hand-picking a model in
+		// Settings; the default path still 404'd and the raw error surfaced verbatim.
+		// Recover once by pinning an *advertised* text-generation model the provider
+		// exposes (excluding any already tried), so the common "did nothing in Settings"
+		// case works out of the box instead of 404ing. One retry only, to stay bounded.
+		if ( is_wp_error( $result ) && self::is_model_not_available_error( $result ) ) {
+			$fallback = self::fallback_models( $models );
+			if ( ! empty( $fallback ) ) {
+				$result = $this->run_generation( $user_prompt, $system_prompt, $temperature, $fallback );
 			}
-		);
+			// If the retry also 404'd (or there was no fallback to try), surface the
+			// friendly, actionable notice pointing at the model picker rather than the
+			// raw connector error.
+			if ( is_wp_error( $result ) && self::is_model_not_available_error( $result ) ) {
+				return self::model_not_available_error();
+			}
+		}
 
 		if ( is_wp_error( $result ) ) {
 			// A provider can be "supported" yet expose no text-generation model, in
@@ -917,6 +924,90 @@ class Wpait_Translator {
 			'wpait_ai_unavailable',
 			__( 'AI translation is unavailable: this site has no AI provider with a text-generation model configured. Configure one and try again.', 'wp-ai-translate' ),
 			array( 'status' => 503 )
+		);
+	}
+
+	/**
+	 * Runs one connector generation call (with the request-timeout filter, C3) for
+	 * the given ordered model preferences. An empty `$models` list leaves model
+	 * selection to the connector's own default. Centralised so {@see
+	 * translate_text()} can retry once with a fallback model list when the
+	 * connector's auto-pick is rejected (#32).
+	 *
+	 * @param string     $user_prompt    Wrapped source text.
+	 * @param string     $system_prompt  System instruction.
+	 * @param float|null $temperature    Temperature, or null to omit.
+	 * @param string[]   $models         Ordered preferred model IDs; empty = connector default.
+	 * @return string|WP_Error
+	 */
+	private function run_generation( string $user_prompt, string $system_prompt, ?float $temperature, array $models ) {
+		return $this->with_timeout(
+			(float) apply_filters( 'wpait_request_timeout', self::DEFAULT_TIMEOUT ),
+			static function () use ( $user_prompt, $system_prompt, $temperature, $models ) {
+				$builder = wp_ai_client_prompt( $user_prompt )
+					->using_system_instruction( $system_prompt );
+				if ( null !== $temperature ) {
+					$builder = $builder->using_temperature( $temperature );
+				}
+				if ( ! empty( $models ) ) {
+					$builder = $builder->using_model_preference( ...$models );
+				}
+				return $builder->generate_text();
+			}
+		);
+	}
+
+	/**
+	 * Whether a connector WP_Error is the "model not available to this account" 404
+	 * the provider raises when the connector auto-picks a model the account can't use
+	 * (e.g. "Not Found (404) - Claude Fable 5 is not available. Please use Opus 4.8."),
+	 * so we can recover by retrying with an advertised model. Distinct from {@see
+	 * is_no_model_error()} (provider exposes no text-generation model at all), which
+	 * is not recoverable this way.
+	 *
+	 * @param mixed $error Candidate error.
+	 * @return bool
+	 */
+	private static function is_model_not_available_error( $error ): bool {
+		return $error instanceof WP_Error
+			&& false !== stripos( (string) $error->get_error_message(), 'is not available' );
+	}
+
+	/**
+	 * Advertised text-generation model IDs to retry with when the connector rejects
+	 * a model as "not available" (#32): the models the provider actually exposes (via
+	 * {@see available_models()}), minus any already tried so the retry advances. Empty
+	 * when the provider advertises none — in which case the caller surfaces the
+	 * friendly {@see model_not_available_error()} instead.
+	 *
+	 * @param string[] $tried Model IDs already attempted in this request.
+	 * @return string[] Ordered fallback model IDs.
+	 */
+	private static function fallback_models( array $tried ): array {
+		$tried = array_map( 'strval', $tried );
+		$ids   = array();
+		foreach ( self::available_models() as $m ) {
+			$id = (string) $m['id'];
+			if ( ! in_array( $id, $tried, true ) && ! in_array( $id, $ids, true ) ) {
+				$ids[] = $id;
+			}
+		}
+		return $ids;
+	}
+
+	/**
+	 * The friendly, actionable error shown when the provider's default model (or a
+	 * pinned one) is not available to the account and no advertised fallback worked:
+	 * points the admin at the Settings model picker rather than surfacing the raw
+	 * connector 404. REST-friendly (status 404).
+	 *
+	 * @return WP_Error
+	 */
+	private static function model_not_available_error(): WP_Error {
+		return new WP_Error(
+			'wpait_model_not_available',
+			__( 'The AI provider’s default model is not available to this account, and no advertised model could be used. Pick an accessible model in Settings → AI provider (AI model) and try again.', 'wp-ai-translate' ),
+			array( 'status' => 404 )
 		);
 	}
 
