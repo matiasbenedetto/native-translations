@@ -36,8 +36,22 @@ final class Wpait_Test_State {
 	/** @var mixed Result the fake connector returns from generate_text(). */
 	public static $connector_result = 'Hola';
 
+	/**
+	 * @var array<int,mixed> Queue of results returned by successive generate_text()
+	 * calls (shifted in order). When empty, generate_text() falls back to
+	 * $connector_result. Lets a test simulate "first call 404s, retry succeeds".
+	 */
+	public static array $connector_results = array();
+
 	/** @var array<string,mixed>|null The recorded builder calls from the last generate_text(). */
 	public static ?array $last_request = null;
+
+	/**
+	 * @var array<int,array<string,mixed>> The recorded builder calls from every
+	 * generate_text() call, in order — lets the #32 retry tests assert both the
+	 * first (auto-pick) and the second (fallback) request.
+	 */
+	public static array $requests = array();
 
 	/** @var array<string,mixed> WP options store (get_option). */
 	public static array $options = array();
@@ -48,7 +62,9 @@ final class Wpait_Test_State {
 		self::$transients       = array();
 		self::$filters          = array();
 		self::$connector_result = 'Hola';
+		self::$connector_results = array();
 		self::$last_request     = null;
+		self::$requests          = array();
 		self::$options          = array();
 	}
 }
@@ -85,7 +101,11 @@ final class Wpait_Fake_Prompt_Builder {
 	}
 
 	public function generate_text() {
+		Wpait_Test_State::$requests[]    = $this->calls;
 		Wpait_Test_State::$last_request = $this->calls;
+		if ( ! empty( Wpait_Test_State::$connector_results ) ) {
+			return array_shift( Wpait_Test_State::$connector_results );
+		}
 		return Wpait_Test_State::$connector_result;
 	}
 }
