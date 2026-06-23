@@ -8,7 +8,8 @@
     "build": "npm run build:editor-panel && npm run build:post-links && npm run build:language-switcher && npm run build:overview",
     "build:editor-panel": "wp-scripts build src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel",
     "build:overview": "wp-scripts build src/overview/index.js --output-path=wp-ai-translate/build/overview && npm run build:overview-css",
-    "build:overview-css": "node -e \"require('fs').copyFileSync('node_modules/@wordpress/dataviews/build-style/style.css','wp-ai-translate/build/overview/style-index.css')\"",
+    "build:overview-css": "node overview-css.mjs copy",
+    "check:overview-css": "node overview-css.mjs check",
     "build:post-links": "wp-scripts build src/post-links/index.js --output-path=wp-ai-translate/build/post-links",
     "build:language-switcher": "wp-scripts build src/language-switcher/index.js --output-path=wp-ai-translate/build/language-switcher",
     "start": "wp-scripts start src/editor-panel/index.js --output-path=wp-ai-translate/build/editor-panel",
@@ -22,6 +23,6 @@
     "@wordpress/scripts": "^30.0.0"
   },
   "dependencies": {
-    "@wordpress/dataviews": "^16.0.1"
+    "@wordpress/dataviews": "16.0.1"
   }
 }
