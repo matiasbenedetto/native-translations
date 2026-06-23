@@ -665,11 +665,15 @@ class Wpait_Admin_List {
 			return array();
 		}
 
+		$default = (string) ( Wpait_Admin_Settings::get_settings()['default_language'] ?? '' );
+
 		$rows = array();
 		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
 			foreach ( $this->untranslated_map( $post_type ) as $post_id => $present ) {
 				$missing = array_diff( $codes, $present );
-				if ( empty( $missing ) || $this->skip_in_overview( 'post', (int) $post_id, $show_hidden ) ) {
+				if ( empty( $missing )
+					|| $this->is_translated_copy( 'post', (int) $post_id, $default )
+					|| $this->skip_in_overview( 'post', (int) $post_id, $show_hidden ) ) {
 					continue;
 				}
 				$rows[] = array( 'type' => 'post', 'id' => (int) $post_id, 'missing' => $missing );
@@ -678,7 +682,9 @@ class Wpait_Admin_List {
 		foreach ( self::TERM_TAXONOMIES as $taxonomy ) {
 			foreach ( $this->untranslated_term_map( $taxonomy ) as $term_id => $present ) {
 				$missing = array_diff( $codes, $present );
-				if ( empty( $missing ) || $this->skip_in_overview( 'term', (int) $term_id, $show_hidden ) ) {
+				if ( empty( $missing )
+					|| $this->is_translated_copy( 'term', (int) $term_id, $default )
+					|| $this->skip_in_overview( 'term', (int) $term_id, $show_hidden ) ) {
 					continue;
 				}
 				$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
@@ -686,6 +692,30 @@ class Wpait_Admin_List {
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * Whether an item is a translated copy that must be excluded from the "missing
+	 * translations" view (#85): we only want to translate *from* originals, never
+	 * from a translation. An item counts as a valid source — and so is kept — when
+	 * it has no language (an unmarked original candidate) or it is in the site's
+	 * default (source) language. A member in any other language is itself a
+	 * translation and is excluded.
+	 *
+	 * Falls back to keeping everything when no default language is configured, since
+	 * originals cannot be told apart from translations without one.
+	 *
+	 * @param string $type    'post' | 'term'.
+	 * @param int    $id      Object id.
+	 * @param string $default The configured default language code ('' if none).
+	 * @return bool
+	 */
+	private function is_translated_copy( string $type, int $id, string $default ): bool {
+		if ( '' === $default ) {
+			return false;
+		}
+		$own = $this->store->get_language( $type, $id );
+		return '' !== $own && $own !== $default;
 	}
 
 	/**

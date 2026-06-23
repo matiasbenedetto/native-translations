@@ -122,6 +122,39 @@ final class OverviewRestTest extends TestCase {
 		$this->assertSame( 1, $data['counts']['missing'] );
 	}
 
+	public function test_missing_view_excludes_translated_copies_keeping_originals(): void {
+		// Default (source) language is English; en/es/fr enabled. The missing view
+		// should only offer originals (default language) and unmarked items as
+		// translation sources — never a translated copy (#85).
+		Wpait_Languages::flush_index();
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'default_language' => 'en',
+			'languages'        => array(
+				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
+				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
+				array( 'code' => 'fr', 'name' => 'French', 'enabled' => true ),
+			),
+		);
+
+		// Group g1: en original (10) + its es translation (11). Both lack fr.
+		$this->seed_post( 10, 'en', 'g1', 'post', 'Original' );
+		$this->seed_post( 11, 'es', 'g1', 'post', 'Traduccion' );
+		// Unmarked item (no language) — an original candidate, kept.
+		$this->seed_post( 20, '', '', 'post', 'Unmarked' );
+		// Standalone non-default-language item — a copy, excluded.
+		$this->seed_post( 30, 'es', '', 'post', 'Standalone ES' );
+
+		$data = $this->payload( array( 'view' => 'missing' ) );
+		$ids  = array_map( static fn ( $r ) => $r['id'], $data['rows'] );
+		sort( $ids );
+
+		$this->assertContains( 10, $ids, 'the en original (missing fr) should be listed' );
+		$this->assertContains( 20, $ids, 'the unmarked item should be listed' );
+		$this->assertNotContains( 11, $ids, 'the es translation must not be listed' );
+		$this->assertNotContains( 30, $ids, 'a non-default-language copy must not be listed' );
+		$this->assertSame( count( $data['rows'] ), $data['counts']['missing'], 'count matches the filtered list' );
+	}
+
 	public function test_search_filters_rows_by_title(): void {
 		$this->seed_post( 20, 'en', '', 'post', 'Alpha' );
 		$this->seed_post( 21, 'en', '', 'post', 'Beta' );
