@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-06-23T03:39:04+00:00\n"
+"POT-Creation-Date: 2026-06-23T03:47:56+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-ai-translate\n"
@@ -133,11 +133,13 @@ msgid "Yes, trash it"
 msgstr ""
 
 #: src/editor-panel/index.js:243
+#: src/overview/index.js:261
 #: assets/js/term-panel.js:225
 msgid "Edit"
 msgstr ""
 
 #: src/editor-panel/index.js:246
+#: src/overview/index.js:272
 #: assets/js/term-panel.js:229
 msgid "View"
 msgstr ""
@@ -195,6 +197,100 @@ msgstr ""
 msgid "Mark the current language"
 msgstr ""
 
+#: src/overview/index.js:115
+msgid "Could not load the overview."
+msgstr ""
+
+#: src/overview/index.js:139
+msgid "Title"
+msgstr ""
+
+#: src/overview/index.js:153
+msgid "Type"
+msgstr ""
+
+#: src/overview/index.js:157
+#: includes/class-admin-list.php:1158
+msgid "Post"
+msgstr ""
+
+#: src/overview/index.js:158
+#: includes/class-admin-list.php:1155
+msgid "Page"
+msgstr ""
+
+#: src/overview/index.js:159
+#: includes/class-admin-list.php:1145
+msgid "Category"
+msgstr ""
+
+#: src/overview/index.js:160
+#: includes/class-admin-list.php:1148
+msgid "Tag"
+msgstr ""
+
+#: src/overview/index.js:170
+#: includes/class-admin-list.php:155
+#: includes/class-admin-list.php:160
+#: includes/class-admin-list.php:299
+#: includes/class-admin-list.php:304
+#: includes/class-languages.php:174
+msgid "Language"
+msgstr ""
+
+#: src/overview/index.js:179
+msgid "Missing"
+msgstr ""
+
+#. translators: 1: count of failures, 2: language name.
+#: src/overview/index.js:213
+#, js-format
+msgid "%1$d translation(s) to %2$s failed."
+msgstr ""
+
+#. translators: 1: count, 2: language name.
+#: src/overview/index.js:223
+#, js-format
+msgid "%1$d translation(s) to %2$s created as drafts."
+msgstr ""
+
+#. translators: %s: language name.
+#: src/overview/index.js:244
+#, js-format
+msgid "Translate to %s"
+msgstr ""
+
+#: src/overview/index.js:299
+msgid "Hide from list"
+msgstr ""
+
+#: src/overview/index.js:307
+msgid "Unhide"
+msgstr ""
+
+#: src/overview/index.js:326
+#: src/overview/index.js:330
+msgid "AI translation is unavailable, so Translate actions are disabled."
+msgstr ""
+
+#: src/overview/index.js:327
+msgid "Check the AI provider status."
+msgstr ""
+
+#. translators: %d: number of items missing translations.
+#: src/overview/index.js:354
+#, js-format
+msgid "Missing translations (%d)"
+msgstr ""
+
+#: src/overview/index.js:380
+msgid "Search by title"
+msgstr ""
+
+#: src/overview/index.js:385
+msgid "Nothing to show here."
+msgstr ""
+
 #: src/post-links/index.js:43
 msgid "Include the current language"
 msgstr ""
@@ -223,76 +319,52 @@ msgstr ""
 msgid "Matias Benedetto"
 msgstr ""
 
-#: includes/class-admin-list.php:154
-#: includes/class-admin-list.php:159
-#: includes/class-admin-list.php:298
-#: includes/class-admin-list.php:303
-#: includes/class-languages.php:174
-msgid "Language"
-msgstr ""
-
-#: includes/class-admin-list.php:181
-#: includes/class-admin-list.php:327
+#: includes/class-admin-list.php:182
+#: includes/class-admin-list.php:328
 msgid "No language"
 msgstr ""
 
-#: includes/class-admin-list.php:224
-#: includes/class-admin-list.php:438
+#: includes/class-admin-list.php:225
+#: includes/class-admin-list.php:439
 msgid "Filter by language"
 msgstr ""
 
-#: includes/class-admin-list.php:226
-#: includes/class-admin-list.php:428
+#: includes/class-admin-list.php:227
+#: includes/class-admin-list.php:429
 msgid "All languages"
 msgstr ""
 
-#: includes/class-admin-list.php:228
-#: includes/class-admin-list.php:429
+#: includes/class-admin-list.php:229
+#: includes/class-admin-list.php:430
 msgid "Untranslated"
 msgstr ""
 
-#: includes/class-admin-list.php:1020
-#: includes/class-admin-list.php:1071
+#: includes/class-admin-list.php:1021
+#: includes/class-admin-list.php:1072
 msgid "(no title)"
 msgstr ""
 
-#: includes/class-admin-list.php:1144
-msgid "Category"
-msgstr ""
-
-#: includes/class-admin-list.php:1147
-msgid "Tag"
-msgstr ""
-
-#: includes/class-admin-list.php:1154
-msgid "Page"
-msgstr ""
-
-#: includes/class-admin-list.php:1157
-msgid "Post"
-msgstr ""
-
-#: includes/class-admin-list.php:1170
-#: includes/class-admin-list.php:1254
+#: includes/class-admin-list.php:1171
+#: includes/class-admin-list.php:1255
 msgid "AI Translate Overview"
 msgstr ""
 
-#: includes/class-admin-list.php:1171
+#: includes/class-admin-list.php:1172
 msgid "Overview"
 msgstr ""
 
-#: includes/class-admin-list.php:1257
+#: includes/class-admin-list.php:1258
 msgid "The AI Translate Overview requires JavaScript to display the translations table."
 msgstr ""
 
 #. translators: %d: scan limit.
-#: includes/class-admin-list.php:1284
+#: includes/class-admin-list.php:1285
 #, php-format
 msgid "Only the most recent %d items per type were scanned; the list may be incomplete. Use the by-language filter for older content."
 msgstr ""
 
 #. translators: %s: language name.
-#: includes/class-admin-list.php:1328
+#: includes/class-admin-list.php:1329
 #, php-format
 msgid "Edit the %s translation"
 msgstr ""
