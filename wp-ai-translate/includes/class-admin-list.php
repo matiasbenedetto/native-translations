@@ -908,14 +908,19 @@ class Wpait_Admin_List {
 		$search      = trim( (string) ( $args['search'] ?? '' ) );
 		$show_hidden = ! empty( $args['show_hidden'] );
 		$is_lang     = in_array( $view, $codes, true );
+		$is_unmarked = 'unmarked' === $view;
 
 		$this->scan_truncated = false;
 
 		// Build the full row set for the requested view, then sort/search/paginate
 		// it in PHP (admin-only + bounded by MAX_SCAN per N6).
-		$rows = $is_lang
-			? $this->language_overview_rows( $view, $languages )
-			: $this->missing_overview_rows( $codes, $languages, $show_hidden );
+		if ( $is_lang ) {
+			$rows = $this->language_overview_rows( $view, $languages );
+		} elseif ( $is_unmarked ) {
+			$rows = $this->unmarked_overview_rows();
+		} else {
+			$rows = $this->missing_overview_rows( $codes, $languages, $show_hidden );
+		}
 
 		// Search filter (title match, case-insensitive).
 		if ( '' !== $search ) {
@@ -968,6 +973,7 @@ class Wpait_Admin_List {
 			'scan_truncated' => $this->scan_truncated,
 			'counts'        => array(
 				'missing'     => $this->missing_count( $codes, $show_hidden ),
+				'unmarked'    => count( $this->unmarked_overview_rows() ),
 				'by_language' => $by_language,
 			),
 		);
@@ -1113,6 +1119,100 @@ class Wpait_Admin_List {
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
 				'hidden'     => false,
 				'taxonomy'   => $term->taxonomy,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Builds the "Unmarked" rows (#56): posts/pages and categories/tags with NO
+	 * language assigned at all, shaped for the REST/DataViews payload. These are the
+	 * items the manual bulk-set and AI-detection actions target. Bounded by MAX_SCAN
+	 * (N6); `language` is always null here by definition.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function unmarked_overview_rows(): array {
+		$out = array();
+
+		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
+			$ids = get_posts(
+				array(
+					'post_type'              => $post_type,
+					'post_status'            => 'any',
+					'fields'                 => 'ids',
+					'posts_per_page'         => self::MAX_SCAN,
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => true,
+					'update_post_term_cache' => true,
+					'ignore_sticky_posts'    => true,
+				)
+			);
+			if ( count( $ids ) >= self::MAX_SCAN ) {
+				$this->scan_truncated = true;
+			}
+			foreach ( $ids as $post_id ) {
+				$post_id = (int) $post_id;
+				if ( '' !== $this->store->get_language( 'post', $post_id ) ) {
+					continue;
+				}
+				$post     = get_post( $post_id );
+				$view_url = ( $post instanceof WP_Post && 'publish' === $post->post_status ) ? (string) get_permalink( $post_id ) : (string) get_preview_post_link( $post_id );
+				$out[]    = array(
+					'key'        => 'post:' . $post_id,
+					'type'       => 'post',
+					'id'         => $post_id,
+					'title'      => get_the_title( $post_id ) ?: __( '(no title)', 'wp-ai-translate' ),
+					'type_label' => $this->type_label( 'post', '', $post_id ),
+					'language'   => null,
+					'missing'    => array(),
+					'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
+					'view_url'   => $view_url,
+					'hidden'     => false,
+					'taxonomy'   => '',
+				);
+			}
+		}
+
+		$this->in_term_filter = true;
+		$terms                = get_terms(
+			array(
+				'taxonomy'               => self::TERM_TAXONOMIES,
+				'hide_empty'             => false,
+				'number'                 => self::MAX_SCAN,
+				'update_term_meta_cache' => true,
+			)
+		);
+		$this->in_term_filter = false;
+		if ( is_wp_error( $terms ) ) {
+			$terms = array();
+		}
+		if ( count( $terms ) >= self::MAX_SCAN ) {
+			$this->scan_truncated = true;
+		}
+		foreach ( $terms as $term ) {
+			$term_id = (int) ( is_object( $term ) ? $term->term_id : $term );
+			if ( '' !== $this->store->get_language( 'term', $term_id ) ) {
+				continue;
+			}
+			$term_obj = get_term( $term_id );
+			if ( ! $term_obj instanceof WP_Term ) {
+				continue;
+			}
+			$link  = get_term_link( $term_id );
+			$out[] = array(
+				'key'        => 'term:' . $term_id,
+				'type'       => 'term',
+				'id'         => $term_id,
+				'title'      => $term_obj->name,
+				'type_label' => $this->type_label( 'term', $term_obj->taxonomy, $term_id ),
+				'language'   => null,
+				'missing'    => array(),
+				'edit_url'   => (string) get_edit_term_link( $term_id ),
+				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
+				'hidden'     => false,
+				'taxonomy'   => $term_obj->taxonomy,
 			);
 		}
 

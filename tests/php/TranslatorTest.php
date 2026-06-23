@@ -277,4 +277,117 @@ final class TranslatorTest extends TestCase {
 		$this->translate();
 		$this->assertSame( 'SYS', Wpait_Test_State::$last_request['system'] );
 	}
+
+	/* ------------------------------------------------------------------ *
+	 * AI language detection (#56)
+	 * ------------------------------------------------------------------ */
+
+	/** Seeds en+es as enabled languages so detect_language has an allowlist. */
+	private function seed_languages(): void {
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'languages' => array(
+				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
+				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
+			),
+		);
+		Wpait_Languages::flush_index();
+	}
+
+	public function test_detect_language_returns_validated_code(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array(
+			'ID'           => 5,
+			'post_type'    => 'post',
+			'post_title'   => 'Hola mundo',
+			'post_content' => 'Esto es un texto en español.',
+		);
+		Wpait_Test_State::$connector_result = 'es';
+
+		$out = $this->translator->detect_language( 'post', 5 );
+
+		$this->assertSame( 'es', $out );
+		// The detection prompt — not the translation prompt — must be used.
+		$this->assertStringContainsString( 'classifier', Wpait_Test_State::$last_request['system'] );
+		$this->assertStringContainsString( 'en, es', Wpait_Test_State::$last_request['system'] );
+	}
+
+	public function test_detect_language_normalises_noisy_model_reply(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => 'Hi', 'post_content' => 'Hello there.' );
+		// Model adds quotes / casing / trailing words — we take the first valid token.
+		Wpait_Test_State::$connector_result = "EN.\nThe language is English.";
+
+		$this->assertSame( 'en', $this->translator->detect_language( 'post', 5 ) );
+	}
+
+	public function test_detect_language_rejects_out_of_allowlist_code(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => 'Bonjour', 'post_content' => 'Texte en français.' );
+		Wpait_Test_State::$connector_result = 'fr'; // Not an enabled language.
+
+		$out = $this->translator->detect_language( 'post', 5 );
+		$this->assertInstanceOf( WP_Error::class, $out );
+		$this->assertSame( 'wpait_detect_failed', $out->get_error_code() );
+	}
+
+	public function test_detect_language_rejects_unknown_reply(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => '123', 'post_content' => '456' );
+		Wpait_Test_State::$connector_result = 'unknown';
+
+		$out = $this->translator->detect_language( 'post', 5 );
+		$this->assertInstanceOf( WP_Error::class, $out );
+		$this->assertSame( 'wpait_detect_failed', $out->get_error_code() );
+	}
+
+	public function test_detect_language_for_term_uses_name_and_description(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$terms[3] = array(
+			'term_id'     => 3,
+			'taxonomy'    => 'category',
+			'name'        => 'Noticias',
+			'slug'        => 'noticias',
+			'description' => 'Categoría de noticias en español.',
+		);
+		Wpait_Test_State::$connector_result = 'es';
+
+		$this->assertSame( 'es', $this->translator->detect_language( 'term', 3 ) );
+	}
+
+	public function test_detect_language_empty_content_does_not_call_connector(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => '', 'post_content' => '' );
+
+		$out = $this->translator->detect_language( 'post', 5 );
+		$this->assertInstanceOf( WP_Error::class, $out );
+		$this->assertSame( 'wpait_detect_empty', $out->get_error_code() );
+		$this->assertNull( Wpait_Test_State::$last_request );
+	}
+
+	public function test_detect_language_unavailable_when_ai_off(): void {
+		$this->seed_languages();
+		Wpait_Test_State::$is_supported = false;
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => 'Hi', 'post_content' => 'Hello.' );
+
+		$out = $this->translator->detect_language( 'post', 5 );
+		$this->assertInstanceOf( WP_Error::class, $out );
+		$this->assertSame( 'wpait_ai_unavailable', $out->get_error_code() );
+	}
+
+	public function test_detect_language_reuses_self_heal_on_model_not_available(): void {
+		// The detection path must share the #32 self-heal: a 404 retries once with
+		// an advertised model rather than surfacing the raw error.
+		$this->seed_languages();
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post', 'post_title' => 'Hi', 'post_content' => 'Hello.' );
+		Wpait_Test_State::$connector_results = array(
+			new WP_Error( 'prompt_client_error', 'Not Found (404) - Claude Fable 5 is not available. Please use Opus 4.8.' ),
+			'en',
+		);
+		set_transient( 'wpait_available_models', array(
+			array( 'id' => 'claude-opus-4-8', 'label' => 'Opus 4.8', 'provider' => 'Anthropic' ),
+		) );
+
+		$this->assertSame( 'en', $this->translator->detect_language( 'post', 5 ) );
+		$this->assertCount( 2, Wpait_Test_State::$requests );
+	}
 }
