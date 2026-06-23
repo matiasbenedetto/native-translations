@@ -128,18 +128,65 @@ class Wpait_Admin_Settings {
 	}
 
 	/**
+	 * Bundled catalog of language defaults keyed by language code. Picking a code
+	 * in the Languages table auto-fills the remaining fields (locale, name, native
+	 * name, flag) from this table; the user can still override any value (#74).
+	 *
+	 * Each code maps to the language's primary WordPress locale. Additional
+	 * regional variants are offered for the Locale field via common_locales(),
+	 * which is derived from this catalog so the two stay in sync.
+	 *
+	 * @return array<string,array{locale:string,name:string,native:string,flag:string}>
+	 */
+	public static function default_catalog(): array {
+		return array(
+			'en' => array( 'locale' => 'en_US', 'name' => __( 'English', 'wp-ai-translate' ),    'native' => 'English',          'flag' => '🇺🇸' ),
+			'es' => array( 'locale' => 'es_ES', 'name' => __( 'Spanish', 'wp-ai-translate' ),    'native' => 'Español',          'flag' => '🇪🇸' ),
+			'fr' => array( 'locale' => 'fr_FR', 'name' => __( 'French', 'wp-ai-translate' ),     'native' => 'Français',         'flag' => '🇫🇷' ),
+			'de' => array( 'locale' => 'de_DE', 'name' => __( 'German', 'wp-ai-translate' ),     'native' => 'Deutsch',          'flag' => '🇩🇪' ),
+			'pt' => array( 'locale' => 'pt_BR', 'name' => __( 'Portuguese', 'wp-ai-translate' ), 'native' => 'Português',        'flag' => '🇧🇷' ),
+			'it' => array( 'locale' => 'it_IT', 'name' => __( 'Italian', 'wp-ai-translate' ),    'native' => 'Italiano',         'flag' => '🇮🇹' ),
+			'nl' => array( 'locale' => 'nl_NL', 'name' => __( 'Dutch', 'wp-ai-translate' ),      'native' => 'Nederlands',       'flag' => '🇳🇱' ),
+			'pl' => array( 'locale' => 'pl_PL', 'name' => __( 'Polish', 'wp-ai-translate' ),     'native' => 'Polski',           'flag' => '🇵🇱' ),
+			'ru' => array( 'locale' => 'ru_RU', 'name' => __( 'Russian', 'wp-ai-translate' ),    'native' => 'Русский',          'flag' => '🇷🇺' ),
+			'uk' => array( 'locale' => 'uk',    'name' => __( 'Ukrainian', 'wp-ai-translate' ),  'native' => 'Українська',       'flag' => '🇺🇦' ),
+			'sv' => array( 'locale' => 'sv_SE', 'name' => __( 'Swedish', 'wp-ai-translate' ),    'native' => 'Svenska',          'flag' => '🇸🇪' ),
+			'da' => array( 'locale' => 'da_DK', 'name' => __( 'Danish', 'wp-ai-translate' ),     'native' => 'Dansk',            'flag' => '🇩🇰' ),
+			'nb' => array( 'locale' => 'nb_NO', 'name' => __( 'Norwegian', 'wp-ai-translate' ),  'native' => 'Norsk bokmål',     'flag' => '🇳🇴' ),
+			'fi' => array( 'locale' => 'fi',    'name' => __( 'Finnish', 'wp-ai-translate' ),    'native' => 'Suomi',            'flag' => '🇫🇮' ),
+			'cs' => array( 'locale' => 'cs_CZ', 'name' => __( 'Czech', 'wp-ai-translate' ),      'native' => 'Čeština',          'flag' => '🇨🇿' ),
+			'el' => array( 'locale' => 'el',    'name' => __( 'Greek', 'wp-ai-translate' ),      'native' => 'Ελληνικά',         'flag' => '🇬🇷' ),
+			'tr' => array( 'locale' => 'tr_TR', 'name' => __( 'Turkish', 'wp-ai-translate' ),    'native' => 'Türkçe',           'flag' => '🇹🇷' ),
+			'ar' => array( 'locale' => 'ar',    'name' => __( 'Arabic', 'wp-ai-translate' ),     'native' => 'العربية',          'flag' => '🇸🇦' ),
+			'he' => array( 'locale' => 'he_IL', 'name' => __( 'Hebrew', 'wp-ai-translate' ),     'native' => 'עברית',            'flag' => '🇮🇱' ),
+			'hi' => array( 'locale' => 'hi_IN', 'name' => __( 'Hindi', 'wp-ai-translate' ),      'native' => 'हिन्दी',            'flag' => '🇮🇳' ),
+			'id' => array( 'locale' => 'id_ID', 'name' => __( 'Indonesian', 'wp-ai-translate' ), 'native' => 'Bahasa Indonesia', 'flag' => '🇮🇩' ),
+			'ja' => array( 'locale' => 'ja',    'name' => __( 'Japanese', 'wp-ai-translate' ),   'native' => '日本語',           'flag' => '🇯🇵' ),
+			'ko' => array( 'locale' => 'ko_KR', 'name' => __( 'Korean', 'wp-ai-translate' ),     'native' => '한국어',           'flag' => '🇰🇷' ),
+			'th' => array( 'locale' => 'th',    'name' => __( 'Thai', 'wp-ai-translate' ),       'native' => 'ไทย',              'flag' => '🇹🇭' ),
+			'vi' => array( 'locale' => 'vi',    'name' => __( 'Vietnamese', 'wp-ai-translate' ), 'native' => 'Tiếng Việt',       'flag' => '🇻🇳' ),
+			'zh' => array( 'locale' => 'zh_CN', 'name' => __( 'Chinese', 'wp-ai-translate' ),    'native' => '中文',             'flag' => '🇨🇳' ),
+		);
+	}
+
+	/**
 	 * A representative set of WordPress locales offered as datalist suggestions for
 	 * the Locale field. Suggestions only — any `xx_YY`-format value is still allowed.
+	 *
+	 * Derived from default_catalog() (one primary locale per language) plus a few
+	 * additional regional variants, so adding a language to the catalog also offers
+	 * its locale here without maintaining a second list.
 	 *
 	 * @return string[]
 	 */
 	public static function common_locales(): array {
-		return array(
-			'en_US', 'en_GB', 'es_ES', 'es_AR', 'es_MX', 'pt_BR', 'pt_PT', 'fr_FR',
-			'fr_CA', 'de_DE', 'it_IT', 'nl_NL', 'pl_PL', 'ru_RU', 'uk', 'sv_SE',
-			'da_DK', 'nb_NO', 'fi', 'cs_CZ', 'el', 'tr_TR', 'ar', 'he_IL', 'hi_IN',
-			'id_ID', 'ja', 'ko_KR', 'th', 'vi', 'zh_CN', 'zh_TW',
-		);
+		$locales = array();
+		foreach ( self::default_catalog() as $entry ) {
+			$locales[] = $entry['locale'];
+		}
+		// Extra regional variants beyond each language's primary catalog locale.
+		$variants = array( 'en_GB', 'es_AR', 'es_MX', 'pt_PT', 'fr_CA', 'zh_TW' );
+		return array_values( array_unique( array_merge( $locales, $variants ) ) );
 	}
 
 	/**
@@ -431,6 +478,7 @@ class Wpait_Admin_Settings {
 				</p>
 				<p class="description">
 					<?php esc_html_e( 'Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: an optional emoji shown beside the name — leave blank to show the name only.', 'wp-ai-translate' ); ?>
+						<?php esc_html_e( 'Tip: set the Code of a new language to auto-fill the other fields from a built-in catalog of common languages — you can still edit any value.', 'wp-ai-translate' ); ?>
 				</p>
 				<datalist id="wpait-locales">
 					<?php foreach ( self::common_locales() as $loc ) : ?>
@@ -664,6 +712,24 @@ class Wpait_Admin_Settings {
 					var row = btn.closest( '.wpait-language-row' );
 					if ( row ) { row.parentNode.removeChild( row ); }
 					refreshEmptyState();
+				} );
+			}
+
+			// Auto-fill a new language row from the bundled catalog (#74). When the
+			// user sets a row's Code, fill any *empty* sibling fields (Locale, Name,
+			// Native, Flag) from the catalog; values the user already typed are kept.
+			var wpaitCatalog = <?php echo wp_json_encode( self::default_catalog() ); ?>;
+			if ( tbody ) {
+				tbody.addEventListener( 'change', function ( e ) {
+					var input = e.target;
+					if ( ! input.matches || ! input.matches( '.wpait-new-language-row input[name$="[code]"]' ) ) { return; }
+					var entry = wpaitCatalog[ input.value.trim().toLowerCase() ];
+					if ( ! entry ) { return; }
+					var row = input.closest( '.wpait-language-row' );
+					[ 'locale', 'name', 'native', 'flag' ].forEach( function ( field ) {
+						var el = row.querySelector( 'input[name$="[' + field + ']"]' );
+						if ( el && '' === el.value.trim() ) { el.value = entry[ field ]; }
+					} );
 				} );
 			}
 

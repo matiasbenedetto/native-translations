@@ -42,6 +42,37 @@ final class AdminSettingsTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * Language defaults catalog (#74)
+	 * ------------------------------------------------------------------ */
+
+	public function test_default_catalog_entries_are_well_formed(): void {
+		$catalog = Wpait_Admin_Settings::default_catalog();
+		$this->assertNotEmpty( $catalog );
+		foreach ( $catalog as $code => $entry ) {
+			$this->assertMatchesRegularExpression( '/^[a-z]{2,3}$/', $code, "code '$code' should be a short lowercase code" );
+			foreach ( array( 'locale', 'name', 'native', 'flag' ) as $field ) {
+				$this->assertArrayHasKey( $field, $entry, "code '$code' missing '$field'" );
+				$this->assertNotSame( '', $entry[ $field ], "code '$code' has empty '$field'" );
+			}
+			$this->assertTrue(
+				Wpait_Admin_Settings::is_valid_locale( $entry['locale'] ),
+				"catalog locale '{$entry['locale']}' (code '$code') should be valid"
+			);
+		}
+	}
+
+	public function test_common_locales_are_derived_from_catalog(): void {
+		$locales = Wpait_Admin_Settings::common_locales();
+		foreach ( Wpait_Admin_Settings::default_catalog() as $entry ) {
+			$this->assertContains(
+				$entry['locale'],
+				$locales,
+				"catalog locale '{$entry['locale']}' should be offered as a suggestion"
+			);
+		}
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * get_settings() shape
 	 * ------------------------------------------------------------------ */
 
