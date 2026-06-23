@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-06-23T03:16:22+00:00\n"
+"POT-Creation-Date: 2026-06-23T03:21:20+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-ai-translate\n"
@@ -201,9 +201,10 @@ msgstr ""
 
 #. Plugin Name of the plugin
 #: wp-ai-translate.php
-#: includes/class-admin-settings.php:168
-#: includes/class-admin-settings.php:169
-#: includes/class-admin-settings.php:357
+#: includes/class-admin-settings.php:181
+#: includes/class-admin-settings.php:182
+#: includes/class-admin-settings.php:192
+#: includes/class-admin-settings.php:381
 msgid "AI Translate"
 msgstr ""
 
@@ -222,424 +223,431 @@ msgstr ""
 msgid "Matias Benedetto"
 msgstr ""
 
-#: includes/class-admin-list.php:145
-#: includes/class-admin-list.php:150
-#: includes/class-admin-list.php:289
-#: includes/class-admin-list.php:294
-#: includes/class-admin-list.php:1062
+#: includes/class-admin-list.php:153
+#: includes/class-admin-list.php:158
+#: includes/class-admin-list.php:297
+#: includes/class-admin-list.php:302
+#: includes/class-admin-list.php:1070
 #: includes/class-languages.php:174
 msgid "Language"
 msgstr ""
 
-#: includes/class-admin-list.php:172
-#: includes/class-admin-list.php:318
+#: includes/class-admin-list.php:180
+#: includes/class-admin-list.php:326
 msgid "No language"
 msgstr ""
 
-#: includes/class-admin-list.php:215
-#: includes/class-admin-list.php:429
+#: includes/class-admin-list.php:223
+#: includes/class-admin-list.php:437
 msgid "Filter by language"
 msgstr ""
 
-#: includes/class-admin-list.php:217
-#: includes/class-admin-list.php:419
+#: includes/class-admin-list.php:225
+#: includes/class-admin-list.php:427
 msgid "All languages"
 msgstr ""
 
-#: includes/class-admin-list.php:219
-#: includes/class-admin-list.php:420
+#: includes/class-admin-list.php:227
+#: includes/class-admin-list.php:428
 msgid "Untranslated"
 msgstr ""
 
-#: includes/class-admin-list.php:651
-#: includes/class-admin-list.php:652
-#: includes/class-admin-list.php:707
+#: includes/class-admin-list.php:659
+#: includes/class-admin-list.php:715
 msgid "AI Translate Overview"
 msgstr ""
 
+#: includes/class-admin-list.php:660
+msgid "Overview"
+msgstr ""
+
 #. translators: %s: settings page URL.
-#: includes/class-admin-list.php:714
+#: includes/class-admin-list.php:722
 #, php-format
 msgid "AI translation is unavailable, so quick-Translate actions are disabled. Check the <a href=\"%s\">AI provider status</a>."
 msgstr ""
 
-#: includes/class-admin-list.php:724
+#: includes/class-admin-list.php:732
 msgid "Missing translations"
 msgstr ""
 
-#: includes/class-admin-list.php:750
+#: includes/class-admin-list.php:758
 msgid "Hide excluded items"
 msgstr ""
 
-#: includes/class-admin-list.php:751
+#: includes/class-admin-list.php:759
 msgid "Show hidden / default items"
 msgstr ""
 
-#: includes/class-admin-list.php:955
+#: includes/class-admin-list.php:963
 msgid "Translating…"
 msgstr ""
 
-#: includes/class-admin-list.php:956
+#: includes/class-admin-list.php:964
 msgid "✓ Translated"
 msgstr ""
 
-#: includes/class-admin-list.php:957
+#: includes/class-admin-list.php:965
 msgid "Translation failed."
 msgstr ""
 
-#: includes/class-admin-list.php:958
+#: includes/class-admin-list.php:966
 msgid "Could not run the request in this browser."
 msgstr ""
 
-#: includes/class-admin-list.php:959
-#: includes/class-admin-list.php:1123
+#: includes/class-admin-list.php:967
+#: includes/class-admin-list.php:1131
 msgid "Hide"
 msgstr ""
 
-#: includes/class-admin-list.php:960
-#: includes/class-admin-list.php:1123
+#: includes/class-admin-list.php:968
+#: includes/class-admin-list.php:1131
 msgid "Unhide"
 msgstr ""
 
-#: includes/class-admin-list.php:1041
+#: includes/class-admin-list.php:1049
 msgid "Configure at least two languages to track missing translations."
 msgstr ""
 
-#: includes/class-admin-list.php:1060
-#: includes/class-admin-list.php:1170
+#: includes/class-admin-list.php:1068
+#: includes/class-admin-list.php:1178
 msgid "Title"
 msgstr ""
 
-#: includes/class-admin-list.php:1061
-#: includes/class-admin-list.php:1171
+#: includes/class-admin-list.php:1069
+#: includes/class-admin-list.php:1179
 msgid "Type"
 msgstr ""
 
-#: includes/class-admin-list.php:1063
+#: includes/class-admin-list.php:1071
 msgid "Missing"
 msgstr ""
 
-#: includes/class-admin-list.php:1064
-#: includes/class-admin-settings.php:429
+#: includes/class-admin-list.php:1072
+#: includes/class-admin-settings.php:453
 msgid "Actions"
 msgstr ""
 
-#: includes/class-admin-list.php:1069
+#: includes/class-admin-list.php:1077
 msgid "Nothing is missing translations."
 msgstr ""
 
 #. translators: %s: target language label.
-#: includes/class-admin-list.php:1106
+#: includes/class-admin-list.php:1114
 #, php-format
 msgid "Translate to %s"
 msgstr ""
 
-#: includes/class-admin-list.php:1172
-#: includes/class-admin-settings.php:382
+#: includes/class-admin-list.php:1180
+#: includes/class-admin-settings.php:406
 msgid "Status"
 msgstr ""
 
-#: includes/class-admin-list.php:1177
+#: includes/class-admin-list.php:1185
 msgid "No content in this language yet."
 msgstr ""
 
-#: includes/class-admin-list.php:1233
-#: includes/class-admin-settings.php:564
+#: includes/class-admin-list.php:1241
+#: includes/class-admin-settings.php:588
 msgid "Categories &amp; tags"
 msgstr ""
 
-#: includes/class-admin-list.php:1237
-#: includes/class-admin-settings.php:425
+#: includes/class-admin-list.php:1245
+#: includes/class-admin-settings.php:449
 msgid "Name"
 msgstr ""
 
-#: includes/class-admin-list.php:1238
+#: includes/class-admin-list.php:1246
 msgid "Taxonomy"
 msgstr ""
 
-#: includes/class-admin-list.php:1243
+#: includes/class-admin-list.php:1251
 msgid "No categories or tags in this language yet."
 msgstr ""
 
 #. translators: %d: number of items.
-#: includes/class-admin-list.php:1282
+#: includes/class-admin-list.php:1290
 #, php-format
 msgid "%d item"
 msgid_plural "%d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-admin-list.php:1290
+#: includes/class-admin-list.php:1298
 msgid "‹ Previous"
 msgstr ""
 
-#: includes/class-admin-list.php:1297
+#: includes/class-admin-list.php:1305
 msgid "Next ›"
 msgstr ""
 
 #. translators: %d: scan limit.
-#: includes/class-admin-list.php:1322
+#: includes/class-admin-list.php:1330
 #, php-format
 msgid "Only the most recent %d items per type were scanned; the list may be incomplete. Use the by-language filter for older content."
 msgstr ""
 
 #. translators: %s: language name.
-#: includes/class-admin-list.php:1366
+#: includes/class-admin-list.php:1374
 #, php-format
 msgid "Edit the %s translation"
 msgstr ""
 
-#: includes/class-admin-settings.php:99
+#: includes/class-admin-settings.php:109
 msgid "You are a professional translator for {site_name}. Translate the provided content from {source_lang} into {target_lang}. Produce a natural, fluent translation that preserves the original meaning, tone, and register. Do not summarise, add, or omit content."
 msgstr ""
 
-#: includes/class-admin-settings.php:103
+#: includes/class-admin-settings.php:113
 msgid "This is web page content. Keep headings, lists, and structure intact."
 msgstr ""
 
-#: includes/class-admin-settings.php:107
+#: includes/class-admin-settings.php:117
 msgid "This is a taxonomy term (a category or tag) used for navigation. Keep the translation short and label-like."
 msgstr ""
 
+#: includes/class-admin-settings.php:193
+msgid "Settings"
+msgstr ""
+
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:244
+#: includes/class-admin-settings.php:268
 #, php-format
 msgid "These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them."
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:300
+#: includes/class-admin-settings.php:324
 #, php-format
 msgid "Added languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:302
+#: includes/class-admin-settings.php:326
 #, php-format
 msgid "Updated languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:304
+#: includes/class-admin-settings.php:328
 #, php-format
 msgid "Disabled languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:306
+#: includes/class-admin-settings.php:330
 #, php-format
 msgid "Removed languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:325
+#: includes/class-admin-settings.php:349
 #, php-format
 msgid "These languages still have content and were kept (disabled) instead of being deleted: %s. Reassign or delete their content first to remove them."
 msgstr ""
 
-#: includes/class-admin-settings.php:367
+#: includes/class-admin-settings.php:391
 msgid "Available"
 msgstr ""
 
-#: includes/class-admin-settings.php:368
+#: includes/class-admin-settings.php:392
 msgid "An AI provider with a text-generation model is available. Translations can be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:371
+#: includes/class-admin-settings.php:395
 msgid "No usable model"
 msgstr ""
 
-#: includes/class-admin-settings.php:372
+#: includes/class-admin-settings.php:396
 msgid "An AI provider is present, but no text-generation model is available, so translations will fail. Configure a text-generation model for this site’s AI provider."
 msgstr ""
 
-#: includes/class-admin-settings.php:375
+#: includes/class-admin-settings.php:399
 msgid "Not configured"
 msgstr ""
 
-#: includes/class-admin-settings.php:376
+#: includes/class-admin-settings.php:400
 msgid "No AI provider is configured for this site, so translations cannot be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:379
+#: includes/class-admin-settings.php:403
 msgid "AI provider"
 msgstr ""
 
-#: includes/class-admin-settings.php:387
+#: includes/class-admin-settings.php:411
 msgid "Test connection"
 msgstr ""
 
-#: includes/class-admin-settings.php:391
+#: includes/class-admin-settings.php:415
 msgid "Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin."
 msgstr ""
 
-#: includes/class-admin-settings.php:408
+#: includes/class-admin-settings.php:432
 msgid "Languages"
 msgstr ""
 
-#: includes/class-admin-settings.php:410
+#: includes/class-admin-settings.php:434
 msgid "A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead."
 msgstr ""
 
-#: includes/class-admin-settings.php:413
+#: includes/class-admin-settings.php:437
 msgid "Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: an optional emoji shown beside the name — leave blank to show the name only."
 msgstr ""
 
-#: includes/class-admin-settings.php:423
+#: includes/class-admin-settings.php:447
 msgid "Code"
 msgstr ""
 
-#: includes/class-admin-settings.php:424
+#: includes/class-admin-settings.php:448
 msgid "Locale"
 msgstr ""
 
-#: includes/class-admin-settings.php:426
+#: includes/class-admin-settings.php:450
 msgid "Native name"
 msgstr ""
 
-#: includes/class-admin-settings.php:427
+#: includes/class-admin-settings.php:451
 msgid "Flag"
 msgstr ""
 
-#: includes/class-admin-settings.php:428
+#: includes/class-admin-settings.php:452
 msgid "Enabled"
 msgstr ""
 
-#: includes/class-admin-settings.php:446
+#: includes/class-admin-settings.php:470
 msgid "In use — code locked"
 msgstr ""
 
-#: includes/class-admin-settings.php:449
-#: includes/class-admin-settings.php:479
+#: includes/class-admin-settings.php:473
+#: includes/class-admin-settings.php:503
 msgid "WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region)."
 msgstr ""
 
-#: includes/class-admin-settings.php:452
-#: includes/class-admin-settings.php:482
+#: includes/class-admin-settings.php:476
+#: includes/class-admin-settings.php:506
 msgid "Optional emoji flag shown next to the name. Leave blank to show the name only."
 msgstr ""
 
-#: includes/class-admin-settings.php:456
+#: includes/class-admin-settings.php:480
 msgid "This language has content and cannot be removed. Disable it instead, or reassign/delete its content first."
 msgstr ""
 
-#: includes/class-admin-settings.php:456
+#: includes/class-admin-settings.php:480
 msgid "In use"
 msgstr ""
 
 #. translators: %s: language code.
-#: includes/class-admin-settings.php:458
+#: includes/class-admin-settings.php:482
 #, php-format
 msgid "Remove language %s"
 msgstr ""
 
 #. translators: %s: language code.
-#: includes/class-admin-settings.php:458
-#: includes/class-admin-settings.php:484
+#: includes/class-admin-settings.php:482
+#: includes/class-admin-settings.php:508
 msgid "Remove"
 msgstr ""
 
-#: includes/class-admin-settings.php:464
+#: includes/class-admin-settings.php:488
 msgid "No languages configured yet. Use “Add language” to create one."
 msgstr ""
 
-#: includes/class-admin-settings.php:471
+#: includes/class-admin-settings.php:495
 msgid "Add language"
 msgstr ""
 
-#: includes/class-admin-settings.php:478
+#: includes/class-admin-settings.php:502
 msgid "e.g. fr"
 msgstr ""
 
-#: includes/class-admin-settings.php:479
+#: includes/class-admin-settings.php:503
 msgid "e.g. fr_FR"
 msgstr ""
 
-#: includes/class-admin-settings.php:480
+#: includes/class-admin-settings.php:504
 msgid "e.g. French"
 msgstr ""
 
-#: includes/class-admin-settings.php:481
+#: includes/class-admin-settings.php:505
 msgid "e.g. Français"
 msgstr ""
 
-#: includes/class-admin-settings.php:484
+#: includes/class-admin-settings.php:508
 msgid "Remove this new language"
 msgstr ""
 
-#: includes/class-admin-settings.php:488
+#: includes/class-admin-settings.php:512
 msgid "Default language"
 msgstr ""
 
-#: includes/class-admin-settings.php:490
+#: includes/class-admin-settings.php:514
 msgid "— Select —"
 msgstr ""
 
-#: includes/class-admin-settings.php:498
+#: includes/class-admin-settings.php:522
 msgid "AI model"
 msgstr ""
 
-#: includes/class-admin-settings.php:512
+#: includes/class-admin-settings.php:536
 msgid "Which model to use for translations. “Automatic” lets the provider choose — pick a specific model if the provider rejects the default (e.g. Anthropic’s “Claude Fable 5 is not available, use Opus 4.8”)."
 msgstr ""
 
-#: includes/class-admin-settings.php:515
+#: includes/class-admin-settings.php:539
 msgid "Automatic (provider default)"
 msgstr ""
 
 #. translators: %s: model id.
-#: includes/class-admin-settings.php:520
+#: includes/class-admin-settings.php:544
 #, php-format
 msgid "%s (currently set)"
 msgstr ""
 
-#: includes/class-admin-settings.php:535
+#: includes/class-admin-settings.php:559
 msgid "If your selected model is unavailable to the account, translation automatically retries once with another advertised model rather than failing — so a translation may be produced by a different model than the one chosen here."
 msgstr ""
 
-#: includes/class-admin-settings.php:538
+#: includes/class-admin-settings.php:562
 msgid "Could not list models from the provider; “Automatic” will be used."
 msgstr ""
 
-#: includes/class-admin-settings.php:540
+#: includes/class-admin-settings.php:564
 msgid "Connect an AI provider (see status above) to choose a model."
 msgstr ""
 
-#: includes/class-admin-settings.php:543
+#: includes/class-admin-settings.php:567
 msgid "Translation instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:545
+#: includes/class-admin-settings.php:569
 msgid "These instructions shape the AI translation. Markup-safety rules are always applied automatically and cannot be overridden. Available placeholders:"
 msgstr ""
 
-#: includes/class-admin-settings.php:550
+#: includes/class-admin-settings.php:574
 msgid "Global"
 msgstr ""
 
-#: includes/class-admin-settings.php:553
-#: includes/class-admin-settings.php:560
-#: includes/class-admin-settings.php:567
+#: includes/class-admin-settings.php:577
+#: includes/class-admin-settings.php:584
+#: includes/class-admin-settings.php:591
 msgid "Reset to default"
 msgstr ""
 
-#: includes/class-admin-settings.php:557
+#: includes/class-admin-settings.php:581
 msgid "Posts &amp; pages"
 msgstr ""
 
-#: includes/class-admin-settings.php:573
+#: includes/class-admin-settings.php:597
 msgid "Per-language instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:645
+#: includes/class-admin-settings.php:669
 msgid "Testing…"
 msgstr ""
 
-#: includes/class-admin-settings.php:646
+#: includes/class-admin-settings.php:670
 msgid "Test failed."
 msgstr ""
 
-#: includes/class-admin-settings.php:647
+#: includes/class-admin-settings.php:671
 msgid "Could not run the test in this browser."
 msgstr ""
 
@@ -759,7 +767,7 @@ msgid "AI translation is unavailable: this site has no AI provider with a text-g
 msgstr ""
 
 #: includes/class-translator.php:1009
-msgid "The AI provider’s default model is not available to this account, and no advertised model could be used. Pick an accessible model in Settings → AI provider (AI model) and try again."
+msgid "The AI provider’s default model is not available to this account, and no advertised model could be used. Pick an accessible model in AI Translate → Settings (AI model) and try again."
 msgstr ""
 
 #: includes/class-translator.php:1134

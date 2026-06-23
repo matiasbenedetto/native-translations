@@ -16,7 +16,7 @@ publish.
 
 ## Functionality
 
-### Settings → AI Translate
+### AI Translate menu
 
 Configure languages (add/remove with the explicit controls), the default language, the **AI
 provider status** with a live *Test connection* check, the **AI model** to use, and the
@@ -78,7 +78,7 @@ Both are server-rendered, filtered to publicly-viewable targets, and styled as c
    `ai-provider-for-*` plugin with an API key).
 2. **Install:** copy `wp-ai-translate/` to `wp-content/plugins/` (or upload a zip of that folder
    via **Plugins → Add New → Upload**), then activate **AI Translate**.
-3. **Configure:** under **Settings → AI Translate**, add at least two languages, set the default
+3. **Configure:** under the **AI Translate** menu, add at least two languages, set the default
    language, confirm the **AI provider** status is green (use *Test connection*), and pick a
    model.
 4. **Translate:** open a post, set its language in the **Translations** sidebar panel, click

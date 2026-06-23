@@ -50,7 +50,7 @@ it) and can be supplied with the `wpait_temperature` filter.
 1. Upload the `wp-ai-translate` folder to `/wp-content/plugins/`, or install through the
    Plugins screen.
 2. Activate the plugin.
-3. Go to **Settings → AI Translate** and configure your languages, the default language,
+3. Go to the **AI Translate** menu and configure your languages, the default language,
    and (optionally) custom translation instructions.
 4. Ensure an AI provider is configured for your site (required to generate translations).
 
