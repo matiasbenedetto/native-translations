@@ -1,0 +1,105 @@
+/**
+ * AI Translate — settings page layout (#61).
+ *
+ * Constrains the page to a readable column, groups each section into a card with
+ * consistent spacing, and gives form controls a sensible width instead of letting
+ * them stretch the full width of the screen.
+ */
+
+.wpait-settings {
+	max-width: 860px;
+}
+
+/* Section cards: white box, subtle border, even padding + spacing. */
+.wpait-settings .wpait-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 4px 24px 20px;
+	margin: 0 0 20px;
+	box-shadow: 0 1px 1px rgba( 0, 0, 0, 0.04 );
+}
+
+.wpait-settings .wpait-card > h2 {
+	font-size: 14px;
+	padding: 16px 0 4px;
+	margin: 0 0 4px;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.wpait-settings .wpait-card > h3 {
+	margin-top: 20px;
+}
+
+/* Keep explanatory text to a comfortable measure. */
+.wpait-settings .description {
+	max-width: 68ch;
+}
+
+/* Form controls get a logical width rather than filling the screen.
+   Inputs that set an explicit `size` (code/locale/flag) keep their small width. */
+.wpait-settings select,
+.wpait-settings input[type="text"]:not([size]) {
+	max-width: 360px;
+	width: 100%;
+}
+
+.wpait-settings textarea.large-text {
+	max-width: 100%;
+	width: 100%;
+}
+
+/* The form-table label column is narrower here so the instruction textareas read
+   on one comfortable column. */
+.wpait-settings .form-table th {
+	width: 180px;
+	padding-left: 0;
+}
+
+.wpait-settings .form-table td {
+	padding-right: 0;
+}
+
+/* Languages table: let the editable name/native inputs fill their cell. */
+.wpait-settings .wpait-languages-table {
+	margin-bottom: 12px;
+}
+
+.wpait-settings .wpait-languages-table td input[type="text"]:not([size]) {
+	width: 100%;
+	max-width: none;
+}
+
+.wpait-settings .wpait-languages-table th,
+.wpait-settings .wpait-languages-table td {
+	vertical-align: middle;
+}
+
+/* AI provider status badge. */
+.wpait-ai-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 10px;
+	font-weight: 600;
+	color: #fff;
+}
+
+.wpait-ai-ok {
+	background: #198754;
+}
+
+.wpait-ai-warn {
+	background: #b88600;
+}
+
+.wpait-ai-bad {
+	background: #b32d2e;
+}
+
+#wpait-test-result.is-ok {
+	color: #198754;
+}
+
+#wpait-test-result.is-bad {
+	color: #b32d2e;
+}
