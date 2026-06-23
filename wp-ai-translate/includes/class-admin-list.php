@@ -1401,16 +1401,6 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Human-readable label for a code, e.g. "🇪🇸 Spanish".
-	 *
-	 * @param string $code Language code.
-	 * @return string
-	 */
-	private function label( string $code ): string {
-		return $this->languages->label( $code );
-	}
-
-	/**
 	 * Builds an accessible "edit the sibling translation" link for the Language
 	 * column. The flag (if any) is decorative (aria-hidden) with the language name
 	 * carried as screen-reader text and a hover `title`/`aria-label`, so the link is
