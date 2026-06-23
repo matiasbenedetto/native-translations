@@ -1,0 +1,16 @@
+{
+    "name": "wp-ai-translate/runtime",
+    "description": "Runtime dependencies bundled with the AI Translate plugin.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.1",
+        "woocommerce/action-scheduler": "^3.8"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "composer/installers": true
+        }
+    }
+}

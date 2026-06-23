@@ -32,7 +32,8 @@ final class RestTest extends TestCase {
 		$languages = new Wpait_Languages();
 		$store      = new Wpait_Translation_Store();
 		$translator = new Wpait_Translator( $store, $languages );
-		$this->rest = new Wpait_Rest( $store, $languages, $translator );
+		$queue      = new Wpait_Queue( $store, $languages, $translator );
+		$this->rest = new Wpait_Rest( $store, $languages, $translator, $queue );
 	}
 
 	private function request( array $params ): WP_REST_Request {
@@ -202,5 +203,97 @@ final class RestTest extends TestCase {
 		// The route's `type` arg validates against this allowlist; the store/REST units
 		// both reject anything outside { post, term }.
 		$this->assertSame( array( 'post', 'term' ), Wpait_Rest::TYPES );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * /enqueue (#55) — per-item permission skipping, target validation, shape
+	 * ------------------------------------------------------------------ */
+
+	public function test_enqueue_rejects_invalid_target_code(): void {
+		$result = $this->rest->handle_enqueue(
+			$this->request(
+				array(
+					'items'       => array( array( 'id' => 5, 'type' => 'post' ) ),
+					'target_code' => 'de', // unknown.
+				)
+			)
+		);
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_invalid_language', $result->get_error_code() );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_enqueue_rejects_disabled_target_code(): void {
+		$result = $this->rest->handle_enqueue(
+			$this->request(
+				array(
+					'items'       => array( array( 'id' => 5, 'type' => 'post' ) ),
+					'target_code' => 'fr', // configured but disabled.
+				)
+			)
+		);
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_invalid_language', $result->get_error_code() );
+	}
+
+	public function test_enqueue_skips_unauthorized_items_and_queues_allowed(): void {
+		// Post 5: caller can edit + create → authorized → queued.
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$caps['edit_post:5']  = true;
+		Wpait_Test_State::$caps['create_posts'] = true;
+		// Post 6: caller cannot edit → skipped (forbidden).
+		Wpait_Test_State::$posts[6] = array( 'ID' => 6, 'post_type' => 'post' );
+
+		$response = $this->rest->handle_enqueue(
+			$this->request(
+				array(
+					'items'       => array(
+						array( 'id' => 5, 'type' => 'post' ),
+						array( 'id' => 6, 'type' => 'post' ),
+					),
+					'target_code' => 'es',
+				)
+			)
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 1, $data['queued'] );
+		$this->assertSame( 1, $data['skipped'] );
+		$this->assertCount( 2, $data['results'] );
+		$this->assertSame( array( 'id' => 5, 'type' => 'post', 'status' => 'queued' ), $data['results'][0] );
+		$this->assertSame( 'forbidden', $data['results'][1]['status'] );
+		// Exactly one action enqueued (the authorized one).
+		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_enqueue_marks_invalid_items(): void {
+		$response = $this->rest->handle_enqueue(
+			$this->request(
+				array(
+					'items'       => array(
+						array( 'id' => 0, 'type' => 'post' ),    // bad id.
+						array( 'id' => 5, 'type' => 'widget' ),  // bad type.
+					),
+					'target_code' => 'es',
+				)
+			)
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 0, $data['queued'] );
+		$this->assertSame( 2, $data['skipped'] );
+		$this->assertSame( 'invalid', $data['results'][0]['status'] );
+		$this->assertSame( 'invalid', $data['results'][1]['status'] );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_queue_status_handler_returns_counts(): void {
+		Wpait_Test_State::$as_counts = array(
+			ActionScheduler_Store::STATUS_PENDING => 3,
+			ActionScheduler_Store::STATUS_RUNNING => 0,
+			ActionScheduler_Store::STATUS_FAILED  => 1,
+		);
+		$response = $this->rest->handle_queue_status();
+		$this->assertSame( array( 'pending' => 3, 'running' => 0, 'failed' => 1 ), $response->get_data() );
 	}
 }

@@ -9,7 +9,7 @@
  */
 
 import { createRoot } from '@wordpress/element';
-import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
+import { useState, useEffect, useMemo, useCallback, useRef } from '@wordpress/element';
 import { DataViews } from '@wordpress/dataviews';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
@@ -90,6 +90,9 @@ function Overview() {
 	const [ error, setError ] = useState( '' );
 	const [ aiOk, setAiOk ] = useState( cfg.aiOk );
 	const [ notice, setNotice ] = useState( '' );
+	// Background-queue status: { pending, running, failed }.
+	const [ queue, setQueue ] = useState( { pending: 0, running: 0, failed: 0 } );
+	const pollRef = useRef( null );
 
 	const languages = cfg.languages || [];
 	const isLang = activeView !== 'missing';
@@ -119,6 +122,59 @@ function Overview() {
 	useEffect( () => {
 		fetchData();
 	}, [ fetchData ] );
+
+	// Keep the latest fetchData in a ref so the polling loop can refetch the table
+	// when the queue drains without re-creating the interval on every view change.
+	const fetchDataRef = useRef( fetchData );
+	useEffect( () => {
+		fetchDataRef.current = fetchData;
+	}, [ fetchData ] );
+
+	const stopPolling = useCallback( () => {
+		if ( pollRef.current ) {
+			clearInterval( pollRef.current );
+			pollRef.current = null;
+		}
+	}, [] );
+
+	const pollOnce = useCallback( () => {
+		return apiFetch( { path: `/${ cfg.namespace }/queue-status` } )
+			.then( ( res ) => {
+				const next = {
+					pending: res.pending || 0,
+					running: res.running || 0,
+					failed: res.failed || 0,
+				};
+				setQueue( next );
+				if ( next.pending + next.running <= 0 ) {
+					stopPolling();
+					// The queue drained — newly created drafts should appear/disappear.
+					fetchDataRef.current();
+				}
+				return next;
+			} )
+			.catch( () => ( { pending: 0, running: 0, failed: 0 } ) );
+	}, [ stopPolling ] );
+
+	const startPolling = useCallback( () => {
+		if ( pollRef.current ) {
+			return;
+		}
+		pollRef.current = setInterval( () => {
+			pollOnce();
+		}, 5000 );
+	}, [ pollOnce ] );
+
+	// On mount: if the queue is already busy, show the banner and start polling.
+	useEffect( () => {
+		pollOnce().then( ( status ) => {
+			if ( status.pending + status.running > 0 ) {
+				startPolling();
+			}
+		} );
+		return stopPolling;
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [] );
 
 	const switchView = ( next ) => {
 		if ( next === activeView ) {
@@ -195,41 +251,42 @@ function Overview() {
 			}
 			setNotice( '' );
 			setError( '' );
-			return Promise.allSettled(
-				eligible.map( ( it ) =>
-					apiFetch( {
-						path: `/${ cfg.namespace }/translate`,
-						method: 'POST',
-						data: { source_id: it.id, target_code: code, type: it.type },
-					} )
-				)
-			).then( ( results ) => {
-				const failed = results.filter( ( r ) => r.status === 'rejected' ).length;
-				const ok = results.length - failed;
-				if ( failed ) {
-					setError(
-						sprintf(
-							/* translators: 1: count of failures, 2: language name. */
-							__( '%1$d translation(s) to %2$s failed.', 'wp-ai-translate' ),
-							failed,
-							name
-						)
-					);
-				}
-				if ( ok ) {
-					setNotice(
-						sprintf(
-							/* translators: 1: count, 2: language name. */
-							__( '%1$d translation(s) to %2$s created as drafts.', 'wp-ai-translate' ),
-							ok,
-							name
-						)
-					);
-				}
-				fetchData();
-			} );
+			return apiFetch( {
+				path: `/${ cfg.namespace }/enqueue`,
+				method: 'POST',
+				data: {
+					items: eligible.map( ( it ) => ( { id: it.id, type: it.type } ) ),
+					target_code: code,
+				},
+			} )
+				.then( ( res ) => {
+					const queued = res.queued || 0;
+					if ( queued ) {
+						setNotice(
+							sprintf(
+								/* translators: 1: count, 2: language name. */
+								__( '%1$d translation(s) to %2$s queued.', 'wp-ai-translate' ),
+								queued,
+								name
+							)
+						);
+						// Start (or refresh) the background-status banner + polling.
+						pollOnce().then( () => startPolling() );
+					} else {
+						setNotice(
+							sprintf(
+								/* translators: %s: language name. */
+								__( 'Nothing new to queue for %s.', 'wp-ai-translate' ),
+								name
+							)
+						);
+					}
+				} )
+				.catch( ( e ) =>
+					setError( e.message || __( 'Could not queue the translations.', 'wp-ai-translate' ) )
+				);
 		},
-		[ fetchData ]
+		[ pollOnce, startPolling ]
 	);
 
 	const actions = useMemo( () => {
@@ -328,6 +385,16 @@ function Overview() {
 						</>
 					) : (
 						__( 'AI translation is unavailable, so Translate actions are disabled.', 'wp-ai-translate' )
+					) }
+				</Notice>
+			) }
+
+			{ queue.pending + queue.running > 0 && (
+				<Notice status="info" isDismissible={ false }>
+					{ sprintf(
+						/* translators: %d: number of translations being processed. */
+						__( '%d translation(s) processing in the background…', 'wp-ai-translate' ),
+						queue.pending + queue.running
 					) }
 				</Notice>
 			) }

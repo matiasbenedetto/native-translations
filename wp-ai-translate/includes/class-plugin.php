@@ -55,6 +55,13 @@ final class Wpait_Plugin {
 	private Wpait_Rest $rest;
 
 	/**
+	 * Background translation queue (#55).
+	 *
+	 * @var Wpait_Queue
+	 */
+	private Wpait_Queue $queue;
+
+	/**
 	 * Editor integration (sidebar panel + term meta box).
 	 *
 	 * @var Wpait_Editor
@@ -95,7 +102,8 @@ final class Wpait_Plugin {
 		$this->languages  = new Wpait_Languages();
 		$this->settings   = new Wpait_Admin_Settings( $this->languages );
 		$this->translator = new Wpait_Translator( $this->store, $this->languages );
-		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator );
+		$this->queue      = new Wpait_Queue( $this->store, $this->languages, $this->translator );
+		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator, $this->queue );
 		$this->editor     = new Wpait_Editor( $this->languages );
 		$this->admin_list = new Wpait_Admin_List( $this->store, $this->languages );
 		$this->frontend   = new Wpait_Frontend( $this->store, $this->languages );
@@ -106,6 +114,9 @@ final class Wpait_Plugin {
 		$this->languages->register_hooks();
 		$this->settings->register_hooks();
 		$this->rest->register_hooks();
+		// The queue's AS action hook must register unconditionally: jobs run in
+		// cron/async context, not just on admin screens.
+		$this->queue->register_hooks();
 		$this->editor->register_hooks();
 		$this->frontend->register_hooks();
 
@@ -166,6 +177,15 @@ final class Wpait_Plugin {
 	 */
 	public function rest(): Wpait_Rest {
 		return $this->rest;
+	}
+
+	/**
+	 * Returns the background translation queue.
+	 *
+	 * @return Wpait_Queue
+	 */
+	public function queue(): Wpait_Queue {
+		return $this->queue;
 	}
 
 	/**

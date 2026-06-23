@@ -124,6 +124,29 @@ final class Wpait_Test_State {
 	/** @var bool Return value of is_admin(). */
 	public static bool $is_admin = false;
 
+	/**
+	 * Recorded calls to as_enqueue_async_action(): each is `[ hook, args, group ]`.
+	 *
+	 * @var array<int,array{0:string,1:array,2:string}>
+	 */
+	public static array $as_enqueued = array();
+
+	/**
+	 * Hook+args+group tuples as_has_scheduled_action() should report as already
+	 * scheduled. Keyed by a serialized signature.
+	 *
+	 * @var array<string,bool>
+	 */
+	public static array $as_scheduled = array();
+
+	/**
+	 * Action Scheduler status counts the get_status() store query returns, keyed by
+	 * status constant string.
+	 *
+	 * @var array<string,int>
+	 */
+	public static array $as_counts = array();
+
 	/** @var object|null Return value of get_current_screen() (e.g. ->base, ->taxonomy). */
 	public static $current_screen = null;
 
@@ -150,6 +173,9 @@ final class Wpait_Test_State {
 		self::$archive_type     = '';
 		self::$is_admin         = false;
 		self::$current_screen   = null;
+		self::$as_enqueued      = array();
+		self::$as_scheduled     = array();
+		self::$as_counts        = array();
 		$_GET                   = array();
 	}
 }
@@ -871,6 +897,60 @@ function get_preview_post_link( $id = 0 ) {
 function wp_reset_postdata(): void {}
 
 /* -------------------------------------------------------------------------
+ * Action Scheduler stubs (#55 queue). The queue unit only touches three AS
+ * surfaces: enqueue, the "already scheduled?" dedup probe, and a status-count
+ * store query. All record into / read from Wpait_Test_State so QueueTest can
+ * assert the enqueued payload and drive the dedup branches declaratively.
+ * ---------------------------------------------------------------------- */
+
+/** Signature for an (hook, args, group) tuple used by the dedup stub. */
+function wpait_test_as_signature( $hook, $args, $group ): string {
+	return md5( wp_json_encode( array( $hook, $args, $group ) ) );
+}
+
+function wp_json_encode( $data, $options = 0, $depth = 512 ) {
+	return json_encode( $data, $options, $depth );
+}
+
+function as_enqueue_async_action( $hook, $args = array(), $group = '', $unique = false, $priority = 10 ) {
+	Wpait_Test_State::$as_enqueued[] = array( $hook, $args, $group );
+	return count( Wpait_Test_State::$as_enqueued ); // A fake action id.
+}
+
+function as_has_scheduled_action( $hook, $args = null, $group = '' ): bool {
+	$sig = wpait_test_as_signature( $hook, $args, $group );
+	return ! empty( Wpait_Test_State::$as_scheduled[ $sig ] );
+}
+
+if ( ! class_exists( 'ActionScheduler_Store' ) ) {
+	class ActionScheduler_Store {
+		const STATUS_PENDING  = 'pending';
+		const STATUS_RUNNING  = 'in-progress';
+		const STATUS_FAILED   = 'failed';
+		const STATUS_COMPLETE = 'complete';
+
+		/** @param array<string,mixed> $args @return int */
+		public function query_actions( $args = array(), $return_format = 'ids' ) {
+			$status = $args['status'] ?? '';
+			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
+		}
+	}
+}
+
+if ( ! class_exists( 'ActionScheduler' ) ) {
+	class ActionScheduler {
+		private static ?ActionScheduler_Store $store = null;
+
+		public static function store(): ActionScheduler_Store {
+			if ( null === self::$store ) {
+				self::$store = new ActionScheduler_Store();
+			}
+			return self::$store;
+		}
+	}
+}
+
+/* -------------------------------------------------------------------------
  * Load the real units under test. The Translation Store is now the REAL class
  * (the stubs above give it a DB-free WP environment); it must load before the
  * Translator, whose constructor type-hints it.
@@ -880,6 +960,7 @@ require_once __DIR__ . '/../../wp-ai-translate/includes/class-translation-store.
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-settings.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-languages.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-translator.php';
+require_once __DIR__ . '/../../wp-ai-translate/includes/class-queue.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-rest.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-frontend.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-list.php';
