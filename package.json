@@ -17,6 +17,8 @@
     "make-pot": "node extract-js-i18n.mjs /tmp/wpait-js.pot && wp i18n make-pot wp-ai-translate wp-ai-translate/languages/wp-ai-translate.pot --exclude=build,node_modules --merge=/tmp/wpait-js.pot"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.7",
+    "@babel/traverse": "^7.29.7",
     "@wordpress/scripts": "^30.0.0"
   },
   "dependencies": {
