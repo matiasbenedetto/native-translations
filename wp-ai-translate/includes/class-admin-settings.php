@@ -578,21 +578,21 @@ class Wpait_Admin_Settings {
 					<tr>
 						<th scope="row"><label><?php esc_html_e( 'Global', 'wp-ai-translate' ); ?></label></th>
 						<td>
-							<textarea class="large-text" rows="3" name="<?php echo esc_attr( $option . '[instructions][global]' ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['global'] ); ?>"><?php echo esc_textarea( $settings['instructions']['global'] ); ?></textarea>
+							<textarea class="large-text" rows="3" name="<?php echo esc_attr( $option . '[instructions][global]' ); ?>" placeholder="<?php echo esc_attr( $instr_defaults['global'] ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['global'] ); ?>"><?php echo esc_textarea( $settings['instructions']['global'] ); ?></textarea>
 							<p><a href="#" class="wpait-reset-instruction"><?php esc_html_e( 'Reset to default', 'wp-ai-translate' ); ?></a></p>
 						</td>
 					</tr>
 					<tr>
 						<th scope="row"><label><?php esc_html_e( 'Posts &amp; pages', 'wp-ai-translate' ); ?></label></th>
 						<td>
-							<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][post]' ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['post'] ); ?>"><?php echo esc_textarea( $settings['instructions']['post'] ); ?></textarea>
+							<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][post]' ); ?>" placeholder="<?php echo esc_attr( $instr_defaults['post'] ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['post'] ); ?>"><?php echo esc_textarea( $settings['instructions']['post'] ); ?></textarea>
 							<p><a href="#" class="wpait-reset-instruction"><?php esc_html_e( 'Reset to default', 'wp-ai-translate' ); ?></a></p>
 						</td>
 					</tr>
 					<tr>
 						<th scope="row"><label><?php esc_html_e( 'Categories &amp; tags', 'wp-ai-translate' ); ?></label></th>
 						<td>
-							<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][term]' ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['term'] ); ?>"><?php echo esc_textarea( $settings['instructions']['term'] ); ?></textarea>
+							<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][term]' ); ?>" placeholder="<?php echo esc_attr( $instr_defaults['term'] ); ?>" data-wpait-default="<?php echo esc_attr( $instr_defaults['term'] ); ?>"><?php echo esc_textarea( $settings['instructions']['term'] ); ?></textarea>
 							<p><a href="#" class="wpait-reset-instruction"><?php esc_html_e( 'Reset to default', 'wp-ai-translate' ); ?></a></p>
 						</td>
 					</tr>
@@ -605,7 +605,7 @@ class Wpait_Admin_Settings {
 							<tr>
 								<th scope="row"><label><?php echo esc_html( $lang['name'] . ' (' . $lang['code'] . ')' ); ?></label></th>
 								<td>
-									<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][per_language][' . $lang['code'] . ']' ); ?>"><?php echo esc_textarea( $settings['instructions']['per_language'][ $lang['code'] ] ?? '' ); ?></textarea>
+									<textarea class="large-text" rows="2" name="<?php echo esc_attr( $option . '[instructions][per_language][' . $lang['code'] . ']' ); ?>" placeholder="<?php esc_attr_e( 'Optional — adds to the global and content-type instructions for this language.', 'wp-ai-translate' ); ?>"><?php echo esc_textarea( $settings['instructions']['per_language'][ $lang['code'] ] ?? '' ); ?></textarea>
 								</td>
 							</tr>
 						<?php endforeach; ?>
