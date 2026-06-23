@@ -94,6 +94,10 @@ function Overview() {
 	const [ queue, setQueue ] = useState( { pending: 0, running: 0, failed: 0 } );
 	const pollRef = useRef( null );
 	const [ selection, setSelection ] = useState( [] );
+	// Failed background jobs surfaced in the banner (#69).
+	const [ failedJobs, setFailedJobs ] = useState( [] );
+	const [ showFailed, setShowFailed ] = useState( false );
+	const [ retryingId, setRetryingId ] = useState( 0 );
 
 	const languages = cfg.languages || [];
 	const isUnmarked = activeView === 'unmarked';
@@ -166,6 +170,50 @@ function Overview() {
 			pollOnce();
 		}, 5000 );
 	}, [ pollOnce ] );
+
+	// Load the failed-jobs list (which items failed + why) on demand (#69).
+	const loadFailed = useCallback( () => {
+		return apiFetch( { path: `/${ cfg.namespace }/failed-jobs` } )
+			.then( ( res ) => {
+				setFailedJobs( res.jobs || [] );
+				return res.jobs || [];
+			} )
+			.catch( () => {
+				setFailedJobs( [] );
+				return [];
+			} );
+	}, [] );
+
+	const toggleFailed = useCallback( () => {
+		setShowFailed( ( prev ) => {
+			const next = ! prev;
+			if ( next ) {
+				loadFailed();
+			}
+			return next;
+		} );
+	}, [ loadFailed ] );
+
+	const retryJob = useCallback(
+		( actionId ) => {
+			setRetryingId( actionId );
+			apiFetch( {
+				path: `/${ cfg.namespace }/retry-job`,
+				method: 'POST',
+				data: { action_id: actionId },
+			} )
+				.then( () => {
+					setNotice( __( 'Job re-queued.', 'wp-ai-translate' ) );
+					return Promise.all( [ loadFailed(), pollOnce() ] );
+				} )
+				.then( () => startPolling() )
+				.catch( ( e ) =>
+					setError( e.message || __( 'Could not re-run the job.', 'wp-ai-translate' ) )
+				)
+				.finally( () => setRetryingId( 0 ) );
+		},
+		[ loadFailed, pollOnce, startPolling ]
+	);
 
 	// On mount: if the queue is already busy, show the banner and start polling.
 	useEffect( () => {
@@ -505,6 +553,54 @@ function Overview() {
 						/* translators: %d: number of translations being processed. */
 						__( '%d translation(s) processing in the background…', 'wp-ai-translate' ),
 						queue.pending + queue.running
+					) }
+				</Notice>
+			) }
+
+			{ queue.failed > 0 && (
+				<Notice status="error" isDismissible={ false }>
+					<span>
+						{ sprintf(
+							/* translators: %d: number of failed background jobs. */
+							__( '%d background job(s) failed.', 'wp-ai-translate' ),
+							queue.failed
+						) }
+					</span>{ ' ' }
+					<button
+						type="button"
+						className="button-link"
+						onClick={ toggleFailed }
+					>
+						{ showFailed
+							? __( 'Hide details', 'wp-ai-translate' )
+							: __( 'Show details', 'wp-ai-translate' ) }
+					</button>
+					{ showFailed && (
+						<ul className="wpait-failed-list" style={ { margin: '8px 0 0' } }>
+							{ failedJobs.length === 0 && (
+								<li>{ __( 'No failed jobs found.', 'wp-ai-translate' ) }</li>
+							) }
+							{ failedJobs.map( ( job ) => (
+								<li key={ job.action_id } style={ { marginBottom: '8px' } }>
+									<strong>{ job.title }</strong>
+									{ 'translate' === job.kind && job.target
+										? ` → ${ job.target }`
+										: '' }
+									{ ' — ' }
+									<span className="wpait-failed-msg">{ job.message }</span>{ ' ' }
+									<button
+										type="button"
+										className="button button-small"
+										disabled={ retryingId !== 0 }
+										onClick={ () => retryJob( job.action_id ) }
+									>
+										{ retryingId === job.action_id
+											? __( 'Re-running…', 'wp-ai-translate' )
+											: __( 'Re-run', 'wp-ai-translate' ) }
+									</button>
+								</li>
+							) ) }
+						</ul>
 					) }
 				</Notice>
 			) }

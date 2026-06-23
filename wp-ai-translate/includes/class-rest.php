@@ -186,6 +186,33 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/failed-jobs',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_failed_jobs' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/retry-job',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_retry_job' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+				'args'                => array(
+					'action_id' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/recreate',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -619,6 +646,32 @@ class Wpait_Rest {
 	 */
 	public function handle_queue_status() {
 		return rest_ensure_response( $this->queue->get_status() );
+	}
+
+	/**
+	 * `GET /failed-jobs` — lists this plugin's failed background jobs (#69) so the
+	 * Overview can surface which items failed and why, without leaving the plugin.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function handle_failed_jobs() {
+		return rest_ensure_response( array( 'jobs' => $this->queue->get_failed_jobs() ) );
+	}
+
+	/**
+	 * `POST /retry-job` — re-runs a single failed job by action id (#69),
+	 * re-enqueueing it and clearing the failed record.
+	 *
+	 * @param WP_REST_Request $request Request with `action_id`.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_retry_job( WP_REST_Request $request ) {
+		$action_id = (int) $request->get_param( 'action_id' );
+		$result    = $this->queue->retry_job( $action_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response( array( 'retried' => true ) );
 	}
 
 	/**

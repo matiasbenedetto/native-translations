@@ -42,6 +42,14 @@ class Wpait_Queue {
 	const GROUP = 'wp-ai-translate';
 
 	/**
+	 * Default number of attempts (the first run plus retries) before a transient
+	 * failure is reported as failed. Filterable via `wpait_max_attempts`.
+	 *
+	 * @var int
+	 */
+	const MAX_ATTEMPTS = 2;
+
+	/**
 	 * Translation store (dedup detection).
 	 *
 	 * @var Wpait_Translation_Store
@@ -177,9 +185,10 @@ class Wpait_Queue {
 			throw new \Exception( 'Invalid translation job payload.' );
 		}
 
-		$type   = isset( $payload['type'] ) ? (string) $payload['type'] : '';
-		$id     = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
-		$target = isset( $payload['target'] ) ? (string) $payload['target'] : '';
+		$type    = isset( $payload['type'] ) ? (string) $payload['type'] : '';
+		$id      = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+		$target  = isset( $payload['target'] ) ? (string) $payload['target'] : '';
+		$attempt = isset( $payload['attempt'] ) ? max( 1, (int) $payload['attempt'] ) : 1;
 
 		if ( ! in_array( $type, array( 'post', 'term' ), true ) || $id <= 0 || '' === $target ) {
 			throw new \Exception( 'Invalid translation job: missing type, id, or target.' );
@@ -195,8 +204,14 @@ class Wpait_Queue {
 			: $this->translator->translate_post( $id, $target );
 
 		if ( is_wp_error( $result ) ) {
-			// Re-throw so AS marks the action failed (and stores the message).
-			throw new \Exception( $result->get_error_message() );
+			// Retry a transient failure once (bounded) before reporting it; on the
+			// last attempt re-throw so AS marks the action failed (storing the message).
+			$this->fail_or_retry(
+				self::HOOK,
+				array( 'type' => $type, 'id' => $id, 'target' => $target ),
+				$attempt,
+				$result->get_error_message()
+			);
 		}
 	}
 
@@ -219,8 +234,9 @@ class Wpait_Queue {
 			throw new \Exception( 'Invalid detection job payload.' );
 		}
 
-		$type = isset( $payload['type'] ) ? (string) $payload['type'] : '';
-		$id   = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+		$type    = isset( $payload['type'] ) ? (string) $payload['type'] : '';
+		$id      = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+		$attempt = isset( $payload['attempt'] ) ? max( 1, (int) $payload['attempt'] ) : 1;
 
 		if ( ! in_array( $type, array( 'post', 'term' ), true ) || $id <= 0 ) {
 			throw new \Exception( 'Invalid detection job: missing type or id.' );
@@ -233,11 +249,14 @@ class Wpait_Queue {
 
 		$code = $this->translator->detect_language( $type, $id );
 		if ( is_wp_error( $code ) ) {
-			throw new \Exception( $code->get_error_message() );
+			$this->fail_or_retry( self::DETECT_HOOK, array( 'type' => $type, 'id' => $id ), $attempt, $code->get_error_message() );
+			return;
 		}
 
 		$set = $this->store->set_language( $type, $id, (string) $code );
 		if ( is_wp_error( $set ) ) {
+			// A rejected assignment is deterministic (not transient), so don't retry —
+			// re-throw immediately so AS records the failure.
 			throw new \Exception( $set->get_error_message() );
 		}
 	}
@@ -255,9 +274,188 @@ class Wpait_Queue {
 		);
 	}
 
+	/**
+	 * Lists this plugin's failed background jobs for the Overview, newest first,
+	 * resolving each failed action's payload back to a human label + error message.
+	 *
+	 * @param int $limit Max failed actions to return.
+	 * @return array<int,array{action_id:int,kind:string,type:string,id:int,target:string,title:string,message:string}>
+	 */
+	public function get_failed_jobs( int $limit = 50 ): array {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return array();
+		}
+		$store = ActionScheduler::store();
+		// 'select' returns an array of action ids (vs 'count').
+		$ids = $store->query_actions(
+			array(
+				'group'    => self::GROUP,
+				'status'   => ActionScheduler_Store::STATUS_FAILED,
+				'per_page' => max( 1, $limit ),
+				'orderby'  => 'modified',
+				'order'    => 'DESC',
+			),
+			'select'
+		);
+
+		$jobs = array();
+		foreach ( (array) $ids as $action_id ) {
+			$action = $store->fetch_action( (int) $action_id );
+			if ( ! $action || ! method_exists( $action, 'get_hook' ) ) {
+				continue;
+			}
+			$hook = $action->get_hook();
+			if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+				continue;
+			}
+			$args    = $action->get_args();
+			$payload = isset( $args[0] ) && is_array( $args[0] ) ? $args[0] : array();
+			$type    = isset( $payload['type'] ) ? (string) $payload['type'] : '';
+			$id      = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+			$target  = isset( $payload['target'] ) ? (string) $payload['target'] : '';
+
+			$jobs[] = array(
+				'action_id' => (int) $action_id,
+				'kind'      => self::DETECT_HOOK === $hook ? 'detect' : 'translate',
+				'type'      => $type,
+				'id'        => $id,
+				'target'    => $target,
+				'title'     => $this->resolve_title( $type, $id ),
+				'message'   => $this->failure_message( (int) $action_id ),
+			);
+		}
+		return $jobs;
+	}
+
+	/**
+	 * Re-runs a failed job: re-enqueues a fresh action from the failed action's
+	 * payload (attempt counter reset) and removes the failed record so it leaves
+	 * the Overview's failed list.
+	 *
+	 * @param int $action_id Failed Action Scheduler action id.
+	 * @return true|WP_Error True on success.
+	 */
+	public function retry_job( int $action_id ) {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return new WP_Error( 'wpait_no_scheduler', __( 'The background scheduler is unavailable.', 'wp-ai-translate' ) );
+		}
+		$store  = ActionScheduler::store();
+		$action = $store->fetch_action( $action_id );
+		if ( ! $action || ! method_exists( $action, 'get_hook' ) || '' === $action->get_hook() ) {
+			return new WP_Error( 'wpait_unknown_action', __( 'That job no longer exists.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$hook    = $action->get_hook();
+		$args    = $action->get_args();
+		$payload = isset( $args[0] ) && is_array( $args[0] ) ? $args[0] : array();
+		unset( $payload['attempt'] ); // Fresh attempt budget on a manual re-run.
+
+		if ( self::HOOK === $hook ) {
+			$status = $this->enqueue(
+				isset( $payload['type'] ) ? (string) $payload['type'] : '',
+				isset( $payload['id'] ) ? (int) $payload['id'] : 0,
+				isset( $payload['target'] ) ? (string) $payload['target'] : ''
+			);
+		} elseif ( self::DETECT_HOOK === $hook ) {
+			$status = $this->enqueue_detection(
+				isset( $payload['type'] ) ? (string) $payload['type'] : '',
+				isset( $payload['id'] ) ? (int) $payload['id'] : 0
+			);
+		} else {
+			return new WP_Error( 'wpait_unknown_action', __( 'That job cannot be retried.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		if ( 'invalid' === $status ) {
+			return new WP_Error( 'wpait_retry_invalid', __( 'The job’s item or target is no longer valid.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		// Re-enqueued (or already done/pending) — drop the failed record either way.
+		$store->delete_action( $action_id );
+		return true;
+	}
+
 	/* ---------------------------------------------------------------------
 	 * Helpers
 	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Schedules a bounded retry for a failed job, or re-throws on the final attempt.
+	 *
+	 * A transient failure (AI hiccup, timeout, momentary "model not available")
+	 * gets at least one retry with backoff before being reported. Returning without
+	 * throwing lets Action Scheduler complete this action; the scheduled retry
+	 * carries the work forward. On the last attempt this throws so AS records the
+	 * failure and stores the message.
+	 *
+	 * @param string              $hook    The action hook to re-schedule.
+	 * @param array<string,mixed> $payload Clean payload (no attempt key).
+	 * @param int                 $attempt 1-based attempt number that just failed.
+	 * @param string              $message Error message for the final failure.
+	 * @return void
+	 * @throws \Exception On the final attempt, so AS records the action as failed.
+	 */
+	private function fail_or_retry( string $hook, array $payload, int $attempt, string $message ): void {
+		$max = (int) apply_filters( 'wpait_max_attempts', self::MAX_ATTEMPTS );
+
+		if ( $attempt < $max && function_exists( 'as_schedule_single_action' ) ) {
+			$payload['attempt'] = $attempt + 1;
+			/** Backoff (seconds) before the next attempt; receives the failed attempt number. */
+			$delay = (int) apply_filters( 'wpait_retry_delay', 60, $attempt );
+			as_schedule_single_action( time() + max( 0, $delay ), $hook, array( $payload ), self::GROUP );
+			return;
+		}
+
+		throw new \Exception( $message );
+	}
+
+	/**
+	 * Resolves a job payload's `{type,id}` to a human-readable title.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @return string Title, or a generic "#id" fallback.
+	 */
+	private function resolve_title( string $type, int $id ): string {
+		if ( 'post' === $type && $id > 0 ) {
+			$title = get_the_title( $id );
+			if ( '' !== (string) $title ) {
+				return (string) $title;
+			}
+		} elseif ( 'term' === $type && $id > 0 ) {
+			$term = get_term( $id );
+			if ( $term instanceof WP_Term ) {
+				return $term->name;
+			}
+		}
+		/* translators: %d: numeric object id of a deleted/unknown item. */
+		return sprintf( __( 'Item #%d', 'wp-ai-translate' ), $id );
+	}
+
+	/**
+	 * Reads the stored failure message for a failed action from its Action
+	 * Scheduler log (the most recent log entry, with AS's "action failed:" prefix
+	 * stripped). Falls back to a generic message.
+	 *
+	 * @param int $action_id Action id.
+	 * @return string
+	 */
+	private function failure_message( int $action_id ): string {
+		$generic = __( 'The job failed.', 'wp-ai-translate' );
+		if ( ! class_exists( 'ActionScheduler' ) || ! method_exists( 'ActionScheduler', 'logger' ) ) {
+			return $generic;
+		}
+		$logs = ActionScheduler::logger()->get_logs( $action_id );
+		if ( empty( $logs ) ) {
+			return $generic;
+		}
+		// The failure is the most recent log entry.
+		$last    = end( $logs );
+		$message = method_exists( $last, 'get_message' ) ? (string) $last->get_message() : '';
+		// AS logs failures as "action failed[ via <runner>]: <message>"; strip the
+		// prefix up to the first colon so only the underlying error message remains.
+		$message = preg_replace( '/^action failed[^:]*:\s*/i', '', $message );
+		return '' !== trim( (string) $message ) ? (string) $message : $generic;
+	}
 
 	/**
 	 * Whether a translation for `$target_code` already exists in the source's group.

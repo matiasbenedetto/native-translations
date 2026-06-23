@@ -147,13 +147,35 @@ final class QueueTest extends TestCase {
 		$this->assertSame( array( array( 'term', 3, 'es' ) ), $this->translator->calls );
 	}
 
-	public function test_run_job_throws_on_wp_error(): void {
+	public function test_run_job_retries_transient_failure_instead_of_throwing(): void {
 		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
 
-		$this->expectException( \Exception::class );
-		$this->expectExceptionMessage( 'AI exploded' );
+		// First attempt (no attempt key): a failure schedules a retry and does NOT throw.
 		$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) );
+
+		$this->assertCount( 1, Wpait_Test_State::$as_scheduled_single );
+		[ , $hook, $args ] = Wpait_Test_State::$as_scheduled_single[0];
+		$this->assertSame( Wpait_Queue::HOOK, $hook );
+		// The retry payload carries an incremented attempt counter.
+		$this->assertSame(
+			array( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => 2 ) ),
+			$args
+		);
+	}
+
+	public function test_run_job_throws_on_final_attempt(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
+
+		// Final attempt (== MAX_ATTEMPTS): re-throw so AS records the failure; no further retry.
+		try {
+			$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => Wpait_Queue::MAX_ATTEMPTS ) );
+			$this->fail( 'Expected an exception on the final attempt.' );
+		} catch ( \Exception $e ) {
+			$this->assertSame( 'AI exploded', $e->getMessage() );
+		}
+		$this->assertSame( array(), Wpait_Test_State::$as_scheduled_single );
 	}
 
 	public function test_run_job_throws_on_invalid_payload(): void {
@@ -229,13 +251,29 @@ final class QueueTest extends TestCase {
 		$this->assertSame( 'en', $this->store->get_language( 'post', 7 ) );
 	}
 
-	public function test_run_detect_job_throws_on_detection_failure(): void {
+	public function test_run_detect_job_retries_transient_failure(): void {
 		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$this->translator->detect_result = new WP_Error( 'wpait_detect_failed', 'Could not detect' );
 
-		$this->expectException( \Exception::class );
-		$this->expectExceptionMessage( 'Could not detect' );
 		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
+
+		$this->assertCount( 1, Wpait_Test_State::$as_scheduled_single );
+		[ , $hook, $args ] = Wpait_Test_State::$as_scheduled_single[0];
+		$this->assertSame( Wpait_Queue::DETECT_HOOK, $hook );
+		$this->assertSame( array( array( 'type' => 'post', 'id' => 7, 'attempt' => 2 ) ), $args );
+	}
+
+	public function test_run_detect_job_throws_on_final_attempt(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->detect_result = new WP_Error( 'wpait_detect_failed', 'Could not detect' );
+
+		try {
+			$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7, 'attempt' => Wpait_Queue::MAX_ATTEMPTS ) );
+			$this->fail( 'Expected an exception on the final attempt.' );
+		} catch ( \Exception $e ) {
+			$this->assertSame( 'Could not detect', $e->getMessage() );
+		}
+		$this->assertSame( array(), Wpait_Test_State::$as_scheduled_single );
 	}
 
 	public function test_run_detect_job_throws_on_invalid_payload(): void {
@@ -258,5 +296,71 @@ final class QueueTest extends TestCase {
 			array( 'pending' => 4, 'running' => 1, 'failed' => 2 ),
 			$this->queue->get_status()
 		);
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * get_failed_jobs() / retry_job() (#69)
+	 * ------------------------------------------------------------------ */
+
+	public function test_get_failed_jobs_resolves_titles_and_messages(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Hello World' );
+		Wpait_Test_State::$as_failed_actions = array(
+			101 => array(
+				'hook'    => Wpait_Queue::HOOK,
+				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
+				'message' => 'AI exploded',
+			),
+			102 => array(
+				'hook'    => Wpait_Queue::DETECT_HOOK,
+				'args'    => array( array( 'type' => 'term', 'id' => 999 ) ),
+				'message' => 'Could not detect',
+			),
+		);
+
+		$jobs = $this->queue->get_failed_jobs();
+		$this->assertCount( 2, $jobs );
+
+		$byId = array();
+		foreach ( $jobs as $job ) {
+			$byId[ $job['action_id'] ] = $job;
+		}
+
+		$this->assertSame( 'translate', $byId[101]['kind'] );
+		$this->assertSame( 'Hello World', $byId[101]['title'] );
+		$this->assertSame( 'es', $byId[101]['target'] );
+		$this->assertSame( 'AI exploded', $byId[101]['message'] ); // "action failed:" prefix stripped.
+
+		$this->assertSame( 'detect', $byId[102]['kind'] );
+		$this->assertSame( 'Item #999', $byId[102]['title'] ); // unknown id falls back.
+		$this->assertSame( 'Could not detect', $byId[102]['message'] );
+	}
+
+	public function test_retry_job_reenqueues_and_deletes_failed_record(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpait_Test_State::$as_failed_actions = array(
+			101 => array(
+				'hook'    => Wpait_Queue::HOOK,
+				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => 2 ) ),
+				'message' => 'AI exploded',
+			),
+		);
+
+		$this->assertTrue( $this->queue->retry_job( 101 ) );
+
+		// Re-enqueued with a fresh payload (no attempt key).
+		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
+		[ $hook, $args ] = Wpait_Test_State::$as_enqueued[0];
+		$this->assertSame( Wpait_Queue::HOOK, $hook );
+		$this->assertSame( array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ), $args );
+
+		// Failed record removed.
+		$this->assertSame( array( 101 ), Wpait_Test_State::$as_deleted );
+	}
+
+	public function test_retry_job_unknown_action_returns_error(): void {
+		$result = $this->queue->retry_job( 4242 );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
 	}
 }

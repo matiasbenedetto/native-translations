@@ -179,6 +179,24 @@ final class Wpait_Test_State {
 	 */
 	public static array $as_counts = array();
 
+	/**
+	 * Recorded calls to as_schedule_single_action(): each is `[ timestamp, hook, args, group ]`.
+	 *
+	 * @var array<int,array{0:int,1:string,2:array,3:string}>
+	 */
+	public static array $as_scheduled_single = array();
+
+	/**
+	 * Failed Action Scheduler actions keyed by action id, each
+	 * `[ hook, args, message ]`, used by the fetch_action/query/logger stubs (#69).
+	 *
+	 * @var array<int,array{hook:string,args:array,message:string}>
+	 */
+	public static array $as_failed_actions = array();
+
+	/** @var array<int,int> Action ids passed to delete_action(). */
+	public static array $as_deleted = array();
+
 	/** @var object|null Return value of get_current_screen() (e.g. ->base, ->taxonomy). */
 	public static $current_screen = null;
 
@@ -218,6 +236,9 @@ final class Wpait_Test_State {
 		self::$as_enqueued      = array();
 		self::$as_scheduled     = array();
 		self::$as_counts        = array();
+		self::$as_scheduled_single = array();
+		self::$as_failed_actions = array();
+		self::$as_deleted       = array();
 		$_GET                   = array();
 	}
 }
@@ -1022,6 +1043,42 @@ function as_has_scheduled_action( $hook, $args = null, $group = '' ): bool {
 	return ! empty( Wpait_Test_State::$as_scheduled[ $sig ] );
 }
 
+function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '', $unique = false, $priority = 10 ) {
+	Wpait_Test_State::$as_scheduled_single[] = array( (int) $timestamp, $hook, $args, $group );
+	return count( Wpait_Test_State::$as_scheduled_single ); // A fake action id.
+}
+
+if ( ! class_exists( 'Wpait_Fake_AS_Action' ) ) {
+	/** Minimal stand-in for ActionScheduler_Action used by fetch_action(). */
+	class Wpait_Fake_AS_Action {
+		private string $hook;
+		private array $args;
+		public function __construct( string $hook, array $args ) {
+			$this->hook = $hook;
+			$this->args = $args;
+		}
+		public function get_hook(): string {
+			return $this->hook;
+		}
+		public function get_args(): array {
+			return $this->args;
+		}
+	}
+}
+
+if ( ! class_exists( 'Wpait_Fake_AS_LogEntry' ) ) {
+	/** Minimal stand-in for ActionScheduler_LogEntry. */
+	class Wpait_Fake_AS_LogEntry {
+		private string $message;
+		public function __construct( string $message ) {
+			$this->message = $message;
+		}
+		public function get_message(): string {
+			return $this->message;
+		}
+	}
+}
+
 if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 	class ActionScheduler_Store {
 		const STATUS_PENDING  = 'pending';
@@ -1029,10 +1086,37 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 		const STATUS_FAILED   = 'failed';
 		const STATUS_COMPLETE = 'complete';
 
-		/** @param array<string,mixed> $args @return int */
-		public function query_actions( $args = array(), $return_format = 'ids' ) {
+		/** @param array<string,mixed> $args @return int|array<int,int> */
+		public function query_actions( $args = array(), $return_format = 'select' ) {
 			$status = $args['status'] ?? '';
+			if ( 'count' !== $return_format ) {
+				// 'select' returns an array of action ids (mirrors the real store).
+				return self::STATUS_FAILED === $status
+					? array_map( 'intval', array_keys( Wpait_Test_State::$as_failed_actions ) )
+					: array();
+			}
 			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
+		}
+
+		/** @return Wpait_Fake_AS_Action|null */
+		public function fetch_action( $action_id ) {
+			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ] ?? null;
+			return $rec ? new Wpait_Fake_AS_Action( $rec['hook'], $rec['args'] ) : null;
+		}
+
+		public function delete_action( $action_id ): void {
+			Wpait_Test_State::$as_deleted[] = (int) $action_id;
+			unset( Wpait_Test_State::$as_failed_actions[ (int) $action_id ] );
+		}
+	}
+}
+
+if ( ! class_exists( 'Wpait_Fake_AS_Logger' ) ) {
+	class Wpait_Fake_AS_Logger {
+		/** @return array<int,Wpait_Fake_AS_LogEntry> */
+		public function get_logs( $action_id ): array {
+			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ] ?? null;
+			return $rec ? array( new Wpait_Fake_AS_LogEntry( 'action failed: ' . $rec['message'] ) ) : array();
 		}
 	}
 }
@@ -1040,12 +1124,20 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 if ( ! class_exists( 'ActionScheduler' ) ) {
 	class ActionScheduler {
 		private static ?ActionScheduler_Store $store = null;
+		private static ?Wpait_Fake_AS_Logger $logger = null;
 
 		public static function store(): ActionScheduler_Store {
 			if ( null === self::$store ) {
 				self::$store = new ActionScheduler_Store();
 			}
 			return self::$store;
+		}
+
+		public static function logger(): Wpait_Fake_AS_Logger {
+			if ( null === self::$logger ) {
+				self::$logger = new Wpait_Fake_AS_Logger();
+			}
+			return self::$logger;
 		}
 	}
 }
