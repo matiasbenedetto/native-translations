@@ -506,6 +506,8 @@ class Wpait_Admin_Settings {
 				</template>
 				</div>
 
+				<?php $this->render_language_packs_card( $languages ); ?>
+
 				<div class="wpait-card">
 				<h2><?php esc_html_e( 'Default language', 'wp-ai-translate' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'The site’s primary language — used as the source when no other is given.', 'wp-ai-translate' ); ?></p>
@@ -700,6 +702,122 @@ class Wpait_Admin_Settings {
 						.finally( function () { testBtn.disabled = false; } );
 				} );
 			}
+		}() );
+		</script>
+		<?php
+		$this->render_language_packs_script();
+	}
+
+	/**
+	 * Renders the "Language packs" card: for each configured language, its locale and
+	 * core-language-pack install status, with an Install button for missing packs (#62).
+	 *
+	 * @param array<int,array<string,mixed>> $languages Configured language rows.
+	 * @return void
+	 */
+	private function render_language_packs_card( array $languages ): void {
+		?>
+		<div class="wpait-card">
+			<h2><?php esc_html_e( 'Language packs', 'wp-ai-translate' ); ?></h2>
+			<p class="description">
+				<?php esc_html_e( 'WordPress needs a core language pack installed for a language so that dates and theme/core interface strings (e.g. “Previous”, “Next”, “Leave a Reply”) render in that language when a visitor views content in it.', 'wp-ai-translate' ); ?>
+			</p>
+			<table class="widefat striped wpait-language-packs-table">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Language', 'wp-ai-translate' ); ?></th>
+						<th><?php esc_html_e( 'Locale', 'wp-ai-translate' ); ?></th>
+						<th><?php esc_html_e( 'Status', 'wp-ai-translate' ); ?></th>
+						<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $languages as $lang ) : ?>
+						<?php
+						$locale = (string) ( $lang['locale'] ?? '' );
+						$status = Wpait_Languages::locale_pack_status( $locale );
+						?>
+						<tr class="wpait-language-pack-row" data-locale="<?php echo esc_attr( $locale ); ?>">
+							<td><?php echo esc_html( (string) ( $lang['name'] ?? $lang['code'] ) ); ?></td>
+							<td><code><?php echo '' !== $locale ? esc_html( $locale ) : '—'; ?></code></td>
+							<td class="wpait-pack-status">
+								<?php
+								if ( 'builtin' === $status ) {
+									echo '<span class="wpait-pack-badge is-builtin">' . esc_html__( 'Built-in', 'wp-ai-translate' ) . '</span>';
+								} elseif ( 'installed' === $status ) {
+									echo '<span class="wpait-pack-badge is-installed">' . esc_html__( 'Installed', 'wp-ai-translate' ) . '</span>';
+								} elseif ( 'not_installed' === $status ) {
+									echo '<span class="wpait-pack-badge is-missing">' . esc_html__( 'Not installed', 'wp-ai-translate' ) . '</span>';
+								} else {
+									echo '<span class="wpait-pack-badge is-none">' . esc_html__( 'No locale set', 'wp-ai-translate' ) . '</span>';
+								}
+								?>
+							</td>
+							<td class="wpait-pack-action">
+								<?php if ( 'not_installed' === $status ) : ?>
+									<button type="button" class="button wpait-install-pack" data-locale="<?php echo esc_attr( $locale ); ?>"><?php esc_html_e( 'Install', 'wp-ai-translate' ); ?></button>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+					<?php if ( empty( $languages ) ) : ?>
+						<tr><td colspan="4"><?php esc_html_e( 'No languages configured yet.', 'wp-ai-translate' ); ?></td></tr>
+					<?php endif; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Inline JS for the Language packs card: installs a missing pack via the REST
+	 * endpoint and flips the row to "Installed" on success (#62).
+	 *
+	 * @return void
+	 */
+	private function render_language_packs_script(): void {
+		$strings = wp_json_encode(
+			array(
+				'installing' => __( 'Installing…', 'wp-ai-translate' ),
+				'installed'  => __( 'Installed', 'wp-ai-translate' ),
+				'failed'     => __( 'Install failed', 'wp-ai-translate' ),
+				'noFetch'    => __( 'Could not install in this browser.', 'wp-ai-translate' ),
+			)
+		);
+		?>
+		<script>
+		( function () {
+			var strings = <?php echo $strings; ?>;
+			document.querySelectorAll( '.wpait-install-pack' ).forEach( function ( btn ) {
+				btn.addEventListener( 'click', function () {
+					var row    = btn.closest( '.wpait-language-pack-row' );
+					var locale = btn.getAttribute( 'data-locale' );
+					var statusCell = row ? row.querySelector( '.wpait-pack-status' ) : null;
+					if ( ! window.wp || ! wp.apiFetch ) {
+						if ( statusCell ) { statusCell.textContent = strings.noFetch; }
+						return;
+					}
+					btn.disabled = true;
+					var prev = btn.textContent;
+					btn.textContent = strings.installing;
+					wp.apiFetch( { path: '/<?php echo esc_js( Wpait_Rest::NS ); ?>/install-language-pack', method: 'POST', data: { locale: locale } } )
+						.then( function ( res ) {
+							if ( res && res.installed ) {
+								if ( statusCell ) {
+									statusCell.innerHTML = '<span class="wpait-pack-badge is-installed">' + strings.installed + '</span>';
+								}
+								btn.parentNode.removeChild( btn );
+							} else {
+								btn.textContent = strings.failed;
+								btn.disabled = false;
+							}
+						} )
+						.catch( function ( e ) {
+							btn.textContent = ( e && e.message ) ? e.message : strings.failed;
+							btn.disabled = false;
+						} );
+				} );
+			} );
 		}() );
 		</script>
 		<?php

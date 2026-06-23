@@ -124,6 +124,38 @@ final class Wpait_Test_State {
 	/** @var bool Return value of is_admin(). */
 	public static bool $is_admin = false;
 
+	/* --- Locale switching (#62) ----------------------------------------- */
+
+	/** @var bool Return value of wp_doing_ajax(). */
+	public static bool $doing_ajax = false;
+
+	/** @var bool Return value of is_feed(). */
+	public static bool $is_feed = false;
+
+	/** @var bool Return value of is_robots(). */
+	public static bool $is_robots = false;
+
+	/** @var bool Return value of is_main_query(). */
+	public static bool $is_main_query = true;
+
+	/** @var bool Return value of is_tax() (custom-tax archive). */
+	public static bool $is_tax = false;
+
+	/** @var string Return value of get_locale(). */
+	public static string $locale = 'en_US';
+
+	/** @var string[] Locales get_available_languages() reports as installed. */
+	public static array $available_languages = array();
+
+	/** @var string[] Locales passed to switch_to_locale(), in order. */
+	public static array $switched_locales = array();
+
+	/** @var string[] Locales passed to wp_download_language_pack(), in order. */
+	public static array $downloaded_locales = array();
+
+	/** @var string|false Result wp_download_language_pack() returns ('' => echo back locale). */
+	public static $download_result = '';
+
 	/**
 	 * Recorded calls to as_enqueue_async_action(): each is `[ hook, args, group ]`.
 	 *
@@ -172,6 +204,16 @@ final class Wpait_Test_State {
 		self::$queried_object   = null;
 		self::$archive_type     = '';
 		self::$is_admin         = false;
+		self::$doing_ajax        = false;
+		self::$is_feed           = false;
+		self::$is_robots         = false;
+		self::$is_main_query     = true;
+		self::$is_tax            = false;
+		self::$locale            = 'en_US';
+		self::$available_languages = array();
+		self::$switched_locales  = array();
+		self::$downloaded_locales = array();
+		self::$download_result   = '';
 		self::$current_screen   = null;
 		self::$as_enqueued      = array();
 		self::$as_scheduled     = array();
@@ -838,6 +880,48 @@ function get_queried_object() {
 	return Wpait_Test_State::$queried_object;
 }
 
+/* --- Locale switching context (#62) -------------------------------------- */
+
+function wp_doing_ajax(): bool {
+	return Wpait_Test_State::$doing_ajax;
+}
+
+function is_feed(): bool {
+	return Wpait_Test_State::$is_feed;
+}
+
+function is_robots(): bool {
+	return Wpait_Test_State::$is_robots;
+}
+
+function is_main_query(): bool {
+	return Wpait_Test_State::$is_main_query;
+}
+
+function is_tax( $taxonomy = '', $term = '' ): bool {
+	return Wpait_Test_State::$is_tax;
+}
+
+function get_locale(): string {
+	return Wpait_Test_State::$locale;
+}
+
+function get_available_languages( $dir = null ): array {
+	return Wpait_Test_State::$available_languages;
+}
+
+function switch_to_locale( $locale ): bool {
+	Wpait_Test_State::$switched_locales[] = (string) $locale;
+	Wpait_Test_State::$locale             = (string) $locale;
+	return true;
+}
+
+function wp_download_language_pack( $locale ) {
+	Wpait_Test_State::$downloaded_locales[] = (string) $locale;
+	$result = Wpait_Test_State::$download_result;
+	return '' === $result ? (string) $locale : $result;
+}
+
 if ( ! class_exists( 'WP_Block' ) ) {
 	/** Minimal block instance: only the `context` bag resolve_post_id() reads. */
 	class WP_Block {
@@ -979,4 +1063,5 @@ require_once __DIR__ . '/../../wp-ai-translate/includes/class-translator.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-queue.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-rest.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-frontend.php';
+require_once __DIR__ . '/../../wp-ai-translate/includes/class-locale.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-list.php';

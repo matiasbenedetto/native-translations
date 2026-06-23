@@ -267,6 +267,23 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/install-language-pack',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_install_language_pack' ),
+				'permission_callback' => array( $this, 'permission_manage' ),
+				'args'                => array(
+					'locale' => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/overview-visibility',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -675,6 +692,34 @@ class Wpait_Rest {
 	public function handle_test_connection() {
 		$result = $this->translator->test_connection();
 		return rest_ensure_response( $result );
+	}
+
+	/**
+	 * `POST /install-language-pack` — installs a configured locale's core language
+	 * pack (#62) so dates and core/theme UI strings can render in that language.
+	 *
+	 * Body `{ locale }`. The locale is validated against the site's configured
+	 * locales inside the languages handler (never an arbitrary download). Returns
+	 * `{ installed, locale, available }`. Admin-only.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_install_language_pack( WP_REST_Request $request ) {
+		$locale = (string) $request->get_param( 'locale' );
+
+		$result = $this->languages->install_language_pack( $locale );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return rest_ensure_response(
+			array(
+				'installed' => true,
+				'locale'    => $locale,
+				'available' => get_available_languages(),
+			)
+		);
 	}
 
 	/**
