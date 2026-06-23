@@ -128,3 +128,11 @@
 	background: #dcdcde;
 	color: #50575e;
 }
+
+/* Inline install-error notice next to the Install button (#71). */
+.wpait-pack-error {
+	margin: 6px 0 0;
+	max-width: 28em;
+	color: #b32d2e;
+	font-size: 12px;
+}
