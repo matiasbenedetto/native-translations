@@ -60,6 +60,12 @@ if ( version_compare( get_bloginfo( 'version' ), '7.0', '<' ) ) {
 	return;
 }
 
+// Action Scheduler (bundled) powers the background translation queue (#55). Its
+// versioned loader self-selects the newest copy if other plugins bundle it too.
+if ( file_exists( WPAIT_PLUGIN_DIR . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
+	require_once WPAIT_PLUGIN_DIR . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
+}
+
 require_once WPAIT_PLUGIN_DIR . 'includes/class-translation-store.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-languages.php';
 require_once WPAIT_PLUGIN_DIR . 'includes/class-admin-settings.php';
