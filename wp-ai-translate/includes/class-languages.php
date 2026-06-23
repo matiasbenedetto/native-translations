@@ -72,6 +72,7 @@ class Wpait_Languages {
 			}
 			$index[ $code ] = array(
 				'code'    => $code,
+				'locale'  => isset( $lang['locale'] ) ? (string) $lang['locale'] : '',
 				'name'    => ! empty( $lang['name'] ) ? (string) $lang['name'] : $code,
 				'native'  => isset( $lang['native'] ) ? (string) $lang['native'] : '',
 				'flag'    => isset( $lang['flag'] ) ? (string) $lang['flag'] : '',
@@ -131,6 +132,18 @@ class Wpait_Languages {
 		}
 		$flag = '' !== $index[ $code ]['flag'] ? $index[ $code ]['flag'] . ' ' : '';
 		return $flag . $index[ $code ]['name'];
+	}
+
+	/**
+	 * The configured WordPress locale for a code (e.g. "es_ES"), or '' if none is
+	 * set / unknown.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function locale( string $code ): string {
+		$index = self::config_index();
+		return isset( $index[ $code ] ) ? (string) $index[ $code ]['locale'] : '';
 	}
 
 	/**
@@ -202,6 +215,83 @@ class Wpait_Languages {
 				)
 			);
 		}
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Core language-pack status + install (#62)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * The set of distinct, non-empty WordPress locales across all configured
+	 * languages (e.g. `[ 'es_ES', 'fr_FR' ]`). Used to bound pack installs to the
+	 * site's own configured locales — never an arbitrary download target.
+	 *
+	 * @return string[]
+	 */
+	public function configured_locales(): array {
+		$locales = array();
+		foreach ( self::config_index() as $lang ) {
+			$loc = (string) $lang['locale'];
+			if ( '' !== $loc && ! in_array( $loc, $locales, true ) ) {
+				$locales[] = $loc;
+			}
+		}
+		return $locales;
+	}
+
+	/**
+	 * The install status of a WordPress locale's core language pack.
+	 *
+	 * @param string $locale WordPress locale (e.g. es_ES). Empty => 'none'.
+	 * @return string One of 'builtin' (en_US), 'installed', 'not_installed', or
+	 *                'none' when no locale is configured.
+	 */
+	public static function locale_pack_status( string $locale ): string {
+		if ( '' === $locale ) {
+			return 'none';
+		}
+		if ( 'en_US' === $locale ) {
+			return 'builtin';
+		}
+		return in_array( $locale, get_available_languages(), true ) ? 'installed' : 'not_installed';
+	}
+
+	/**
+	 * Downloads and installs the core language pack for a configured locale.
+	 *
+	 * Validates that the locale is one of the site's configured locales (never an
+	 * arbitrary locale), then delegates to core's downloader. en_US is built in and
+	 * needs no download.
+	 *
+	 * @param string $locale WordPress locale (e.g. es_ES).
+	 * @return true|WP_Error True on success (or already built in/installed).
+	 */
+	public function install_language_pack( string $locale ) {
+		if ( '' === $locale || ! in_array( $locale, $this->configured_locales(), true ) ) {
+			return new WP_Error(
+				'wpait_invalid_locale',
+				__( 'That locale is not one of the site’s configured languages.', 'wp-ai-translate' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( 'en_US' === $locale || in_array( $locale, get_available_languages(), true ) ) {
+			return true;
+		}
+
+		if ( ! function_exists( 'wp_download_language_pack' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/translation-install.php';
+		}
+		$result = wp_download_language_pack( $locale );
+
+		if ( false === $result ) {
+			return new WP_Error(
+				'wpait_install_failed',
+				__( 'The language pack could not be installed.', 'wp-ai-translate' ),
+				array( 'status' => 500 )
+			);
+		}
+		return true;
 	}
 
 	/**

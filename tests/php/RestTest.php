@@ -381,4 +381,61 @@ final class RestTest extends TestCase {
 		$response = $this->rest->handle_queue_status();
 		$this->assertSame( array( 'pending' => 3, 'running' => 0, 'failed' => 1 ), $response->get_data() );
 	}
+
+	/* ------------------------------------------------------------------ *
+	 * /install-language-pack (#62) — manage_options gate + configured-locale bound
+	 * ------------------------------------------------------------------ */
+
+	/** Replaces the settings with configured locales for the pack tests. */
+	private function seed_locales(): void {
+		Wpait_Languages::flush_index();
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'languages' => array(
+				array( 'code' => 'en', 'name' => 'English', 'locale' => 'en_US', 'enabled' => true ),
+				array( 'code' => 'es', 'name' => 'Spanish', 'locale' => 'es_ES', 'enabled' => true ),
+			),
+		);
+	}
+
+	public function test_install_pack_admin_gate(): void {
+		Wpait_Test_State::$caps['manage_options'] = false;
+		$this->assertFalse( $this->rest->permission_manage() );
+		Wpait_Test_State::$caps['manage_options'] = true;
+		$this->assertTrue( $this->rest->permission_manage() );
+	}
+
+	public function test_install_pack_rejects_unconfigured_locale(): void {
+		$this->seed_locales();
+		$result = $this->rest->handle_install_language_pack( $this->request( array( 'locale' => 'fr_FR' ) ) );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_invalid_locale', $result->get_error_code() );
+		$this->assertSame( array(), Wpait_Test_State::$downloaded_locales );
+	}
+
+	public function test_install_pack_downloads_configured_locale(): void {
+		$this->seed_locales();
+		Wpait_Test_State::$available_languages = array(); // es_ES not yet installed.
+
+		$response = $this->rest->handle_install_language_pack( $this->request( array( 'locale' => 'es_ES' ) ) );
+		$data     = $response->get_data();
+
+		$this->assertTrue( $data['installed'] );
+		$this->assertSame( 'es_ES', $data['locale'] );
+		$this->assertSame( array( 'es_ES' ), Wpait_Test_State::$downloaded_locales );
+	}
+
+	public function test_install_pack_builtin_locale_needs_no_download(): void {
+		$this->seed_locales();
+		$response = $this->rest->handle_install_language_pack( $this->request( array( 'locale' => 'en_US' ) ) );
+		$this->assertTrue( $response->get_data()['installed'] );
+		$this->assertSame( array(), Wpait_Test_State::$downloaded_locales );
+	}
+
+	public function test_install_pack_surfaces_download_failure(): void {
+		$this->seed_locales();
+		Wpait_Test_State::$download_result = false; // Simulate a failed download.
+		$result = $this->rest->handle_install_language_pack( $this->request( array( 'locale' => 'es_ES' ) ) );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_install_failed', $result->get_error_code() );
+	}
 }

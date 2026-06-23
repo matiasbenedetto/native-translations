@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-06-23T04:17:44+00:00\n"
+"POT-Creation-Date: 2026-06-23T13:05:16+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-ai-translate\n"
@@ -234,7 +234,8 @@ msgstr ""
 #: includes/class-admin-list.php:160
 #: includes/class-admin-list.php:299
 #: includes/class-admin-list.php:304
-#: includes/class-languages.php:174
+#: includes/class-admin-settings.php:728
+#: includes/class-languages.php:187
 msgid "Language"
 msgstr ""
 
@@ -347,10 +348,10 @@ msgstr ""
 
 #. Plugin Name of the plugin
 #: wp-ai-translate.php
-#: includes/class-admin-settings.php:181
-#: includes/class-admin-settings.php:182
-#: includes/class-admin-settings.php:192
-#: includes/class-admin-settings.php:381
+#: includes/class-admin-settings.php:187
+#: includes/class-admin-settings.php:188
+#: includes/class-admin-settings.php:198
+#: includes/class-admin-settings.php:387
 msgid "AI Translate"
 msgstr ""
 
@@ -420,197 +421,195 @@ msgstr ""
 msgid "Edit the %s translation"
 msgstr ""
 
-#: includes/class-admin-settings.php:109
+#: includes/class-admin-settings.php:115
 msgid "You are a professional translator for {site_name}. Translate the provided content from {source_lang} into {target_lang}. Produce a natural, fluent translation that preserves the original meaning, tone, and register. Do not summarise, add, or omit content."
 msgstr ""
 
-#: includes/class-admin-settings.php:113
+#: includes/class-admin-settings.php:119
 msgid "This is web page content. Keep headings, lists, and structure intact."
 msgstr ""
 
-#: includes/class-admin-settings.php:117
+#: includes/class-admin-settings.php:123
 msgid "This is a taxonomy term (a category or tag) used for navigation. Keep the translation short and label-like."
 msgstr ""
 
-#: includes/class-admin-settings.php:193
+#: includes/class-admin-settings.php:199
 msgid "Settings"
 msgstr ""
 
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:268
+#: includes/class-admin-settings.php:274
 #, php-format
 msgid "These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them."
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:324
+#: includes/class-admin-settings.php:330
 #, php-format
 msgid "Added languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:326
+#: includes/class-admin-settings.php:332
 #, php-format
 msgid "Updated languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:328
+#: includes/class-admin-settings.php:334
 #, php-format
 msgid "Disabled languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:330
+#: includes/class-admin-settings.php:336
 #, php-format
 msgid "Removed languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:349
+#: includes/class-admin-settings.php:355
 #, php-format
 msgid "These languages still have content and were kept (disabled) instead of being deleted: %s. Reassign or delete their content first to remove them."
 msgstr ""
 
-#: includes/class-admin-settings.php:391
+#: includes/class-admin-settings.php:397
 msgid "Available"
 msgstr ""
 
-#: includes/class-admin-settings.php:392
+#: includes/class-admin-settings.php:398
 msgid "An AI provider with a text-generation model is available. Translations can be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:395
+#: includes/class-admin-settings.php:401
 msgid "No usable model"
 msgstr ""
 
-#: includes/class-admin-settings.php:396
+#: includes/class-admin-settings.php:402
 msgid "An AI provider is present, but no text-generation model is available, so translations will fail. Configure a text-generation model for this site’s AI provider."
 msgstr ""
 
-#: includes/class-admin-settings.php:399
+#: includes/class-admin-settings.php:405
 msgid "Not configured"
 msgstr ""
 
-#: includes/class-admin-settings.php:400
+#: includes/class-admin-settings.php:406
 msgid "No AI provider is configured for this site, so translations cannot be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:403
+#: includes/class-admin-settings.php:410
 msgid "AI provider"
 msgstr ""
 
-#: includes/class-admin-settings.php:406
-msgid "Status"
-msgstr ""
-
-#: includes/class-admin-settings.php:411
+#: includes/class-admin-settings.php:416
 msgid "Test connection"
 msgstr ""
 
-#: includes/class-admin-settings.php:415
+#: includes/class-admin-settings.php:420
 msgid "Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin."
 msgstr ""
 
-#: includes/class-admin-settings.php:432
+#: includes/class-admin-settings.php:428
 msgid "Languages"
 msgstr ""
 
-#: includes/class-admin-settings.php:434
+#: includes/class-admin-settings.php:430
 msgid "A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead."
 msgstr ""
 
-#: includes/class-admin-settings.php:437
+#: includes/class-admin-settings.php:433
 msgid "Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: an optional emoji shown beside the name — leave blank to show the name only."
 msgstr ""
 
-#: includes/class-admin-settings.php:447
+#: includes/class-admin-settings.php:443
 msgid "Code"
 msgstr ""
 
-#: includes/class-admin-settings.php:448
+#: includes/class-admin-settings.php:444
+#: includes/class-admin-settings.php:729
 msgid "Locale"
 msgstr ""
 
-#: includes/class-admin-settings.php:449
+#: includes/class-admin-settings.php:445
 msgid "Name"
 msgstr ""
 
-#: includes/class-admin-settings.php:450
+#: includes/class-admin-settings.php:446
 msgid "Native name"
 msgstr ""
 
-#: includes/class-admin-settings.php:451
+#: includes/class-admin-settings.php:447
 msgid "Flag"
 msgstr ""
 
-#: includes/class-admin-settings.php:452
+#: includes/class-admin-settings.php:448
 msgid "Enabled"
 msgstr ""
 
-#: includes/class-admin-settings.php:453
+#: includes/class-admin-settings.php:449
+#: includes/class-admin-settings.php:731
 msgid "Actions"
 msgstr ""
 
-#: includes/class-admin-settings.php:470
+#: includes/class-admin-settings.php:466
 msgid "In use — code locked"
 msgstr ""
 
-#: includes/class-admin-settings.php:473
-#: includes/class-admin-settings.php:503
+#: includes/class-admin-settings.php:469
+#: includes/class-admin-settings.php:499
 msgid "WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region)."
 msgstr ""
 
-#: includes/class-admin-settings.php:476
-#: includes/class-admin-settings.php:506
+#: includes/class-admin-settings.php:472
+#: includes/class-admin-settings.php:502
 msgid "Optional emoji flag shown next to the name. Leave blank to show the name only."
 msgstr ""
 
-#: includes/class-admin-settings.php:480
+#: includes/class-admin-settings.php:476
 msgid "This language has content and cannot be removed. Disable it instead, or reassign/delete its content first."
 msgstr ""
 
-#: includes/class-admin-settings.php:480
+#: includes/class-admin-settings.php:476
 msgid "In use"
 msgstr ""
 
 #. translators: %s: language code.
-#: includes/class-admin-settings.php:482
+#: includes/class-admin-settings.php:478
 #, php-format
 msgid "Remove language %s"
 msgstr ""
 
 #. translators: %s: language code.
-#: includes/class-admin-settings.php:482
-#: includes/class-admin-settings.php:508
+#: includes/class-admin-settings.php:478
+#: includes/class-admin-settings.php:504
 msgid "Remove"
 msgstr ""
 
-#: includes/class-admin-settings.php:488
+#: includes/class-admin-settings.php:484
 msgid "No languages configured yet. Use “Add language” to create one."
 msgstr ""
 
-#: includes/class-admin-settings.php:495
+#: includes/class-admin-settings.php:491
 msgid "Add language"
 msgstr ""
 
-#: includes/class-admin-settings.php:502
+#: includes/class-admin-settings.php:498
 msgid "e.g. fr"
 msgstr ""
 
-#: includes/class-admin-settings.php:503
+#: includes/class-admin-settings.php:499
 msgid "e.g. fr_FR"
 msgstr ""
 
-#: includes/class-admin-settings.php:504
+#: includes/class-admin-settings.php:500
 msgid "e.g. French"
 msgstr ""
 
-#: includes/class-admin-settings.php:505
+#: includes/class-admin-settings.php:501
 msgid "e.g. Français"
 msgstr ""
 
-#: includes/class-admin-settings.php:508
+#: includes/class-admin-settings.php:504
 msgid "Remove this new language"
 msgstr ""
 
@@ -618,80 +617,133 @@ msgstr ""
 msgid "Default language"
 msgstr ""
 
-#: includes/class-admin-settings.php:514
+#: includes/class-admin-settings.php:513
+msgid "The site’s primary language — used as the source when no other is given."
+msgstr ""
+
+#: includes/class-admin-settings.php:515
 msgid "— Select —"
 msgstr ""
 
-#: includes/class-admin-settings.php:522
+#: includes/class-admin-settings.php:525
 msgid "AI model"
 msgstr ""
 
-#: includes/class-admin-settings.php:536
+#: includes/class-admin-settings.php:539
 msgid "Which model to use for translations. “Automatic” lets the provider choose — pick a specific model if the provider rejects the default (e.g. Anthropic’s “Claude Fable 5 is not available, use Opus 4.8”)."
 msgstr ""
 
-#: includes/class-admin-settings.php:539
+#: includes/class-admin-settings.php:542
 msgid "Automatic (provider default)"
 msgstr ""
 
 #. translators: %s: model id.
-#: includes/class-admin-settings.php:544
+#: includes/class-admin-settings.php:547
 #, php-format
 msgid "%s (currently set)"
 msgstr ""
 
-#: includes/class-admin-settings.php:559
+#: includes/class-admin-settings.php:562
 msgid "If your selected model is unavailable to the account, translation automatically retries once with another advertised model rather than failing — so a translation may be produced by a different model than the one chosen here."
 msgstr ""
 
-#: includes/class-admin-settings.php:562
+#: includes/class-admin-settings.php:565
 msgid "Could not list models from the provider; “Automatic” will be used."
 msgstr ""
 
-#: includes/class-admin-settings.php:564
+#: includes/class-admin-settings.php:567
 msgid "Connect an AI provider (see status above) to choose a model."
 msgstr ""
 
-#: includes/class-admin-settings.php:567
+#: includes/class-admin-settings.php:572
 msgid "Translation instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:569
+#: includes/class-admin-settings.php:574
 msgid "These instructions shape the AI translation. Markup-safety rules are always applied automatically and cannot be overridden. Available placeholders:"
 msgstr ""
 
-#: includes/class-admin-settings.php:574
+#: includes/class-admin-settings.php:579
 msgid "Global"
 msgstr ""
 
-#: includes/class-admin-settings.php:577
-#: includes/class-admin-settings.php:584
-#: includes/class-admin-settings.php:591
+#: includes/class-admin-settings.php:582
+#: includes/class-admin-settings.php:589
+#: includes/class-admin-settings.php:596
 msgid "Reset to default"
 msgstr ""
 
-#: includes/class-admin-settings.php:581
+#: includes/class-admin-settings.php:586
 msgid "Posts &amp; pages"
 msgstr ""
 
-#: includes/class-admin-settings.php:588
+#: includes/class-admin-settings.php:593
 msgid "Categories &amp; tags"
 msgstr ""
 
-#: includes/class-admin-settings.php:597
+#: includes/class-admin-settings.php:602
 msgid "Per-language instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:669
+#: includes/class-admin-settings.php:675
 msgid "Testing…"
 msgstr ""
 
-#: includes/class-admin-settings.php:670
+#: includes/class-admin-settings.php:676
 msgid "Test failed."
 msgstr ""
 
-#: includes/class-admin-settings.php:671
+#: includes/class-admin-settings.php:677
 msgid "Could not run the test in this browser."
+msgstr ""
+
+#: includes/class-admin-settings.php:721
+msgid "Language packs"
+msgstr ""
+
+#: includes/class-admin-settings.php:723
+msgid "WordPress needs a core language pack installed for a language so that dates and theme/core interface strings (e.g. “Previous”, “Next”, “Leave a Reply”) render in that language when a visitor views content in it."
+msgstr ""
+
+#: includes/class-admin-settings.php:730
+msgid "Status"
+msgstr ""
+
+#: includes/class-admin-settings.php:746
+msgid "Built-in"
+msgstr ""
+
+#: includes/class-admin-settings.php:748
+#: includes/class-admin-settings.php:782
+msgid "Installed"
+msgstr ""
+
+#: includes/class-admin-settings.php:750
+msgid "Not installed"
+msgstr ""
+
+#: includes/class-admin-settings.php:752
+msgid "No locale set"
+msgstr ""
+
+#: includes/class-admin-settings.php:758
+msgid "Install"
+msgstr ""
+
+#: includes/class-admin-settings.php:764
+msgid "No languages configured yet."
+msgstr ""
+
+#: includes/class-admin-settings.php:781
+msgid "Installing…"
+msgstr ""
+
+#: includes/class-admin-settings.php:783
+msgid "Install failed"
+msgstr ""
+
+#: includes/class-admin-settings.php:784
+msgid "Could not install in this browser."
 msgstr ""
 
 #: includes/class-editor.php:206
@@ -707,19 +759,27 @@ msgstr ""
 msgid "Language switcher"
 msgstr ""
 
-#: includes/class-rest.php:734
+#: includes/class-languages.php:273
+msgid "That locale is not one of the site’s configured languages."
+msgstr ""
+
+#: includes/class-languages.php:290
+msgid "The language pack could not be installed."
+msgstr ""
+
+#: includes/class-rest.php:779
 msgid "The translation could not be trashed."
 msgstr ""
 
-#: includes/class-rest.php:795
+#: includes/class-rest.php:840
 msgid "The language is not a configured, enabled language."
 msgstr ""
 
-#: includes/class-rest.php:869
+#: includes/class-rest.php:914
 msgid "You are not allowed to translate this item."
 msgstr ""
 
-#: includes/class-rest.php:882
+#: includes/class-rest.php:927
 msgid "The requested item was not found."
 msgstr ""
 

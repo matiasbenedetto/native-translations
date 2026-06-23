@@ -83,6 +83,13 @@ final class Wpait_Plugin {
 	private Wpait_Frontend $frontend;
 
 	/**
+	 * Front-end locale switching (#62).
+	 *
+	 * @var Wpait_Locale
+	 */
+	private Wpait_Locale $locale;
+
+	/**
 	 * Returns the singleton instance.
 	 *
 	 * @return Wpait_Plugin
@@ -107,6 +114,7 @@ final class Wpait_Plugin {
 		$this->editor     = new Wpait_Editor( $this->languages );
 		$this->admin_list = new Wpait_Admin_List( $this->store, $this->languages );
 		$this->frontend   = new Wpait_Frontend( $this->store, $this->languages );
+		$this->locale     = new Wpait_Locale( $this->store, $this->languages );
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
@@ -119,6 +127,12 @@ final class Wpait_Plugin {
 		$this->queue->register_hooks();
 		$this->editor->register_hooks();
 		$this->frontend->register_hooks();
+
+		// Locale switching is front-end only; the handler self-guards, but skip the
+		// hook entirely in admin context for clarity.
+		if ( ! is_admin() ) {
+			$this->locale->register_hooks();
+		}
 
 		// The Overview REST route must register in REST (non-admin) context too, so it
 		// is wired unconditionally; the admin-screen hooks (columns, filters, menu)
@@ -213,5 +227,14 @@ final class Wpait_Plugin {
 	 */
 	public function frontend(): Wpait_Frontend {
 		return $this->frontend;
+	}
+
+	/**
+	 * Returns the front-end locale-switching integration.
+	 *
+	 * @return Wpait_Locale
+	 */
+	public function locale(): Wpait_Locale {
+		return $this->locale;
 	}
 }
