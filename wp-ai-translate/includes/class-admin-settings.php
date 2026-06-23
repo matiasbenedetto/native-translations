@@ -789,16 +789,40 @@ class Wpait_Admin_Settings {
 		( function () {
 			var strings = <?php echo $strings; ?>;
 			document.querySelectorAll( '.wpait-install-pack' ).forEach( function ( btn ) {
+				var prev       = btn.textContent;
+				var actionCell = btn.parentNode;
+
+				// Surface install errors in a small inline notice next to the
+				// (re-enabled) Install button rather than as the button label,
+				// which stretched the button and truncated long messages (#71).
+				function showError( msg ) {
+					var note = actionCell.querySelector( '.wpait-pack-error' );
+					if ( ! note ) {
+						note = document.createElement( 'p' );
+						note.className = 'wpait-pack-error';
+						note.setAttribute( 'role', 'alert' );
+						actionCell.appendChild( note );
+					}
+					note.textContent = msg;
+					btn.textContent = prev;
+					btn.disabled = false;
+				}
+
+				function clearError() {
+					var note = actionCell.querySelector( '.wpait-pack-error' );
+					if ( note ) { note.remove(); }
+				}
+
 				btn.addEventListener( 'click', function () {
 					var row    = btn.closest( '.wpait-language-pack-row' );
 					var locale = btn.getAttribute( 'data-locale' );
 					var statusCell = row ? row.querySelector( '.wpait-pack-status' ) : null;
 					if ( ! window.wp || ! wp.apiFetch ) {
-						if ( statusCell ) { statusCell.textContent = strings.noFetch; }
+						showError( strings.noFetch );
 						return;
 					}
+					clearError();
 					btn.disabled = true;
-					var prev = btn.textContent;
 					btn.textContent = strings.installing;
 					wp.apiFetch( { path: '/<?php echo esc_js( Wpait_Rest::NS ); ?>/install-language-pack', method: 'POST', data: { locale: locale } } )
 						.then( function ( res ) {
@@ -808,13 +832,11 @@ class Wpait_Admin_Settings {
 								}
 								btn.parentNode.removeChild( btn );
 							} else {
-								btn.textContent = strings.failed;
-								btn.disabled = false;
+								showError( strings.failed );
 							}
 						} )
 						.catch( function ( e ) {
-							btn.textContent = ( e && e.message ) ? e.message : strings.failed;
-							btn.disabled = false;
+							showError( ( e && e.message ) ? e.message : strings.failed );
 						} );
 				} );
 			} );
