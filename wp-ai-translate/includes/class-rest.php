@@ -49,16 +49,25 @@ class Wpait_Rest {
 	private Wpait_Translator $translator;
 
 	/**
+	 * Background translation queue (#55).
+	 *
+	 * @var Wpait_Queue
+	 */
+	private Wpait_Queue $queue;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Wpait_Translation_Store $store      Translation store.
 	 * @param Wpait_Languages         $languages  Languages handler.
 	 * @param Wpait_Translator        $translator AI translator.
+	 * @param Wpait_Queue             $queue      Background translation queue.
 	 */
-	public function __construct( Wpait_Translation_Store $store, Wpait_Languages $languages, Wpait_Translator $translator ) {
+	public function __construct( Wpait_Translation_Store $store, Wpait_Languages $languages, Wpait_Translator $translator, Wpait_Queue $queue ) {
 		$this->store      = $store;
 		$this->languages  = $languages;
 		$this->translator = $translator;
+		$this->queue      = $queue;
 	}
 
 	/**
@@ -112,6 +121,33 @@ class Wpait_Rest {
 					'target_code' => $code_arg,
 					'type'        => $type_arg,
 				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/enqueue',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_enqueue' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+				'args'                => array(
+					'items'       => array(
+						'type'     => 'array',
+						'required' => true,
+					),
+					'target_code' => $code_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/queue-status',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_queue_status' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
 			)
 		);
 
@@ -228,11 +264,24 @@ class Wpait_Rest {
 	 * @return true|WP_Error
 	 */
 	public function permission_translate( WP_REST_Request $request ) {
-		$type = (string) $request->get_param( 'type' );
-		$id   = (int) $request->get_param( 'source_id' );
+		return $this->can_translate_source(
+			(string) $request->get_param( 'type' ),
+			(int) $request->get_param( 'source_id' )
+		);
+	}
 
+	/**
+	 * Resolves "may translate this source object" capability for a concrete object
+	 * (S2). Shared by the single `/translate` permission callback and the per-item
+	 * authorization inside `/enqueue`, so the rule lives in exactly one place.
+	 *
+	 * @param string $type      'post' | 'term'.
+	 * @param int    $source_id Source object id.
+	 * @return true|WP_Error
+	 */
+	private function can_translate_source( string $type, int $source_id ) {
 		if ( 'term' === $type ) {
-			$term = get_term( $id );
+			$term = get_term( $source_id );
 			if ( ! $term instanceof WP_Term ) {
 				return $this->not_found();
 			}
@@ -243,15 +292,26 @@ class Wpait_Rest {
 			return true;
 		}
 
-		$post = get_post( $id );
+		$post = get_post( $source_id );
 		if ( ! $post instanceof WP_Post ) {
 			return $this->not_found();
 		}
 		$pto = get_post_type_object( $post->post_type );
-		if ( ! $pto || ! current_user_can( 'edit_post', $id ) || ! current_user_can( $pto->cap->create_posts ) ) {
+		if ( ! $pto || ! current_user_can( 'edit_post', $source_id ) || ! current_user_can( $pto->cap->create_posts ) ) {
 			return $this->forbidden();
 		}
 		return true;
+	}
+
+	/**
+	 * Coarse gate for the bulk queue endpoints (`/enqueue`, `/queue-status`): the
+	 * caller must be a content editor. The fine-grained per-target capability check
+	 * runs per item inside the handler (mirroring how WordPress bulk endpoints work).
+	 *
+	 * @return bool
+	 */
+	public function permission_bulk_enqueue(): bool {
+		return current_user_can( 'edit_posts' );
 	}
 
 	/**
@@ -323,6 +383,77 @@ class Wpait_Rest {
 
 		// The source's group now contains the new translation — return its view.
 		return rest_ensure_response( $this->payload( $type, $source_id ) );
+	}
+
+	/**
+	 * `POST /enqueue` — schedules background translations for many items (#55).
+	 *
+	 * Body: `{ items: [{ id:int, type:'post'|'term' }], target_code: string }`.
+	 * Each item is authorized with the same per-target capability rule as
+	 * `/translate`; items the caller cannot translate, or that are invalid, are
+	 * skipped. Returns `{ queued, skipped, results:[{ id, type, status }] }`.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_enqueue( WP_REST_Request $request ) {
+		$code = (string) $request->get_param( 'target_code' );
+
+		$lang_error = $this->validate_enabled_language( $code );
+		if ( is_wp_error( $lang_error ) ) {
+			return $lang_error;
+		}
+
+		$items   = (array) $request->get_param( 'items' );
+		$queued  = 0;
+		$skipped = 0;
+		$results = array();
+
+		foreach ( $items as $item ) {
+			$item = (array) $item;
+			$id   = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+			$type = isset( $item['type'] ) ? sanitize_key( (string) $item['type'] ) : '';
+
+			if ( $id <= 0 || ! in_array( $type, self::TYPES, true ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'invalid' );
+				continue;
+			}
+
+			// Per-item capability check: identical rule to `/translate`.
+			$allowed = $this->can_translate_source( $type, $id );
+			if ( is_wp_error( $allowed ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'forbidden' );
+				continue;
+			}
+
+			$status    = $this->queue->enqueue( $type, $id, $code );
+			$results[] = array( 'id' => $id, 'type' => $type, 'status' => $status );
+
+			if ( 'queued' === $status ) {
+				++$queued;
+			} else {
+				++$skipped;
+			}
+		}
+
+		return rest_ensure_response(
+			array(
+				'queued'  => $queued,
+				'skipped' => $skipped,
+				'results' => $results,
+			)
+		);
+	}
+
+	/**
+	 * `GET /queue-status` — pending/running/failed counts for the Overview banner.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function handle_queue_status() {
+		return rest_ensure_response( $this->queue->get_status() );
 	}
 
 	/**
