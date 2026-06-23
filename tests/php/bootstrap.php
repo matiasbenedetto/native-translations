@@ -412,6 +412,7 @@ if ( ! class_exists( 'WP_Term' ) ) {
 		public $name = '';
 		public $slug = '';
 		public $taxonomy = '';
+		public $description = '';
 		public $count = 0;
 	}
 }
@@ -440,6 +441,8 @@ if ( ! class_exists( 'WP_Post' ) ) {
 		public string $post_type = 'post';
 		public string $post_status = 'publish';
 		public string $post_name = '';
+		public string $post_title = '';
+		public string $post_content = '';
 		public string $post_modified_gmt = '';
 		public string $post_date_gmt = '';
 
@@ -449,6 +452,8 @@ if ( ! class_exists( 'WP_Post' ) ) {
 			$this->post_type         = (string) ( $row['post_type'] ?? 'post' );
 			$this->post_status       = (string) ( $row['post_status'] ?? 'publish' );
 			$this->post_name         = (string) ( $row['post_name'] ?? '' );
+			$this->post_title        = (string) ( $row['post_title'] ?? '' );
+			$this->post_content      = (string) ( $row['post_content'] ?? '' );
 			$this->post_modified_gmt = (string) ( $row['post_modified_gmt'] ?? '' );
 			$this->post_date_gmt     = (string) ( $row['post_date_gmt'] ?? '' );
 		}
@@ -483,6 +488,7 @@ function get_term( $id, $taxonomy = '' ) {
 	$term->taxonomy = (string) ( $row['taxonomy'] ?? 'category' );
 	$term->name     = (string) ( $row['name'] ?? '' );
 	$term->slug     = (string) ( $row['slug'] ?? '' );
+	$term->description = (string) ( $row['description'] ?? '' );
 	$term->count    = (int) ( $row['count'] ?? 0 );
 	return $term;
 }
@@ -593,6 +599,16 @@ function _doing_it_wrong( $function, $message, $version ): void {
 
 function esc_html( $text ) {
 	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+function wp_strip_all_tags( $text, $remove_breaks = false ) {
+	$text = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text );
+	$text = strip_tags( $text );
+	return trim( $text );
+}
+
+function strip_shortcodes( $content ) {
+	return (string) $content;
 }
 
 /**

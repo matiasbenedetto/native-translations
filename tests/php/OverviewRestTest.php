@@ -160,6 +160,25 @@ final class OverviewRestTest extends TestCase {
 		$this->assertSame( 'es', $data['rows'][0]['language']['code'] );
 	}
 
+	public function test_unmarked_view_lists_only_items_with_no_language(): void {
+		// Post 40 has a language; post 41 has none → only 41 is "unmarked" (#56).
+		$this->seed_post( 40, 'es', '', 'post', 'Marked' );
+		$this->seed_post( 41, '', '', 'post', 'Orphan' );
+
+		$data = $this->payload( array( 'view' => 'unmarked' ) );
+
+		$keys = wp_list_pluck( $data['rows'], 'key' );
+		$this->assertContains( 'post:41', $keys );
+		$this->assertNotContains( 'post:40', $keys );
+		// Unmarked rows carry language: null and an empty missing list.
+		$row = $data['rows'][0];
+		$this->assertNull( $row['language'] );
+		$this->assertSame( array(), $row['missing'] );
+		// counts.unmarked is exposed for the tab badge.
+		$this->assertArrayHasKey( 'unmarked', $data['counts'] );
+		$this->assertSame( 1, $data['counts']['unmarked'] );
+	}
+
 	public function test_ai_ok_reflects_connector_availability(): void {
 		Wpait_Test_State::$supports_ai = true;
 		$this->assertTrue( $this->payload()['ai_ok'] );

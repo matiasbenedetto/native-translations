@@ -287,6 +287,91 @@ final class RestTest extends TestCase {
 		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
 	}
 
+	/* ------------------------------------------------------------------ *
+	 * /set-languages (#56) — synchronous manual bulk assignment
+	 * ------------------------------------------------------------------ */
+
+	public function test_set_languages_rejects_invalid_code(): void {
+		$result = $this->rest->handle_set_languages(
+			$this->request( array( 'items' => array( array( 'id' => 5, 'type' => 'post' ) ), 'code' => 'de' ) )
+		);
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_invalid_language', $result->get_error_code() );
+	}
+
+	public function test_set_languages_sets_authorized_and_skips_others(): void {
+		// Post 5: editable, no language yet → set.
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$caps['edit_post:5'] = true;
+		// Post 6: not editable → forbidden.
+		Wpait_Test_State::$posts[6] = array( 'ID' => 6, 'post_type' => 'post' );
+
+		$response = $this->rest->handle_set_languages(
+			$this->request(
+				array(
+					'items' => array(
+						array( 'id' => 5, 'type' => 'post' ),
+						array( 'id' => 6, 'type' => 'post' ),
+						array( 'id' => 0, 'type' => 'post' ), // invalid.
+					),
+					'code'  => 'en',
+				)
+			)
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 1, $data['set'] );
+		$this->assertSame( 2, $data['skipped'] );
+		$this->assertSame( 'set', $data['results'][0]['status'] );
+		$this->assertSame( 'forbidden', $data['results'][1]['status'] );
+		$this->assertSame( 'invalid', $data['results'][2]['status'] );
+		// The store actually carries the new language.
+		$store = new Wpait_Translation_Store();
+		$this->assertSame( 'en', $store->get_language( 'post', 5 ) );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * /enqueue-detection (#56) — queued AI detection
+	 * ------------------------------------------------------------------ */
+
+	public function test_enqueue_detection_queues_authorized_unmarked_item(): void {
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$caps['edit_post:5'] = true;
+
+		$response = $this->rest->handle_enqueue_detection(
+			$this->request( array( 'items' => array( array( 'id' => 5, 'type' => 'post' ) ) ) )
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 1, $data['queued'] );
+		$this->assertSame( 0, $data['skipped'] );
+		$this->assertSame( 'queued', $data['results'][0]['status'] );
+		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
+		$this->assertSame( Wpait_Queue::DETECT_HOOK, Wpait_Test_State::$as_enqueued[0][0] );
+	}
+
+	public function test_enqueue_detection_skips_forbidden_and_invalid(): void {
+		Wpait_Test_State::$posts[6] = array( 'ID' => 6, 'post_type' => 'post' ); // not editable.
+
+		$response = $this->rest->handle_enqueue_detection(
+			$this->request(
+				array(
+					'items' => array(
+						array( 'id' => 6, 'type' => 'post' ),
+						array( 'id' => 0, 'type' => 'post' ),
+					),
+				)
+			)
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 0, $data['queued'] );
+		$this->assertSame( 2, $data['skipped'] );
+		$this->assertSame( 'forbidden', $data['results'][0]['status'] );
+		$this->assertSame( 'invalid', $data['results'][1]['status'] );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
 	public function test_queue_status_handler_returns_counts(): void {
 		Wpait_Test_State::$as_counts = array(
 			ActionScheduler_Store::STATUS_PENDING => 3,

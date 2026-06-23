@@ -143,6 +143,39 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/set-languages',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_set_languages' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+				'args'                => array(
+					'items' => array(
+						'type'     => 'array',
+						'required' => true,
+					),
+					'code'  => $code_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/enqueue-detection',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_enqueue_detection' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+				'args'                => array(
+					'items' => array(
+						'type'     => 'array',
+						'required' => true,
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/queue-status',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -429,6 +462,121 @@ class Wpait_Rest {
 			}
 
 			$status    = $this->queue->enqueue( $type, $id, $code );
+			$results[] = array( 'id' => $id, 'type' => $type, 'status' => $status );
+
+			if ( 'queued' === $status ) {
+				++$queued;
+			} else {
+				++$skipped;
+			}
+		}
+
+		return rest_ensure_response(
+			array(
+				'queued'  => $queued,
+				'skipped' => $skipped,
+				'results' => $results,
+			)
+		);
+	}
+
+	/**
+	 * `POST /set-languages` — synchronously assigns one language to many items (#56).
+	 *
+	 * Manual, no AI: body `{ items:[{ id, type }], code }`. Each item is authorized
+	 * with the same per-target edit rule as `/set-language`; the store's invariants
+	 * still apply (e.g. it rejects reassigning a grouped member with siblings), which
+	 * surfaces as a per-item `error`. Returns `{ set, skipped, results:[{ id, type,
+	 * status }] }` with status ∈ `set`|`error`|`forbidden`|`invalid`.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_set_languages( WP_REST_Request $request ) {
+		$code = (string) $request->get_param( 'code' );
+
+		$lang_error = $this->validate_enabled_language( $code );
+		if ( is_wp_error( $lang_error ) ) {
+			return $lang_error;
+		}
+
+		$items   = (array) $request->get_param( 'items' );
+		$set     = 0;
+		$skipped = 0;
+		$results = array();
+
+		foreach ( $items as $item ) {
+			$item = (array) $item;
+			$id   = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+			$type = isset( $item['type'] ) ? sanitize_key( (string) $item['type'] ) : '';
+
+			if ( $id <= 0 || ! in_array( $type, self::TYPES, true ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'invalid' );
+				continue;
+			}
+
+			if ( is_wp_error( $this->can_edit_target( $type, $id ) ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'forbidden' );
+				continue;
+			}
+
+			$result = $this->store->set_language( $type, $id, $code );
+			if ( is_wp_error( $result ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'error', 'message' => $result->get_error_message() );
+				continue;
+			}
+
+			++$set;
+			$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'set' );
+		}
+
+		return rest_ensure_response(
+			array(
+				'set'     => $set,
+				'skipped' => $skipped,
+				'results' => $results,
+			)
+		);
+	}
+
+	/**
+	 * `POST /enqueue-detection` — queues AI language-detection jobs for many items (#56).
+	 *
+	 * Body: `{ items:[{ id, type }] }`. Each item is authorized with the same
+	 * per-target edit rule as `/set-languages`; the queue then skips items that
+	 * already carry a language (`has_language`). Returns `{ queued, skipped,
+	 * results:[{ id, type, status }] }` with status from {@see Wpait_Queue::enqueue_detection()}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function handle_enqueue_detection( WP_REST_Request $request ) {
+		$items   = (array) $request->get_param( 'items' );
+		$queued  = 0;
+		$skipped = 0;
+		$results = array();
+
+		foreach ( $items as $item ) {
+			$item = (array) $item;
+			$id   = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+			$type = isset( $item['type'] ) ? sanitize_key( (string) $item['type'] ) : '';
+
+			if ( $id <= 0 || ! in_array( $type, self::TYPES, true ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'invalid' );
+				continue;
+			}
+
+			if ( is_wp_error( $this->can_edit_target( $type, $id ) ) ) {
+				++$skipped;
+				$results[] = array( 'id' => $id, 'type' => $type, 'status' => 'forbidden' );
+				continue;
+			}
+
+			$status    = $this->queue->enqueue_detection( $type, $id );
 			$results[] = array( 'id' => $id, 'type' => $type, 'status' => $status );
 
 			if ( 'queued' === $status ) {

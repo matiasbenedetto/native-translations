@@ -28,6 +28,13 @@ class Wpait_Queue {
 	const HOOK = 'wpait_translate_item';
 
 	/**
+	 * Action Scheduler hook each queued AI language-detection job fires (#56).
+	 *
+	 * @var string
+	 */
+	const DETECT_HOOK = 'wpait_detect_item';
+
+	/**
 	 * Action Scheduler group for all queue actions (lets us count/list them).
 	 *
 	 * @var string
@@ -76,6 +83,7 @@ class Wpait_Queue {
 	 */
 	public function register_hooks(): void {
 		add_action( self::HOOK, array( $this, 'run_job' ), 10, 1 );
+		add_action( self::DETECT_HOOK, array( $this, 'run_detect_job' ), 10, 1 );
 	}
 
 	/**
@@ -120,6 +128,42 @@ class Wpait_Queue {
 	}
 
 	/**
+	 * Enqueues a single AI language-detection job for an unmarked item (#56).
+	 *
+	 * Detection only makes sense for an item with no language yet, so an item that
+	 * already carries one is skipped (`has_language`) — re-detecting could only
+	 * override a deliberate assignment. Dedups an identical pending action.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @return string One of: 'queued', 'has_language', 'pending', 'invalid'.
+	 */
+	public function enqueue_detection( string $type, int $id ): string {
+		if ( ! in_array( $type, array( 'post', 'term' ), true ) || $id <= 0 ) {
+			return 'invalid';
+		}
+
+		// Detection is only for unmarked items — never override an existing language.
+		if ( '' !== $this->store->get_language( $type, $id ) ) {
+			return 'has_language';
+		}
+
+		$payload = array(
+			'type' => $type,
+			'id'   => $id,
+		);
+
+		if ( function_exists( 'as_has_scheduled_action' )
+			&& as_has_scheduled_action( self::DETECT_HOOK, array( $payload ), self::GROUP ) ) {
+			return 'pending';
+		}
+
+		as_enqueue_async_action( self::DETECT_HOOK, array( $payload ), self::GROUP );
+
+		return 'queued';
+	}
+
+	/**
 	 * Action Scheduler callback: runs one translation job.
 	 *
 	 * @param array<string,mixed> $payload `{ type, id, target }`.
@@ -157,6 +201,48 @@ class Wpait_Queue {
 	}
 
 	/**
+	 * Action Scheduler callback: runs one AI language-detection job (#56).
+	 *
+	 * Re-checks the item is still unmarked (a sibling/admin may have set a language
+	 * between enqueue and run — skip quietly if so), detects the language via the
+	 * translator, and assigns it through the store. Any failure re-throws so Action
+	 * Scheduler records the action as failed with the message.
+	 *
+	 * @param array<string,mixed> $payload `{ type, id }`.
+	 * @return void
+	 *
+	 * @throws \Exception When validation fails, detection fails, or the store rejects
+	 *                    the assignment, so Action Scheduler records the failure.
+	 */
+	public function run_detect_job( $payload ): void {
+		if ( ! is_array( $payload ) ) {
+			throw new \Exception( 'Invalid detection job payload.' );
+		}
+
+		$type = isset( $payload['type'] ) ? (string) $payload['type'] : '';
+		$id   = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+
+		if ( ! in_array( $type, array( 'post', 'term' ), true ) || $id <= 0 ) {
+			throw new \Exception( 'Invalid detection job: missing type or id.' );
+		}
+
+		// Already marked between enqueue and run — nothing to do.
+		if ( '' !== $this->store->get_language( $type, $id ) ) {
+			return;
+		}
+
+		$code = $this->translator->detect_language( $type, $id );
+		if ( is_wp_error( $code ) ) {
+			throw new \Exception( $code->get_error_message() );
+		}
+
+		$set = $this->store->set_language( $type, $id, (string) $code );
+		if ( is_wp_error( $set ) ) {
+			throw new \Exception( $set->get_error_message() );
+		}
+	}
+
+	/**
 	 * Returns queue counts for the status banner.
 	 *
 	 * @return array{pending:int,running:int,failed:int}
@@ -187,7 +273,10 @@ class Wpait_Queue {
 	}
 
 	/**
-	 * Counts actions in this plugin's group with a given status.
+	 * Counts actions in this plugin's group with a given status. Filtered by group
+	 * only (not by hook) so the banner reflects both translation and detection jobs
+	 * (#56) — the group is exclusive to this plugin, so the count stays accurate and
+	 * cheap.
 	 *
 	 * @param string $status Action Scheduler status constant.
 	 * @return int
@@ -198,7 +287,6 @@ class Wpait_Queue {
 		}
 		return (int) ActionScheduler::store()->query_actions(
 			array(
-				'hook'   => self::HOOK,
 				'group'  => self::GROUP,
 				'status' => $status,
 			),

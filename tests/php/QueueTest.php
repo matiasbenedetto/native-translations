@@ -27,6 +27,12 @@ final class Wpait_Recording_Translator extends Wpait_Translator {
 	/** @var int|WP_Error */
 	public $term_result = 99;
 
+	/** @var string|WP_Error Result detect_language returns. */
+	public $detect_result = 'es';
+
+	/** @var array<int,array{0:string,1:int}> Recorded detect_language calls. */
+	public array $detect_calls = array();
+
 	public function translate_post( int $source_id, string $to_code ) {
 		$this->calls[] = array( 'post', $source_id, $to_code );
 		return $this->post_result;
@@ -35,6 +41,11 @@ final class Wpait_Recording_Translator extends Wpait_Translator {
 	public function translate_term( int $term_id, string $to_code ) {
 		$this->calls[] = array( 'term', $term_id, $to_code );
 		return $this->term_result;
+	}
+
+	public function detect_language( string $type, int $id ) {
+		$this->detect_calls[] = array( $type, $id );
+		return $this->detect_result;
 	}
 }
 
@@ -157,6 +168,79 @@ final class QueueTest extends TestCase {
 
 		$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) );
 		$this->assertSame( array(), $this->translator->calls );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * enqueue_detection() — dedup / validation (#56)
+	 * ------------------------------------------------------------------ */
+
+	public function test_enqueue_detection_queues_unmarked_item(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+
+		$status = $this->queue->enqueue_detection( 'post', 7 );
+
+		$this->assertSame( 'queued', $status );
+		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
+		[ $hook, $args, $group ] = Wpait_Test_State::$as_enqueued[0];
+		$this->assertSame( Wpait_Queue::DETECT_HOOK, $hook );
+		$this->assertSame( Wpait_Queue::GROUP, $group );
+		$this->assertSame( array( array( 'type' => 'post', 'id' => 7 ) ), $args );
+	}
+
+	public function test_enqueue_detection_skips_item_with_language(): void {
+		$this->seed_post( 7, 'en' );
+		$this->assertSame( 'has_language', $this->queue->enqueue_detection( 'post', 7 ) );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_enqueue_detection_invalid_type(): void {
+		$this->assertSame( 'invalid', $this->queue->enqueue_detection( 'widget', 7 ) );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_enqueue_detection_pending_when_identical_action_scheduled(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$payload = array( 'type' => 'post', 'id' => 7 );
+		$sig     = wpait_test_as_signature( Wpait_Queue::DETECT_HOOK, array( $payload ), Wpait_Queue::GROUP );
+		Wpait_Test_State::$as_scheduled[ $sig ] = true;
+
+		$this->assertSame( 'pending', $this->queue->enqueue_detection( 'post', 7 ) );
+		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * run_detect_job() — detect + assign (#56)
+	 * ------------------------------------------------------------------ */
+
+	public function test_run_detect_job_sets_detected_language(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->detect_result = 'es';
+
+		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
+
+		$this->assertSame( array( array( 'post', 7 ) ), $this->translator->detect_calls );
+		$this->assertSame( 'es', $this->store->get_language( 'post', 7 ) );
+	}
+
+	public function test_run_detect_job_skips_item_that_gained_a_language(): void {
+		$this->seed_post( 7, 'en' );
+		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
+		$this->assertSame( array(), $this->translator->detect_calls );
+		$this->assertSame( 'en', $this->store->get_language( 'post', 7 ) );
+	}
+
+	public function test_run_detect_job_throws_on_detection_failure(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->detect_result = new WP_Error( 'wpait_detect_failed', 'Could not detect' );
+
+		$this->expectException( \Exception::class );
+		$this->expectExceptionMessage( 'Could not detect' );
+		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
+	}
+
+	public function test_run_detect_job_throws_on_invalid_payload(): void {
+		$this->expectException( \Exception::class );
+		$this->queue->run_detect_job( 'nope' );
 	}
 
 	/* ------------------------------------------------------------------ *

@@ -85,7 +85,7 @@ function Overview() {
 	const [ view, setView ] = useState( DEFAULT_VIEW );
 	const [ data, setData ] = useState( [] );
 	const [ paginationInfo, setPaginationInfo ] = useState( { totalItems: 0, totalPages: 1 } );
-	const [ counts, setCounts ] = useState( { missing: 0, by_language: {} } );
+	const [ counts, setCounts ] = useState( { missing: 0, unmarked: 0, by_language: {} } );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ aiOk, setAiOk ] = useState( cfg.aiOk );
@@ -93,9 +93,11 @@ function Overview() {
 	// Background-queue status: { pending, running, failed }.
 	const [ queue, setQueue ] = useState( { pending: 0, running: 0, failed: 0 } );
 	const pollRef = useRef( null );
+	const [ selection, setSelection ] = useState( [] );
 
 	const languages = cfg.languages || [];
-	const isLang = activeView !== 'missing';
+	const isUnmarked = activeView === 'unmarked';
+	const isLang = activeView !== 'missing' && ! isUnmarked;
 
 	const fetchData = useCallback( () => {
 		setIsLoading( true );
@@ -112,7 +114,7 @@ function Overview() {
 			.then( ( res ) => {
 				setData( res.rows || [] );
 				setPaginationInfo( { totalItems: res.total || 0, totalPages: res.total_pages || 1 } );
-				setCounts( res.counts || { missing: 0, by_language: {} } );
+				setCounts( res.counts || { missing: 0, unmarked: 0, by_language: {} } );
 				setAiOk( !! res.ai_ok );
 			} )
 			.catch( ( e ) => setError( e.message || __( 'Could not load the overview.', 'wp-ai-translate' ) ) )
@@ -186,6 +188,7 @@ function Overview() {
 			...DEFAULT_VIEW,
 			fields: next === 'missing' ? [ 'type_label', 'missing' ] : [ 'type_label', 'language' ],
 		} );
+		setSelection( [] );
 	};
 
 	const fields = useMemo( () => {
@@ -220,7 +223,7 @@ function Overview() {
 			},
 		];
 
-		if ( isLang ) {
+		if ( isLang || isUnmarked ) {
 			base.push( {
 				id: 'language',
 				label: __( 'Language', 'wp-ai-translate' ),
@@ -241,7 +244,7 @@ function Overview() {
 		}
 
 		return base;
-	}, [ isLang ] );
+	}, [ isLang, isUnmarked ] );
 
 	const runBulk = useCallback(
 		( items, code, name ) => {
@@ -289,8 +292,116 @@ function Overview() {
 		[ pollOnce, startPolling ]
 	);
 
+	// Manual bulk set: synchronously assign one language to the unmarked items (#56).
+	const runSetLanguage = useCallback(
+		( items, code, name ) => {
+			const eligible = items.filter( ( it ) => ! it.language );
+			if ( ! eligible.length ) {
+				return Promise.resolve();
+			}
+			setNotice( '' );
+			setError( '' );
+			return apiFetch( {
+				path: `/${ cfg.namespace }/set-languages`,
+				method: 'POST',
+				data: {
+					items: eligible.map( ( it ) => ( { id: it.id, type: it.type } ) ),
+					code,
+				},
+			} )
+				.then( ( res ) => {
+					const n = res.set || 0;
+					setNotice(
+						sprintf(
+							/* translators: 1: count, 2: language name. */
+							__( '%1$d item(s) set to %2$s.', 'wp-ai-translate' ),
+							n,
+							name
+						)
+					);
+					fetchData();
+				} )
+				.catch( ( e ) =>
+					setError( e.message || __( 'Could not set the language.', 'wp-ai-translate' ) )
+				);
+		},
+		[ fetchData ]
+	);
+
+	// AI detection: queue background detection jobs for the unmarked items (#56).
+	const runDetect = useCallback(
+		( items ) => {
+			const eligible = items.filter( ( it ) => ! it.language );
+			if ( ! eligible.length ) {
+				return Promise.resolve();
+			}
+			setNotice( '' );
+			setError( '' );
+			return apiFetch( {
+				path: `/${ cfg.namespace }/enqueue-detection`,
+				method: 'POST',
+				data: { items: eligible.map( ( it ) => ( { id: it.id, type: it.type } ) ) },
+			} )
+				.then( ( res ) => {
+					const queued = res.queued || 0;
+					if ( queued ) {
+						setNotice(
+							sprintf(
+								/* translators: %d: count. */
+								__( '%d detection job(s) queued.', 'wp-ai-translate' ),
+								queued
+							)
+						);
+						pollOnce().then( () => startPolling() );
+					} else {
+						setNotice( __( 'Nothing new to detect.', 'wp-ai-translate' ) );
+					}
+				} )
+				.catch( ( e ) =>
+					setError( e.message || __( 'Could not queue detection.', 'wp-ai-translate' ) )
+				);
+		},
+		[ pollOnce, startPolling ]
+	);
+
 	const actions = useMemo( () => {
 		const list = [];
+
+		// Manual "Set language: <name>" for each enabled language (#56). Eligible
+		// wherever an item has no language; most useful in the Unmarked view.
+		languages.forEach( ( lang ) => {
+			list.push( {
+				id: `set-language-${ lang.code }`,
+				label: sprintf(
+					/* translators: %s: language name. */
+					__( 'Set language: %s', 'wp-ai-translate' ),
+					lang.name
+				),
+				supportsBulk: true,
+				isEligible: ( item ) => ! item.language,
+				callback: ( items, { onActionPerformed } ) =>
+					runSetLanguage( items, lang.code, lang.name ).then( () => {
+						if ( onActionPerformed ) {
+							onActionPerformed( items );
+						}
+					} ),
+			} );
+		} );
+
+		// AI "Detect language (AI)" for unmarked items (#56).
+		list.push( {
+			id: 'detect-language',
+			label: __( 'Detect language (AI)', 'wp-ai-translate' ),
+			supportsBulk: true,
+			disabled: ! aiOk,
+			isEligible: ( item ) => ! item.language && aiOk,
+			callback: ( items, { onActionPerformed } ) =>
+				runDetect( items ).then( () => {
+					if ( onActionPerformed ) {
+						onActionPerformed( items );
+					}
+				} ),
+		} );
 
 		// Per-language Translate actions (foundation for #55/#56 bulk translate).
 		languages.forEach( ( lang ) => {
@@ -368,11 +479,10 @@ function Overview() {
 		} );
 
 		return list;
-	}, [ languages, aiOk, isLang, runBulk, fetchData ] );
-
-	const [ selection, setSelection ] = useState( [] );
+	}, [ languages, aiOk, isLang, runBulk, runSetLanguage, runDetect, fetchData ] );
 
 	const missingCount = counts.missing || 0;
+	const unmarkedCount = counts.unmarked || 0;
 
 	return (
 		<div className="wpait-overview">
@@ -420,6 +530,18 @@ function Overview() {
 							/* translators: %d: number of items missing translations. */
 							__( 'Missing translations (%d)', 'wp-ai-translate' ),
 							missingCount
+						) }
+					</Button>
+				</FlexItem>
+				<FlexItem>
+					<Button
+						variant={ activeView === 'unmarked' ? 'primary' : 'secondary' }
+						onClick={ () => switchView( 'unmarked' ) }
+					>
+						{ sprintf(
+							/* translators: %d: number of items with no language assigned. */
+							__( 'Unmarked (%d)', 'wp-ai-translate' ),
+							unmarkedCount
 						) }
 					</Button>
 				</FlexItem>
