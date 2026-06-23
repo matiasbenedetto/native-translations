@@ -527,6 +527,9 @@ class Wpait_Admin_Settings {
 						</optgroup>
 					<?php endforeach; ?>
 				</select>
+				<p class="description">
+					<?php esc_html_e( 'If your selected model is unavailable to the account, translation automatically retries once with another advertised model rather than failing — so a translation may be produced by a different model than the one chosen here.', 'wp-ai-translate' ); ?>
+				</p>
 				<?php if ( $ai_usable && empty( $models ) ) : ?>
 					<p class="description"><?php esc_html_e( 'Could not list models from the provider; “Automatic” will be used.', 'wp-ai-translate' ); ?></p>
 				<?php elseif ( ! $ai_usable ) : ?>
