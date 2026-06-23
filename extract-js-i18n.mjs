@@ -114,3 +114,17 @@ for (const e of entries.values()) {
 }
 writeFileSync(OUT, out);
 console.log(`extracted ${entries.size} JS strings -> ${OUT}`);
+
+// Fail loud on a zero/regressed extraction. A broken parser (e.g. the transitive
+// @babel/parser dep getting deduped away) silently emits 0 strings, which is how
+// the .pot previously rotted. Exit non-zero so `npm run make-pot`/CI catches it.
+// WPAIT_I18N_MIN_STRINGS sets a stricter floor than the default of 1.
+const MIN = Number.parseInt(process.env.WPAIT_I18N_MIN_STRINGS || '1', 10);
+if (entries.size < MIN) {
+  console.error(
+    `ERROR: extracted ${entries.size} JS i18n strings, expected at least ${MIN}. ` +
+    `The extractor likely failed to parse src/ (missing @babel/parser/@babel/traverse, ` +
+    `or a source/glob change). Refusing to emit a regressed .pot.`
+  );
+  process.exit(1);
+}
