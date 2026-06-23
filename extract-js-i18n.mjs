@@ -4,18 +4,29 @@
 // Output is merged with the working PHP scan via `wp i18n make-pot ... --merge`.
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 const traverse = _traverse.default || _traverse;
 const DOMAIN = 'wp-ai-translate';
 const OUT = process.argv[2] || '/tmp/wpait-js.pot';
-// Paths as they should appear in #: references (plugin-relative).
-const FILES = [
-  ['src/editor-panel/index.js', 'src/editor-panel/index.js'],
-  ['src/editor-panel/language-options.js', 'src/editor-panel/language-options.js'],
-  ['src/language-switcher/index.js', 'src/language-switcher/index.js'],
-  ['src/post-links/index.js', 'src/post-links/index.js'],
-];
+
+// Auto-discover every JS source under src/ (excluding test files) so a new entry
+// app (e.g. src/overview/) is picked up without editing this list. Refs are the
+// plugin-relative path, sorted for deterministic output.
+function discover( dir ) {
+  const out = [];
+  for ( const ent of readdirSync( dir, { withFileTypes: true } ) ) {
+    const p = join( dir, ent.name );
+    if ( ent.isDirectory() ) {
+      out.push( ...discover( p ) );
+    } else if ( ent.name.endsWith( '.js' ) && ! ent.name.endsWith( '.test.js' ) ) {
+      out.push( [ p, p ] );
+    }
+  }
+  return out;
+}
+const FILES = discover( 'src' ).sort( ( a, b ) => a[ 0 ].localeCompare( b[ 0 ] ) );
 
 // fn name -> arg positions {single, plural, context, domain}
 const FNS = {

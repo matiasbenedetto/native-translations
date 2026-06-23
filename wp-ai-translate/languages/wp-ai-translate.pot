@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-06-23T03:21:20+00:00\n"
+"POT-Creation-Date: 2026-06-23T03:47:56+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-ai-translate\n"
@@ -133,11 +133,13 @@ msgid "Yes, trash it"
 msgstr ""
 
 #: src/editor-panel/index.js:243
+#: src/overview/index.js:261
 #: assets/js/term-panel.js:225
 msgid "Edit"
 msgstr ""
 
 #: src/editor-panel/index.js:246
+#: src/overview/index.js:272
 #: assets/js/term-panel.js:229
 msgid "View"
 msgstr ""
@@ -195,6 +197,100 @@ msgstr ""
 msgid "Mark the current language"
 msgstr ""
 
+#: src/overview/index.js:115
+msgid "Could not load the overview."
+msgstr ""
+
+#: src/overview/index.js:139
+msgid "Title"
+msgstr ""
+
+#: src/overview/index.js:153
+msgid "Type"
+msgstr ""
+
+#: src/overview/index.js:157
+#: includes/class-admin-list.php:1158
+msgid "Post"
+msgstr ""
+
+#: src/overview/index.js:158
+#: includes/class-admin-list.php:1155
+msgid "Page"
+msgstr ""
+
+#: src/overview/index.js:159
+#: includes/class-admin-list.php:1145
+msgid "Category"
+msgstr ""
+
+#: src/overview/index.js:160
+#: includes/class-admin-list.php:1148
+msgid "Tag"
+msgstr ""
+
+#: src/overview/index.js:170
+#: includes/class-admin-list.php:155
+#: includes/class-admin-list.php:160
+#: includes/class-admin-list.php:299
+#: includes/class-admin-list.php:304
+#: includes/class-languages.php:174
+msgid "Language"
+msgstr ""
+
+#: src/overview/index.js:179
+msgid "Missing"
+msgstr ""
+
+#. translators: 1: count of failures, 2: language name.
+#: src/overview/index.js:213
+#, js-format
+msgid "%1$d translation(s) to %2$s failed."
+msgstr ""
+
+#. translators: 1: count, 2: language name.
+#: src/overview/index.js:223
+#, js-format
+msgid "%1$d translation(s) to %2$s created as drafts."
+msgstr ""
+
+#. translators: %s: language name.
+#: src/overview/index.js:244
+#, js-format
+msgid "Translate to %s"
+msgstr ""
+
+#: src/overview/index.js:299
+msgid "Hide from list"
+msgstr ""
+
+#: src/overview/index.js:307
+msgid "Unhide"
+msgstr ""
+
+#: src/overview/index.js:326
+#: src/overview/index.js:330
+msgid "AI translation is unavailable, so Translate actions are disabled."
+msgstr ""
+
+#: src/overview/index.js:327
+msgid "Check the AI provider status."
+msgstr ""
+
+#. translators: %d: number of items missing translations.
+#: src/overview/index.js:354
+#, js-format
+msgid "Missing translations (%d)"
+msgstr ""
+
+#: src/overview/index.js:380
+msgid "Search by title"
+msgstr ""
+
+#: src/overview/index.js:385
+msgid "Nothing to show here."
+msgstr ""
+
 #: src/post-links/index.js:43
 msgid "Include the current language"
 msgstr ""
@@ -223,172 +319,52 @@ msgstr ""
 msgid "Matias Benedetto"
 msgstr ""
 
-#: includes/class-admin-list.php:153
-#: includes/class-admin-list.php:158
-#: includes/class-admin-list.php:297
-#: includes/class-admin-list.php:302
-#: includes/class-admin-list.php:1070
-#: includes/class-languages.php:174
-msgid "Language"
-msgstr ""
-
-#: includes/class-admin-list.php:180
-#: includes/class-admin-list.php:326
+#: includes/class-admin-list.php:182
+#: includes/class-admin-list.php:328
 msgid "No language"
 msgstr ""
 
-#: includes/class-admin-list.php:223
-#: includes/class-admin-list.php:437
+#: includes/class-admin-list.php:225
+#: includes/class-admin-list.php:439
 msgid "Filter by language"
 msgstr ""
 
-#: includes/class-admin-list.php:225
-#: includes/class-admin-list.php:427
+#: includes/class-admin-list.php:227
+#: includes/class-admin-list.php:429
 msgid "All languages"
 msgstr ""
 
-#: includes/class-admin-list.php:227
-#: includes/class-admin-list.php:428
+#: includes/class-admin-list.php:229
+#: includes/class-admin-list.php:430
 msgid "Untranslated"
 msgstr ""
 
-#: includes/class-admin-list.php:659
-#: includes/class-admin-list.php:715
+#: includes/class-admin-list.php:1021
+#: includes/class-admin-list.php:1072
+msgid "(no title)"
+msgstr ""
+
+#: includes/class-admin-list.php:1171
+#: includes/class-admin-list.php:1255
 msgid "AI Translate Overview"
 msgstr ""
 
-#: includes/class-admin-list.php:660
+#: includes/class-admin-list.php:1172
 msgid "Overview"
 msgstr ""
 
-#. translators: %s: settings page URL.
-#: includes/class-admin-list.php:722
-#, php-format
-msgid "AI translation is unavailable, so quick-Translate actions are disabled. Check the <a href=\"%s\">AI provider status</a>."
-msgstr ""
-
-#: includes/class-admin-list.php:732
-msgid "Missing translations"
-msgstr ""
-
-#: includes/class-admin-list.php:758
-msgid "Hide excluded items"
-msgstr ""
-
-#: includes/class-admin-list.php:759
-msgid "Show hidden / default items"
-msgstr ""
-
-#: includes/class-admin-list.php:963
-msgid "Translating…"
-msgstr ""
-
-#: includes/class-admin-list.php:964
-msgid "✓ Translated"
-msgstr ""
-
-#: includes/class-admin-list.php:965
-msgid "Translation failed."
-msgstr ""
-
-#: includes/class-admin-list.php:966
-msgid "Could not run the request in this browser."
-msgstr ""
-
-#: includes/class-admin-list.php:967
-#: includes/class-admin-list.php:1131
-msgid "Hide"
-msgstr ""
-
-#: includes/class-admin-list.php:968
-#: includes/class-admin-list.php:1131
-msgid "Unhide"
-msgstr ""
-
-#: includes/class-admin-list.php:1049
-msgid "Configure at least two languages to track missing translations."
-msgstr ""
-
-#: includes/class-admin-list.php:1068
-#: includes/class-admin-list.php:1178
-msgid "Title"
-msgstr ""
-
-#: includes/class-admin-list.php:1069
-#: includes/class-admin-list.php:1179
-msgid "Type"
-msgstr ""
-
-#: includes/class-admin-list.php:1071
-msgid "Missing"
-msgstr ""
-
-#: includes/class-admin-list.php:1072
-#: includes/class-admin-settings.php:453
-msgid "Actions"
-msgstr ""
-
-#: includes/class-admin-list.php:1077
-msgid "Nothing is missing translations."
-msgstr ""
-
-#. translators: %s: target language label.
-#: includes/class-admin-list.php:1114
-#, php-format
-msgid "Translate to %s"
-msgstr ""
-
-#: includes/class-admin-list.php:1180
-#: includes/class-admin-settings.php:406
-msgid "Status"
-msgstr ""
-
-#: includes/class-admin-list.php:1185
-msgid "No content in this language yet."
-msgstr ""
-
-#: includes/class-admin-list.php:1241
-#: includes/class-admin-settings.php:588
-msgid "Categories &amp; tags"
-msgstr ""
-
-#: includes/class-admin-list.php:1245
-#: includes/class-admin-settings.php:449
-msgid "Name"
-msgstr ""
-
-#: includes/class-admin-list.php:1246
-msgid "Taxonomy"
-msgstr ""
-
-#: includes/class-admin-list.php:1251
-msgid "No categories or tags in this language yet."
-msgstr ""
-
-#. translators: %d: number of items.
-#: includes/class-admin-list.php:1290
-#, php-format
-msgid "%d item"
-msgid_plural "%d items"
-msgstr[0] ""
-msgstr[1] ""
-
-#: includes/class-admin-list.php:1298
-msgid "‹ Previous"
-msgstr ""
-
-#: includes/class-admin-list.php:1305
-msgid "Next ›"
+#: includes/class-admin-list.php:1258
+msgid "The AI Translate Overview requires JavaScript to display the translations table."
 msgstr ""
 
 #. translators: %d: scan limit.
-#: includes/class-admin-list.php:1330
+#: includes/class-admin-list.php:1285
 #, php-format
 msgid "Only the most recent %d items per type were scanned; the list may be incomplete. Use the by-language filter for older content."
 msgstr ""
 
 #. translators: %s: language name.
-#: includes/class-admin-list.php:1374
+#: includes/class-admin-list.php:1329
 #, php-format
 msgid "Edit the %s translation"
 msgstr ""
@@ -473,6 +449,10 @@ msgstr ""
 msgid "AI provider"
 msgstr ""
 
+#: includes/class-admin-settings.php:406
+msgid "Status"
+msgstr ""
+
 #: includes/class-admin-settings.php:411
 msgid "Test connection"
 msgstr ""
@@ -501,6 +481,10 @@ msgstr ""
 msgid "Locale"
 msgstr ""
 
+#: includes/class-admin-settings.php:449
+msgid "Name"
+msgstr ""
+
 #: includes/class-admin-settings.php:450
 msgid "Native name"
 msgstr ""
@@ -511,6 +495,10 @@ msgstr ""
 
 #: includes/class-admin-settings.php:452
 msgid "Enabled"
+msgstr ""
+
+#: includes/class-admin-settings.php:453
+msgid "Actions"
 msgstr ""
 
 #: includes/class-admin-settings.php:470
@@ -633,6 +621,10 @@ msgstr ""
 
 #: includes/class-admin-settings.php:581
 msgid "Posts &amp; pages"
+msgstr ""
+
+#: includes/class-admin-settings.php:588
+msgid "Categories &amp; tags"
 msgstr ""
 
 #: includes/class-admin-settings.php:597

@@ -302,8 +302,13 @@ function get_option( $name, $default = false ) {
 	return Wpait_Test_State::$options[ $name ] ?? $default;
 }
 
-function wp_list_pluck( $list, $field ) {
-	return array_map( static fn( $row ) => is_array( $row ) ? ( $row[ $field ] ?? null ) : ( $row->$field ?? null ), (array) $list );
+function wp_list_pluck( $list, $field, $index_key = null ) {
+	$values = array_map( static fn( $row ) => is_array( $row ) ? ( $row[ $field ] ?? null ) : ( $row->$field ?? null ), (array) $list );
+	if ( null === $index_key ) {
+		return $values;
+	}
+	$keys = array_map( static fn( $row ) => is_array( $row ) ? ( $row[ $index_key ] ?? null ) : ( $row->$index_key ?? null ), (array) $list );
+	return array_combine( $keys, $values );
 }
 
 function add_action( ...$args ) {
@@ -408,12 +413,18 @@ if ( ! class_exists( 'WP_Post' ) ) {
 		public int $ID = 0;
 		public string $post_type = 'post';
 		public string $post_status = 'publish';
+		public string $post_name = '';
+		public string $post_modified_gmt = '';
+		public string $post_date_gmt = '';
 
 		/** @param array<string,mixed> $row */
 		public function __construct( array $row ) {
-			$this->ID          = (int) ( $row['ID'] ?? 0 );
-			$this->post_type   = (string) ( $row['post_type'] ?? 'post' );
-			$this->post_status = (string) ( $row['post_status'] ?? 'publish' );
+			$this->ID                = (int) ( $row['ID'] ?? 0 );
+			$this->post_type         = (string) ( $row['post_type'] ?? 'post' );
+			$this->post_status       = (string) ( $row['post_status'] ?? 'publish' );
+			$this->post_name         = (string) ( $row['post_name'] ?? '' );
+			$this->post_modified_gmt = (string) ( $row['post_modified_gmt'] ?? '' );
+			$this->post_date_gmt     = (string) ( $row['post_date_gmt'] ?? '' );
 		}
 	}
 }
@@ -575,23 +586,40 @@ if ( ! class_exists( 'WP_Query' ) ) {
 		/** @var bool Whether this is the main query (admin-list filter gate). */
 		public bool $is_main = false;
 
+		/** @var int Total matches (admin-list count_in_language / by-language read this). */
+		public int $found_posts = 0;
+
 		/** @param array<string,mixed> $args */
 		public function __construct( array $args = array() ) {
 			$this->query_vars = $args;
 
-			// Only the store's group lookup (meta_key/meta_value) actually scans posts;
-			// admin-list constructs an empty WP_Query and drives it via set()/get().
+			// The store's group lookup keys off meta_key/meta_value; the admin-list
+			// by-language / count queries key off a wpait_language tax_query. Both scan
+			// the in-memory post model. (admin-list filter_query constructs an empty
+			// WP_Query and drives it via set()/get(), so neither path runs there.)
 			$meta_key   = $args['meta_key'] ?? null;
 			$meta_value = $args['meta_value'] ?? null;
-			if ( null === $meta_key ) {
-				return;
-			}
-			foreach ( Wpait_Test_State::$posts as $id => $row ) {
-				$have = Wpait_Test_State::$post_meta[ (int) $id ][ $meta_key ] ?? null;
-				if ( $have === $meta_value ) {
-					$this->posts[] = (int) $id;
+			$tax_query  = $args['tax_query'] ?? null;
+
+			if ( null !== $meta_key ) {
+				foreach ( Wpait_Test_State::$posts as $id => $row ) {
+					$have = Wpait_Test_State::$post_meta[ (int) $id ][ $meta_key ] ?? null;
+					if ( $have === $meta_value ) {
+						$this->posts[] = (int) $id;
+					}
+				}
+			} elseif ( is_array( $tax_query ) && isset( $tax_query[0]['taxonomy'] ) ) {
+				$tax  = (string) $tax_query[0]['taxonomy'];
+				$want = (array) ( $tax_query[0]['terms'] ?? array() );
+				foreach ( Wpait_Test_State::$posts as $id => $row ) {
+					$slugs = Wpait_Test_State::$object_terms[ (int) $id ][ $tax ] ?? array();
+					if ( array_intersect( $slugs, $want ) ) {
+						$this->posts[] = (int) $id;
+					}
 				}
 			}
+
+			$this->found_posts = count( $this->posts );
 		}
 
 		public function is_main_query(): bool {
@@ -812,6 +840,35 @@ function get_posts( $args = array() ) {
 	}
 	return $ids;
 }
+
+/* --- Title / type / link stubs the Overview REST payload (#54) reads --------- */
+
+function get_the_title( $id = 0 ) {
+	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
+	return (string) ( Wpait_Test_State::$posts[ $id ]['post_title'] ?? ( 'Post ' . $id ) );
+}
+
+function get_post_type( $id = 0 ) {
+	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
+	return (string) ( Wpait_Test_State::$posts[ $id ]['post_type'] ?? 'post' );
+}
+
+function get_edit_post_link( $id = 0, $context = 'display' ) {
+	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
+	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/wp-admin/post.php?post=' . $id . '&action=edit' : '';
+}
+
+function get_edit_term_link( $id, $taxonomy = '' ) {
+	$id = (int) ( $id instanceof WP_Term ? $id->term_id : $id );
+	return isset( Wpait_Test_State::$terms[ $id ] ) ? 'https://example.test/wp-admin/term.php?tag_ID=' . $id : '';
+}
+
+function get_preview_post_link( $id = 0 ) {
+	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
+	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id . '&preview=true' : '';
+}
+
+function wp_reset_postdata(): void {}
 
 /* -------------------------------------------------------------------------
  * Load the real units under test. The Translation Store is now the REAL class
