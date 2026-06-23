@@ -73,6 +73,12 @@ class Wpait_Admin_Settings {
 			return;
 		}
 		wp_enqueue_script( 'wp-api-fetch' );
+		wp_enqueue_style(
+			'wpait-admin-settings',
+			WPAIT_PLUGIN_URL . 'assets/css/admin-settings.css',
+			array(),
+			WPAIT_VERSION
+		);
 	}
 
 	/* ---------------------------------------------------------------------
@@ -377,7 +383,7 @@ class Wpait_Admin_Settings {
 		// "Add language" button (no always-present blank rows — see #17).
 		$rows = $languages;
 		?>
-		<div class="wrap">
+		<div class="wrap wpait-settings">
 			<h1><?php esc_html_e( 'AI Translate', 'wp-ai-translate' ); ?></h1>
 			<?php
 			// This page is served by wp-admin/options-general.php, whose
@@ -400,35 +406,25 @@ class Wpait_Admin_Settings {
 				$status_line = __( 'No AI provider is configured for this site, so translations cannot be generated.', 'wp-ai-translate' );
 			}
 			?>
-			<h2><?php esc_html_e( 'AI provider', 'wp-ai-translate' ); ?></h2>
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Status', 'wp-ai-translate' ); ?></th>
-					<td>
-						<span class="wpait-ai-badge <?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( $badge_text ); ?></span>
-						<p class="description" style="margin-top:6px"><?php echo esc_html( $status_line ); ?></p>
-						<p>
-							<button type="button" class="button" id="wpait-test-connection"><?php esc_html_e( 'Test connection', 'wp-ai-translate' ); ?></button>
-							<span id="wpait-test-result" role="status" aria-live="polite" style="margin-left:8px"></span>
-						</p>
-						<p class="description">
-							<?php esc_html_e( 'Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin.', 'wp-ai-translate' ); ?>
-						</p>
-					</td>
-				</tr>
-			</table>
-			<style>
-				.wpait-ai-badge { display:inline-block; padding:2px 10px; border-radius:10px; font-weight:600; color:#fff; }
-				.wpait-ai-ok { background:#198754; }
-				.wpait-ai-warn { background:#b88600; }
-				.wpait-ai-bad { background:#b32d2e; }
-				#wpait-test-result.is-ok { color:#198754; }
-				#wpait-test-result.is-bad { color:#b32d2e; }
-			</style>
+			<div class="wpait-card">
+				<h2><?php esc_html_e( 'AI provider', 'wp-ai-translate' ); ?></h2>
+				<p>
+					<span class="wpait-ai-badge <?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( $badge_text ); ?></span>
+				</p>
+				<p class="description"><?php echo esc_html( $status_line ); ?></p>
+				<p>
+					<button type="button" class="button" id="wpait-test-connection"><?php esc_html_e( 'Test connection', 'wp-ai-translate' ); ?></button>
+					<span id="wpait-test-result" role="status" aria-live="polite" style="margin-left:8px"></span>
+				</p>
+				<p class="description">
+					<?php esc_html_e( 'Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin.', 'wp-ai-translate' ); ?>
+				</p>
+			</div>
 
 			<form method="post" action="options.php">
 				<?php settings_fields( 'wpait_settings_group' ); ?>
 
+				<div class="wpait-card">
 				<h2><?php esc_html_e( 'Languages', 'wp-ai-translate' ); ?></h2>
 				<p class="description">
 					<?php esc_html_e( 'A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead.', 'wp-ai-translate' ); ?>
@@ -441,7 +437,7 @@ class Wpait_Admin_Settings {
 						<option value="<?php echo esc_attr( $loc ); ?>"></option>
 					<?php endforeach; ?>
 				</datalist>
-				<table class="widefat striped" style="max-width:980px">
+				<table class="widefat striped wpait-languages-table">
 					<thead>
 						<tr>
 							<th><?php esc_html_e( 'Code', 'wp-ai-translate' ); ?></th>
@@ -508,8 +504,11 @@ class Wpait_Admin_Settings {
 						<td><button type="button" class="button-link wpait-remove-language" aria-label="<?php esc_attr_e( 'Remove this new language', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button></td>
 					</tr>
 				</template>
+				</div>
 
+				<div class="wpait-card">
 				<h2><?php esc_html_e( 'Default language', 'wp-ai-translate' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'The site’s primary language — used as the source when no other is given.', 'wp-ai-translate' ); ?></p>
 				<select name="<?php echo esc_attr( $option . '[default_language]' ); ?>">
 					<option value=""><?php esc_html_e( '— Select —', 'wp-ai-translate' ); ?></option>
 					<?php foreach ( $languages as $lang ) : ?>
@@ -518,7 +517,9 @@ class Wpait_Admin_Settings {
 						</option>
 					<?php endforeach; ?>
 				</select>
+				</div>
 
+				<div class="wpait-card">
 				<h2><?php esc_html_e( 'AI model', 'wp-ai-translate' ); ?></h2>
 				<?php
 				$current_model = (string) $settings['model'];
@@ -563,7 +564,9 @@ class Wpait_Admin_Settings {
 				<?php elseif ( ! $ai_usable ) : ?>
 					<p class="description"><?php esc_html_e( 'Connect an AI provider (see status above) to choose a model.', 'wp-ai-translate' ); ?></p>
 				<?php endif; ?>
+				</div>
 
+				<div class="wpait-card">
 				<h2><?php esc_html_e( 'Translation instructions', 'wp-ai-translate' ); ?></h2>
 				<p class="description">
 					<?php esc_html_e( 'These instructions shape the AI translation. Markup-safety rules are always applied automatically and cannot be overridden. Available placeholders:', 'wp-ai-translate' ); ?>
@@ -606,6 +609,7 @@ class Wpait_Admin_Settings {
 						<?php endforeach; ?>
 					</table>
 				<?php endif; ?>
+				</div>
 
 				<?php submit_button(); ?>
 			</form>
