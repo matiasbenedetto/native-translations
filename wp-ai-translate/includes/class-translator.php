@@ -1006,7 +1006,7 @@ class Wpait_Translator {
 	private static function model_not_available_error(): WP_Error {
 		return new WP_Error(
 			'wpait_model_not_available',
-			__( 'The AI provider’s default model is not available to this account, and no advertised model could be used. Pick an accessible model in Settings → AI provider (AI model) and try again.', 'wp-ai-translate' ),
+			__( 'The AI provider’s default model is not available to this account, and no advertised model could be used. Pick an accessible model in AI Translate → Settings (AI model) and try again.', 'wp-ai-translate' ),
 			array( 'status' => 404 )
 		);
 	}

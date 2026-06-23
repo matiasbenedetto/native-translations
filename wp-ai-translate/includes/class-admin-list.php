@@ -13,8 +13,8 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Adds the language column + filters to edit.php for posts/pages, and a
- * Settings → AI Translate Overview page.
+ * Adds the language column + filters to edit.php for posts/pages, and the
+ * Overview page under the AI Translate top-level menu.
  */
 class Wpait_Admin_List {
 
@@ -45,6 +45,14 @@ class Wpait_Admin_List {
 	 * Overview page slug.
 	 */
 	const OVERVIEW_SLUG = 'wp-ai-translate-overview';
+
+	/**
+	 * Hook suffix returned by add_submenu_page for the Overview page, used to
+	 * gate asset enqueuing without hardcoding the (fragile) hook string.
+	 *
+	 * @var string
+	 */
+	private string $overview_hook = '';
 
 	/**
 	 * Meta flag marking an item as hidden from the Overview's missing list.
@@ -641,15 +649,15 @@ class Wpait_Admin_List {
 	 * ------------------------------------------------------------------- */
 
 	/**
-	 * Registers the Overview submenu under Settings.
+	 * Registers the Overview submenu under the AI Translate top-level menu.
 	 *
 	 * @return void
 	 */
 	public function add_overview_page(): void {
-		add_submenu_page(
-			'options-general.php',
+		$this->overview_hook = (string) add_submenu_page(
+			Wpait_Admin_Settings::PAGE_SLUG,
 			__( 'AI Translate Overview', 'wp-ai-translate' ),
-			__( 'AI Translate Overview', 'wp-ai-translate' ),
+			__( 'Overview', 'wp-ai-translate' ),
 			'manage_options',
 			self::OVERVIEW_SLUG,
 			array( $this, 'render_overview' )
@@ -664,7 +672,7 @@ class Wpait_Admin_List {
 	 * @return void
 	 */
 	public function enqueue_overview_assets( $hook_suffix ): void {
-		if ( 'settings_page_' . self::OVERVIEW_SLUG !== $hook_suffix ) {
+		if ( '' === $this->overview_hook || $hook_suffix !== $this->overview_hook ) {
 			return;
 		}
 		wp_enqueue_script( 'wp-api-fetch' );
@@ -691,7 +699,7 @@ class Wpait_Admin_List {
 
 		$codes      = wp_list_pluck( $languages, 'code' );
 		$is_lang    = in_array( $view, $codes, true );
-		$base_url   = admin_url( 'options-general.php?page=' . self::OVERVIEW_SLUG );
+		$base_url   = admin_url( 'admin.php?page=' . self::OVERVIEW_SLUG );
 
 		// Computed once so the "Missing" tab can show a live count on every view and
 		// the table (when shown) reuses it rather than re-scanning. Default WordPress
@@ -712,7 +720,7 @@ class Wpait_Admin_List {
 					printf(
 						/* translators: %s: settings page URL. */
 						wp_kses_post( __( 'AI translation is unavailable, so quick-Translate actions are disabled. Check the <a href="%s">AI provider status</a>.', 'wp-ai-translate' ) ),
-						esc_url( admin_url( 'options-general.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ) )
+						esc_url( admin_url( 'admin.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ) )
 					);
 					?>
 				</p></div>

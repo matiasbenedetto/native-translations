@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings page: Settings → AI Translate.
+ * Settings page: the AI Translate top-level admin menu (Settings submenu).
  *
  * @package WpAiTranslate
  */
@@ -15,6 +15,14 @@ class Wpait_Admin_Settings {
 
 	const OPTION    = 'wpait_settings';
 	const PAGE_SLUG = 'wp-ai-translate';
+
+	/**
+	 * Hook suffix returned by add_submenu_page for the Settings page, used to
+	 * gate asset enqueuing without hardcoding the (fragile) hook string.
+	 *
+	 * @var string
+	 */
+	private string $settings_hook = '';
 
 	/**
 	 * Languages handler used for reconcile.
@@ -46,7 +54,9 @@ class Wpait_Admin_Settings {
 	 * @return void
 	 */
 	public function register_hooks(): void {
-		add_action( 'admin_menu', array( $this, 'add_menu' ) );
+		// Priority 9 so the top-level parent menu is registered before
+		// Wpait_Admin_List adds its Overview submenu (default priority 10).
+		add_action( 'admin_menu', array( $this, 'add_menu' ), 9 );
 		add_action( 'admin_init', array( $this, 'register_setting' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
@@ -59,7 +69,7 @@ class Wpait_Admin_Settings {
 	 * @return void
 	 */
 	public function enqueue_assets( $hook_suffix ): void {
-		if ( 'settings_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+		if ( '' === $this->settings_hook || $hook_suffix !== $this->settings_hook ) {
 			return;
 		}
 		wp_enqueue_script( 'wp-api-fetch' );
@@ -159,14 +169,28 @@ class Wpait_Admin_Settings {
 	 * ------------------------------------------------------------------- */
 
 	/**
-	 * Adds the settings submenu.
+	 * Adds the top-level "AI Translate" menu plus its Settings submenu.
+	 *
+	 * The submenu is registered with the same slug as the parent so the first
+	 * item reads "Settings" instead of repeating the menu title.
 	 *
 	 * @return void
 	 */
 	public function add_menu(): void {
-		add_options_page(
+		add_menu_page(
 			__( 'AI Translate', 'wp-ai-translate' ),
 			__( 'AI Translate', 'wp-ai-translate' ),
+			'manage_options',
+			self::PAGE_SLUG,
+			array( $this, 'render_page' ),
+			'dashicons-translation',
+			58
+		);
+
+		$this->settings_hook = (string) add_submenu_page(
+			self::PAGE_SLUG,
+			__( 'AI Translate', 'wp-ai-translate' ),
+			__( 'Settings', 'wp-ai-translate' ),
 			'manage_options',
 			self::PAGE_SLUG,
 			array( $this, 'render_page' )
