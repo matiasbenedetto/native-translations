@@ -677,6 +677,27 @@ function esc_html( $text ) {
 	return htmlspecialchars( (string) $text, ENT_QUOTES );
 }
 
+if ( ! function_exists( 'esc_attr' ) ) {
+	function esc_attr( $text ) {
+		return htmlspecialchars( (string) $text, ENT_QUOTES );
+	}
+}
+
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		// Minimal stand-in: drop spaces and HTML-encode ampersands, like core's
+		// shape for the cases under test.
+		$url = str_replace( ' ', '%20', (string) $url );
+		return str_replace( '&', '&#038;', $url );
+	}
+}
+
+if ( ! function_exists( 'sanitize_html_class' ) ) {
+	function sanitize_html_class( $class ) {
+		return preg_replace( '/[^A-Za-z0-9_-]/', '', (string) $class );
+	}
+}
+
 function wp_strip_all_tags( $text, $remove_breaks = false ) {
 	$text = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text );
 	$text = strip_tags( $text );

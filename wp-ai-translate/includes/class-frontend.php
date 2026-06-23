@@ -433,7 +433,7 @@ class Wpait_Frontend {
 
 		$label_parts = array();
 		if ( $show_flag ) {
-			$label_parts[] = '<span class="wpait-flag" aria-hidden="true">' . esc_html( $flag ) . '</span>';
+			$label_parts[] = '<span class="wpait-flag" aria-hidden="true">' . Wpait_Languages::flag_html( $flag ) . '</span>';
 		}
 		if ( $show_name ) {
 			$label_parts[] = '<span class="wpait-name">' . esc_html( $name ) . '</span>';

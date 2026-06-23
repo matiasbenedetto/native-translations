@@ -140,32 +140,32 @@ class Wpait_Admin_Settings {
 	 */
 	public static function default_catalog(): array {
 		return array(
-			'en' => array( 'locale' => 'en_US', 'name' => __( 'English', 'wp-ai-translate' ),    'native' => 'English',          'flag' => '🇺🇸' ),
-			'es' => array( 'locale' => 'es_ES', 'name' => __( 'Spanish', 'wp-ai-translate' ),    'native' => 'Español',          'flag' => '🇪🇸' ),
-			'fr' => array( 'locale' => 'fr_FR', 'name' => __( 'French', 'wp-ai-translate' ),     'native' => 'Français',         'flag' => '🇫🇷' ),
-			'de' => array( 'locale' => 'de_DE', 'name' => __( 'German', 'wp-ai-translate' ),     'native' => 'Deutsch',          'flag' => '🇩🇪' ),
-			'pt' => array( 'locale' => 'pt_BR', 'name' => __( 'Portuguese', 'wp-ai-translate' ), 'native' => 'Português',        'flag' => '🇧🇷' ),
-			'it' => array( 'locale' => 'it_IT', 'name' => __( 'Italian', 'wp-ai-translate' ),    'native' => 'Italiano',         'flag' => '🇮🇹' ),
-			'nl' => array( 'locale' => 'nl_NL', 'name' => __( 'Dutch', 'wp-ai-translate' ),      'native' => 'Nederlands',       'flag' => '🇳🇱' ),
-			'pl' => array( 'locale' => 'pl_PL', 'name' => __( 'Polish', 'wp-ai-translate' ),     'native' => 'Polski',           'flag' => '🇵🇱' ),
-			'ru' => array( 'locale' => 'ru_RU', 'name' => __( 'Russian', 'wp-ai-translate' ),    'native' => 'Русский',          'flag' => '🇷🇺' ),
-			'uk' => array( 'locale' => 'uk',    'name' => __( 'Ukrainian', 'wp-ai-translate' ),  'native' => 'Українська',       'flag' => '🇺🇦' ),
-			'sv' => array( 'locale' => 'sv_SE', 'name' => __( 'Swedish', 'wp-ai-translate' ),    'native' => 'Svenska',          'flag' => '🇸🇪' ),
-			'da' => array( 'locale' => 'da_DK', 'name' => __( 'Danish', 'wp-ai-translate' ),     'native' => 'Dansk',            'flag' => '🇩🇰' ),
-			'nb' => array( 'locale' => 'nb_NO', 'name' => __( 'Norwegian', 'wp-ai-translate' ),  'native' => 'Norsk bokmål',     'flag' => '🇳🇴' ),
-			'fi' => array( 'locale' => 'fi',    'name' => __( 'Finnish', 'wp-ai-translate' ),    'native' => 'Suomi',            'flag' => '🇫🇮' ),
-			'cs' => array( 'locale' => 'cs_CZ', 'name' => __( 'Czech', 'wp-ai-translate' ),      'native' => 'Čeština',          'flag' => '🇨🇿' ),
-			'el' => array( 'locale' => 'el',    'name' => __( 'Greek', 'wp-ai-translate' ),      'native' => 'Ελληνικά',         'flag' => '🇬🇷' ),
-			'tr' => array( 'locale' => 'tr_TR', 'name' => __( 'Turkish', 'wp-ai-translate' ),    'native' => 'Türkçe',           'flag' => '🇹🇷' ),
-			'ar' => array( 'locale' => 'ar',    'name' => __( 'Arabic', 'wp-ai-translate' ),     'native' => 'العربية',          'flag' => '🇸🇦' ),
-			'he' => array( 'locale' => 'he_IL', 'name' => __( 'Hebrew', 'wp-ai-translate' ),     'native' => 'עברית',            'flag' => '🇮🇱' ),
-			'hi' => array( 'locale' => 'hi_IN', 'name' => __( 'Hindi', 'wp-ai-translate' ),      'native' => 'हिन्दी',            'flag' => '🇮🇳' ),
-			'id' => array( 'locale' => 'id_ID', 'name' => __( 'Indonesian', 'wp-ai-translate' ), 'native' => 'Bahasa Indonesia', 'flag' => '🇮🇩' ),
-			'ja' => array( 'locale' => 'ja',    'name' => __( 'Japanese', 'wp-ai-translate' ),   'native' => '日本語',           'flag' => '🇯🇵' ),
-			'ko' => array( 'locale' => 'ko_KR', 'name' => __( 'Korean', 'wp-ai-translate' ),     'native' => '한국어',           'flag' => '🇰🇷' ),
-			'th' => array( 'locale' => 'th',    'name' => __( 'Thai', 'wp-ai-translate' ),       'native' => 'ไทย',              'flag' => '🇹🇭' ),
-			'vi' => array( 'locale' => 'vi',    'name' => __( 'Vietnamese', 'wp-ai-translate' ), 'native' => 'Tiếng Việt',       'flag' => '🇻🇳' ),
-			'zh' => array( 'locale' => 'zh_CN', 'name' => __( 'Chinese', 'wp-ai-translate' ),    'native' => '中文',             'flag' => '🇨🇳' ),
+			'en' => array( 'locale' => 'en_US', 'name' => __( 'English', 'wp-ai-translate' ),    'native' => 'English',          'flag' => 'us' ),
+			'es' => array( 'locale' => 'es_ES', 'name' => __( 'Spanish', 'wp-ai-translate' ),    'native' => 'Español',          'flag' => 'es' ),
+			'fr' => array( 'locale' => 'fr_FR', 'name' => __( 'French', 'wp-ai-translate' ),     'native' => 'Français',         'flag' => 'fr' ),
+			'de' => array( 'locale' => 'de_DE', 'name' => __( 'German', 'wp-ai-translate' ),     'native' => 'Deutsch',          'flag' => 'de' ),
+			'pt' => array( 'locale' => 'pt_BR', 'name' => __( 'Portuguese', 'wp-ai-translate' ), 'native' => 'Português',        'flag' => 'br' ),
+			'it' => array( 'locale' => 'it_IT', 'name' => __( 'Italian', 'wp-ai-translate' ),    'native' => 'Italiano',         'flag' => 'it' ),
+			'nl' => array( 'locale' => 'nl_NL', 'name' => __( 'Dutch', 'wp-ai-translate' ),      'native' => 'Nederlands',       'flag' => 'nl' ),
+			'pl' => array( 'locale' => 'pl_PL', 'name' => __( 'Polish', 'wp-ai-translate' ),     'native' => 'Polski',           'flag' => 'pl' ),
+			'ru' => array( 'locale' => 'ru_RU', 'name' => __( 'Russian', 'wp-ai-translate' ),    'native' => 'Русский',          'flag' => 'ru' ),
+			'uk' => array( 'locale' => 'uk',    'name' => __( 'Ukrainian', 'wp-ai-translate' ),  'native' => 'Українська',       'flag' => 'ua' ),
+			'sv' => array( 'locale' => 'sv_SE', 'name' => __( 'Swedish', 'wp-ai-translate' ),    'native' => 'Svenska',          'flag' => 'se' ),
+			'da' => array( 'locale' => 'da_DK', 'name' => __( 'Danish', 'wp-ai-translate' ),     'native' => 'Dansk',            'flag' => 'dk' ),
+			'nb' => array( 'locale' => 'nb_NO', 'name' => __( 'Norwegian', 'wp-ai-translate' ),  'native' => 'Norsk bokmål',     'flag' => 'no' ),
+			'fi' => array( 'locale' => 'fi',    'name' => __( 'Finnish', 'wp-ai-translate' ),    'native' => 'Suomi',            'flag' => 'fi' ),
+			'cs' => array( 'locale' => 'cs_CZ', 'name' => __( 'Czech', 'wp-ai-translate' ),      'native' => 'Čeština',          'flag' => 'cz' ),
+			'el' => array( 'locale' => 'el',    'name' => __( 'Greek', 'wp-ai-translate' ),      'native' => 'Ελληνικά',         'flag' => 'gr' ),
+			'tr' => array( 'locale' => 'tr_TR', 'name' => __( 'Turkish', 'wp-ai-translate' ),    'native' => 'Türkçe',           'flag' => 'tr' ),
+			'ar' => array( 'locale' => 'ar',    'name' => __( 'Arabic', 'wp-ai-translate' ),     'native' => 'العربية',          'flag' => 'sa' ),
+			'he' => array( 'locale' => 'he_IL', 'name' => __( 'Hebrew', 'wp-ai-translate' ),     'native' => 'עברית',            'flag' => 'il' ),
+			'hi' => array( 'locale' => 'hi_IN', 'name' => __( 'Hindi', 'wp-ai-translate' ),      'native' => 'हिन्दी',            'flag' => 'in' ),
+			'id' => array( 'locale' => 'id_ID', 'name' => __( 'Indonesian', 'wp-ai-translate' ), 'native' => 'Bahasa Indonesia', 'flag' => 'id' ),
+			'ja' => array( 'locale' => 'ja',    'name' => __( 'Japanese', 'wp-ai-translate' ),   'native' => '日本語',           'flag' => 'jp' ),
+			'ko' => array( 'locale' => 'ko_KR', 'name' => __( 'Korean', 'wp-ai-translate' ),     'native' => '한국어',           'flag' => 'kr' ),
+			'th' => array( 'locale' => 'th',    'name' => __( 'Thai', 'wp-ai-translate' ),       'native' => 'ไทย',              'flag' => 'th' ),
+			'vi' => array( 'locale' => 'vi',    'name' => __( 'Vietnamese', 'wp-ai-translate' ), 'native' => 'Tiếng Việt',       'flag' => 'vn' ),
+			'zh' => array( 'locale' => 'zh_CN', 'name' => __( 'Chinese', 'wp-ai-translate' ),    'native' => '中文',             'flag' => 'cn' ),
 		);
 	}
 
@@ -290,10 +290,15 @@ class Wpait_Admin_Settings {
 			if ( ! self::is_valid_locale( $locale ) ) {
 				$invalid_locales[] = $code;
 			}
-			// Flags are emoji; keep the value but cap its length so a stray paste of
-			// long text can't land in a field meant for one glyph (subdivision flags
-			// can be several code points, so the cap is generous).
+			// Flags are normally a two-letter ISO country code (rendered as a flag
+			// icon, #80); a legacy emoji string is still accepted for back-compat.
+			// Lowercase a bare two-letter code so it matches the flag renderer, and
+			// cap the length so a stray paste can't land here (emoji can be several
+			// code points, so the cap is generous).
 			$flag = isset( $row['flag'] ) ? sanitize_text_field( $row['flag'] ) : '';
+			if ( 1 === preg_match( '/^[A-Za-z]{2}$/', $flag ) ) {
+				$flag = strtolower( $flag );
+			}
 			if ( function_exists( 'mb_substr' ) ) {
 				$flag = mb_substr( $flag, 0, 12 );
 			}
@@ -477,12 +482,17 @@ class Wpait_Admin_Settings {
 					<?php esc_html_e( 'A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead.', 'wp-ai-translate' ); ?>
 				</p>
 				<p class="description">
-					<?php esc_html_e( 'Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: an optional emoji shown beside the name — leave blank to show the name only.', 'wp-ai-translate' ); ?>
+					<?php esc_html_e( 'Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: a two-letter country code (e.g. fr) shown as a flag icon beside the name — leave blank to show the name only.', 'wp-ai-translate' ); ?>
 						<?php esc_html_e( 'Tip: set the Code of a new language to auto-fill the other fields from a built-in catalog of common languages — you can still edit any value.', 'wp-ai-translate' ); ?>
 				</p>
 				<datalist id="wpait-locales">
 					<?php foreach ( self::common_locales() as $loc ) : ?>
 						<option value="<?php echo esc_attr( $loc ); ?>"></option>
+					<?php endforeach; ?>
+				</datalist>
+				<datalist id="wpait-flags">
+					<?php foreach ( self::default_catalog() as $catalog_entry ) : ?>
+						<option value="<?php echo esc_attr( $catalog_entry['flag'] ); ?>"><?php echo esc_html( $catalog_entry['name'] ); ?></option>
 					<?php endforeach; ?>
 				</datalist>
 				<table class="widefat striped wpait-languages-table">
@@ -517,7 +527,12 @@ class Wpait_Admin_Settings {
 								<td><input type="text" name="<?php echo esc_attr( $base . '[locale]' ); ?>" value="<?php echo esc_attr( $row['locale'] ); ?>" placeholder="es_ES" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
 								<td><input type="text" name="<?php echo esc_attr( $base . '[name]' ); ?>" value="<?php echo esc_attr( $row['name'] ); ?>" placeholder="Spanish" /></td>
 								<td><input type="text" name="<?php echo esc_attr( $base . '[native]' ); ?>" value="<?php echo esc_attr( $row['native'] ); ?>" placeholder="Español" /></td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="3" placeholder="🇦🇷" title="<?php esc_attr_e( 'Optional emoji flag shown next to the name. Leave blank to show the name only.', 'wp-ai-translate' ); ?>" /></td>
+								<td>
+									<span class="wpait-flag-cell">
+										<span class="wpait-flag-preview"><?php echo Wpait_Languages::flag_html( (string) $row['flag'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- flag_html() returns escaped HTML. ?></span>
+										<input type="text" class="wpait-flag-input" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="4" list="wpait-flags" placeholder="fr" title="<?php esc_attr_e( 'Two-letter country code (ISO 3166-1, e.g. fr) shown as a flag icon. Leave blank for no flag.', 'wp-ai-translate' ); ?>" />
+									</span>
+								</td>
 								<td><input type="checkbox" name="<?php echo esc_attr( $base . '[enabled]' ); ?>" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?> /></td>
 								<td>
 									<?php if ( $in_use ) : ?>
@@ -547,7 +562,12 @@ class Wpait_Admin_Settings {
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][locale]" value="" placeholder="<?php esc_attr_e( 'e.g. fr_FR', 'wp-ai-translate' ); ?>" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][name]" value="" placeholder="<?php esc_attr_e( 'e.g. French', 'wp-ai-translate' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][native]" value="" placeholder="<?php esc_attr_e( 'e.g. Français', 'wp-ai-translate' ); ?>" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="3" placeholder="🇫🇷" title="<?php esc_attr_e( 'Optional emoji flag shown next to the name. Leave blank to show the name only.', 'wp-ai-translate' ); ?>" /></td>
+						<td>
+							<span class="wpait-flag-cell">
+								<span class="wpait-flag-preview"></span>
+								<input type="text" class="wpait-flag-input" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="4" list="wpait-flags" placeholder="fr" title="<?php esc_attr_e( 'Two-letter country code (ISO 3166-1, e.g. fr) shown as a flag icon. Leave blank for no flag.', 'wp-ai-translate' ); ?>" />
+							</span>
+						</td>
 						<td><input type="checkbox" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][enabled]" value="1" checked /></td>
 						<td><button type="button" class="button-link wpait-remove-language" aria-label="<?php esc_attr_e( 'Remove this new language', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button></td>
 					</tr>
@@ -715,6 +735,30 @@ class Wpait_Admin_Settings {
 				} );
 			}
 
+			// Live flag preview next to a Flag input: a 2-letter country code shows the
+			// flagcdn icon; a legacy emoji/text shows as-is; blank shows nothing (#80).
+			function updateFlagPreview( input ) {
+				var cell = input.closest( '.wpait-flag-cell' );
+				if ( ! cell ) { return; }
+				var preview = cell.querySelector( '.wpait-flag-preview' );
+				if ( ! preview ) { return; }
+				var val = input.value.trim();
+				if ( /^[A-Za-z]{2}$/.test( val ) ) {
+					var img = document.createElement( 'img' );
+					img.className = 'wpait-flag-img';
+					img.src = 'https://flagcdn.com/' + val.toLowerCase() + '.svg';
+					img.alt = '';
+					preview.replaceChildren( img );
+				} else if ( '' !== val ) {
+					var span = document.createElement( 'span' );
+					span.className = 'wpait-flag-emoji';
+					span.textContent = val;
+					preview.replaceChildren( span );
+				} else {
+					preview.replaceChildren();
+				}
+			}
+
 			// Auto-fill a new language row from the bundled catalog (#74). When the
 			// user sets a row's Code, fill any *empty* sibling fields (Locale, Name,
 			// Native, Flag) from the catalog; values the user already typed are kept.
@@ -730,6 +774,15 @@ class Wpait_Admin_Settings {
 						var el = row.querySelector( 'input[name$="[' + field + ']"]' );
 						if ( el && '' === el.value.trim() ) { el.value = entry[ field ]; }
 					} );
+					var flagEl = row.querySelector( 'input[name$="[flag]"]' );
+					if ( flagEl ) { updateFlagPreview( flagEl ); }
+				} );
+
+				// Keep each Flag preview in sync as the user edits the code.
+				tbody.addEventListener( 'input', function ( e ) {
+					if ( e.target.matches && e.target.matches( '.wpait-flag-input' ) ) {
+						updateFlagPreview( e.target );
+					}
 				} );
 			}
 

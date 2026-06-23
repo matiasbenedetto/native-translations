@@ -54,6 +54,8 @@ final class AdminSettingsTest extends TestCase {
 				$this->assertArrayHasKey( $field, $entry, "code '$code' missing '$field'" );
 				$this->assertNotSame( '', $entry[ $field ], "code '$code' has empty '$field'" );
 			}
+			// Flags are ISO 3166-1 alpha-2 region codes (rendered as flag icons, #80).
+			$this->assertMatchesRegularExpression( '/^[a-z]{2}$/', $entry['flag'], "code '$code' flag should be a region code" );
 			$this->assertTrue(
 				Wpait_Admin_Settings::is_valid_locale( $entry['locale'] ),
 				"catalog locale '{$entry['locale']}' (code '$code') should be valid"

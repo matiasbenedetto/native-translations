@@ -48,3 +48,12 @@
 	font-size: 1.1em;
 	line-height: 1;
 }
+
+/* flagcdn SVG flag icon (#80). */
+.wpait-flag .wpait-flag-img {
+	height: 1em;
+	width: auto;
+	border-radius: 2px;
+	vertical-align: -0.1em;
+	box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.1 );
+}

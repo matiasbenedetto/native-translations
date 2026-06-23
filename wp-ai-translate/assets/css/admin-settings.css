@@ -136,3 +136,25 @@
 	color: #b32d2e;
 	font-size: 12px;
 }
+
+/* Flag field: live preview + input (#80). */
+.wpait-flag-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.wpait-flag-preview {
+	display: inline-flex;
+	align-items: center;
+	min-width: 22px;
+	min-height: 15px;
+}
+
+.wpait-flag-img {
+	height: 14px;
+	width: auto;
+	border-radius: 2px;
+	box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.1 );
+	vertical-align: middle;
+}
