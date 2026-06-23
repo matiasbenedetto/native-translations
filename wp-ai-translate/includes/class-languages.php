@@ -130,8 +130,88 @@ class Wpait_Languages {
 		if ( ! isset( $index[ $code ] ) ) {
 			return $code;
 		}
-		$flag = '' !== $index[ $code ]['flag'] ? $index[ $code ]['flag'] . ' ' : '';
-		return $flag . $index[ $code ]['name'];
+		// Only a literal emoji reads as a sensible text prefix; an ISO region code
+		// (the new flag format, #80) is rendered as an image by flag_html() instead,
+		// so it is omitted from the plain-text label.
+		$flag   = (string) $index[ $code ]['flag'];
+		$prefix = ( '' !== $flag && ! self::is_region_code( $flag ) ) ? $flag . ' ' : '';
+		return $prefix . $index[ $code ]['name'];
+	}
+
+	/**
+	 * Whether a stored flag value is an ISO 3166-1 alpha-2 region code (e.g. "es"),
+	 * as opposed to a legacy free-text emoji. Region codes are rendered as flag
+	 * images via flagcdn (#80); anything else is treated as literal text.
+	 *
+	 * @param string $flag Stored flag value.
+	 * @return bool
+	 */
+	public static function is_region_code( string $flag ): bool {
+		return 1 === preg_match( '/^[a-z]{2}$/', $flag );
+	}
+
+	/**
+	 * Renders a stored flag value as safe HTML (#80):
+	 *
+	 * - an ISO region code → a public-domain flagcdn.com SVG `<img>` (consistent
+	 *   cross-platform rendering, unlike pasted emoji);
+	 * - any other non-empty value → the literal text in a span (back-compat with
+	 *   the previous free-text emoji field);
+	 * - empty → ''.
+	 *
+	 * @param string              $flag Stored flag value (region code or legacy text).
+	 * @param array<string,mixed> $args Optional: 'alt' (string, default ''),
+	 *                                  'class' (extra css class).
+	 * @return string HTML, or '' when there is no flag.
+	 */
+	public static function flag_html( string $flag, array $args = array() ): string {
+		if ( '' === $flag ) {
+			return '';
+		}
+		$extra_class = isset( $args['class'] ) ? ' ' . sanitize_html_class( (string) $args['class'] ) : '';
+
+		if ( self::is_region_code( $flag ) ) {
+			$alt = isset( $args['alt'] ) ? (string) $args['alt'] : '';
+			$url = sprintf( 'https://flagcdn.com/%s.svg', $flag );
+			return sprintf(
+				'<img class="wpait-flag-img%s" src="%s" alt="%s" loading="lazy" decoding="async" />',
+				esc_attr( $extra_class ),
+				esc_url( $url ),
+				esc_attr( $alt )
+			);
+		}
+
+		return '<span class="wpait-flag-emoji' . esc_attr( $extra_class ) . '">' . esc_html( $flag ) . '</span>';
+	}
+
+	/**
+	 * Convenience: renders the configured flag for a language code as HTML.
+	 *
+	 * @param string              $code Language code.
+	 * @param array<string,mixed> $args Passed through to flag_html().
+	 * @return string
+	 */
+	public function flag_html_for_code( string $code, array $args = array() ): string {
+		return self::flag_html( $this->flag( $code ), $args );
+	}
+
+	/**
+	 * HTML label for a code: the flag (image for a region code, or a legacy emoji)
+	 * followed by the escaped name. Use this in markup contexts; {@see label()}
+	 * stays the plain-text variant. Returns escaped, safe-to-echo HTML.
+	 *
+	 * @param string $code Language code.
+	 * @return string
+	 */
+	public function label_html( string $code ): string {
+		$index = self::config_index();
+		if ( ! isset( $index[ $code ] ) ) {
+			return esc_html( $code );
+		}
+		$flag = (string) $index[ $code ]['flag'];
+		$name = (string) $index[ $code ]['name'];
+		$prefix = '' !== $flag ? self::flag_html( $flag ) . ' ' : '';
+		return $prefix . esc_html( $name );
 	}
 
 	/**

@@ -183,7 +183,7 @@ class Wpait_Admin_List {
 			return;
 		}
 
-		echo '<strong>' . esc_html( $this->label( $code ) ) . '</strong>';
+		echo '<strong>' . $this->languages->label_html( $code ) . '</strong>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- label_html() returns escaped HTML.
 
 		$siblings = $this->store->get_translations( 'post', $post_id );
 		if ( empty( $siblings ) ) {
@@ -328,7 +328,7 @@ class Wpait_Admin_List {
 				. esc_html__( 'No language', 'wp-ai-translate' ) . '</span>';
 		}
 
-		$out      = '<strong>' . esc_html( $this->label( $code ) ) . '</strong>';
+		$out      = '<strong>' . $this->languages->label_html( $code ) . '</strong>';
 		$siblings = $this->store->get_translations( 'term', $term_id );
 		if ( empty( $siblings ) ) {
 			return $out;
@@ -1401,16 +1401,6 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Human-readable label for a code, e.g. "🇪🇸 Spanish".
-	 *
-	 * @param string $code Language code.
-	 * @return string
-	 */
-	private function label( string $code ): string {
-		return $this->languages->label( $code );
-	}
-
-	/**
 	 * Builds an accessible "edit the sibling translation" link for the Language
 	 * column. The flag (if any) is decorative (aria-hidden) with the language name
 	 * carried as screen-reader text and a hover `title`/`aria-label`, so the link is
@@ -1431,7 +1421,7 @@ class Wpait_Admin_List {
 		);
 
 		if ( '' !== $flag ) {
-			$inner = '<span class="wpait-flag" aria-hidden="true">' . esc_html( $flag ) . '</span>'
+			$inner = '<span class="wpait-flag" aria-hidden="true">' . Wpait_Languages::flag_html( $flag ) . '</span>'
 				. '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
 		} else {
 			$inner = esc_html( strtoupper( $code ) );

@@ -60,6 +60,61 @@ final class LanguagesTest extends TestCase {
 		$this->assertSame( '', $this->languages->flag( 'de' ) );
 	}
 
+	/* ------------------------------------------------------------------ *
+	 * Flag rendering: ISO region code -> flagcdn SVG, emoji back-compat (#80).
+	 * ------------------------------------------------------------------ */
+
+	public function test_is_region_code(): void {
+		$this->assertTrue( Wpait_Languages::is_region_code( 'es' ) );
+		$this->assertTrue( Wpait_Languages::is_region_code( 'fr' ) );
+		$this->assertFalse( Wpait_Languages::is_region_code( 'ES' ) );    // uppercase
+		$this->assertFalse( Wpait_Languages::is_region_code( 'esp' ) );   // too long
+		$this->assertFalse( Wpait_Languages::is_region_code( '🇪🇸' ) );    // emoji
+		$this->assertFalse( Wpait_Languages::is_region_code( '' ) );
+	}
+
+	public function test_flag_html_region_code_renders_flagcdn_svg(): void {
+		$html = Wpait_Languages::flag_html( 'es' );
+		$this->assertStringContainsString( '<img', $html );
+		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
+		$this->assertStringContainsString( 'wpait-flag-img', $html );
+		$this->assertStringContainsString( 'loading="lazy"', $html );
+	}
+
+	public function test_flag_html_legacy_emoji_renders_text_span(): void {
+		$html = Wpait_Languages::flag_html( '🇦🇷' );
+		$this->assertStringNotContainsString( 'flagcdn.com', $html );
+		$this->assertStringContainsString( 'wpait-flag-emoji', $html );
+		$this->assertStringContainsString( '🇦🇷', $html );
+	}
+
+	public function test_flag_html_empty_is_blank(): void {
+		$this->assertSame( '', Wpait_Languages::flag_html( '' ) );
+	}
+
+	public function test_label_and_label_html_with_region_code_flag(): void {
+		Wpait_Languages::flush_index();
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'languages' => array(
+				array( 'code' => 'es', 'name' => 'Spanish', 'native' => 'Español', 'flag' => 'es', 'enabled' => true ),
+			),
+		);
+		$langs = new Wpait_Languages();
+		// Plain-text label omits the region code (it isn't a readable text prefix).
+		$this->assertSame( 'Spanish', $langs->label( 'es' ) );
+		// HTML label renders the flag image before the name.
+		$html = $langs->label_html( 'es' );
+		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
+		$this->assertStringContainsString( 'Spanish', $html );
+	}
+
+	public function test_label_html_with_legacy_emoji_keeps_emoji(): void {
+		// Fixture 'en' has the emoji flag; label_html keeps it (back-compat).
+		$html = $this->languages->label_html( 'en' );
+		$this->assertStringContainsString( '🇺🇸', $html );
+		$this->assertStringContainsString( 'English', $html );
+	}
+
 	public function test_name_falls_back_to_code_when_name_blank(): void {
 		Wpait_Languages::flush_index();
 		Wpait_Test_State::$options['wpait_settings'] = array(
