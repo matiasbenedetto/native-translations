@@ -197,6 +197,9 @@ final class Wpait_Test_State {
 	/** @var array<int,int> Action ids passed to delete_action(). */
 	public static array $as_deleted = array();
 
+	/** @var bool When true, as_schedule_single_action() returns 0 (scheduling failed). */
+	public static bool $as_schedule_fails = false;
+
 	/** @var object|null Return value of get_current_screen() (e.g. ->base, ->taxonomy). */
 	public static $current_screen = null;
 
@@ -239,6 +242,7 @@ final class Wpait_Test_State {
 		self::$as_scheduled_single = array();
 		self::$as_failed_actions = array();
 		self::$as_deleted       = array();
+		self::$as_schedule_fails = false;
 		$_GET                   = array();
 	}
 }
@@ -1045,6 +1049,9 @@ function as_has_scheduled_action( $hook, $args = null, $group = '' ): bool {
 
 function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '', $unique = false, $priority = 10 ) {
 	Wpait_Test_State::$as_scheduled_single[] = array( (int) $timestamp, $hook, $args, $group );
+	if ( Wpait_Test_State::$as_schedule_fails ) {
+		return 0; // Scheduling failed to persist.
+	}
 	return count( Wpait_Test_State::$as_scheduled_single ); // A fake action id.
 }
 

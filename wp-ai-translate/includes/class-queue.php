@@ -374,6 +374,31 @@ class Wpait_Queue {
 		return true;
 	}
 
+	/**
+	 * Resolves a scheduled/failed action to its `{hook,type,id,target}` so a caller
+	 * (e.g. the REST layer) can run a per-item capability check before retrying.
+	 *
+	 * @param int $action_id Action id.
+	 * @return array{hook:string,type:string,id:int,target:string}|null Null if unknown.
+	 */
+	public function describe_action( int $action_id ): ?array {
+		if ( ! class_exists( 'ActionScheduler' ) ) {
+			return null;
+		}
+		$action = ActionScheduler::store()->fetch_action( $action_id );
+		if ( ! $action || ! method_exists( $action, 'get_hook' ) || '' === $action->get_hook() ) {
+			return null;
+		}
+		$args    = $action->get_args();
+		$payload = isset( $args[0] ) && is_array( $args[0] ) ? $args[0] : array();
+		return array(
+			'hook'   => (string) $action->get_hook(),
+			'type'   => isset( $payload['type'] ) ? (string) $payload['type'] : '',
+			'id'     => isset( $payload['id'] ) ? (int) $payload['id'] : 0,
+			'target' => isset( $payload['target'] ) ? (string) $payload['target'] : '',
+		);
+	}
+
 	/* ---------------------------------------------------------------------
 	 * Helpers
 	 * ------------------------------------------------------------------- */
@@ -400,9 +425,14 @@ class Wpait_Queue {
 		if ( $attempt < $max && function_exists( 'as_schedule_single_action' ) ) {
 			$payload['attempt'] = $attempt + 1;
 			/** Backoff (seconds) before the next attempt; receives the failed attempt number. */
-			$delay = (int) apply_filters( 'wpait_retry_delay', 60, $attempt );
-			as_schedule_single_action( time() + max( 0, $delay ), $hook, array( $payload ), self::GROUP );
-			return;
+			$delay     = (int) apply_filters( 'wpait_retry_delay', 60, $attempt );
+			$scheduled = as_schedule_single_action( time() + max( 0, $delay ), $hook, array( $payload ), self::GROUP );
+			// Only swallow this failure if the retry was actually scheduled; if
+			// scheduling returned falsy, fall through and re-throw so the failure is
+			// recorded rather than silently lost (action completed, no retry).
+			if ( $scheduled ) {
+				return;
+			}
 		}
 
 		throw new \Exception( $message );

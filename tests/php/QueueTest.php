@@ -164,6 +164,18 @@ final class QueueTest extends TestCase {
 		);
 	}
 
+	public function test_run_job_records_failure_when_retry_scheduling_fails(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
+		Wpait_Test_State::$as_schedule_fails = true; // as_schedule_single_action returns 0.
+
+		// If the retry can't be scheduled, the failure must surface (re-throw) rather
+		// than the action completing with the work silently lost.
+		$this->expectException( \Exception::class );
+		$this->expectExceptionMessage( 'AI exploded' );
+		$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) );
+	}
+
 	public function test_run_job_throws_on_final_attempt(): void {
 		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
@@ -362,5 +374,20 @@ final class QueueTest extends TestCase {
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
 		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+	}
+
+	public function test_describe_action_resolves_payload(): void {
+		Wpait_Test_State::$as_failed_actions = array(
+			101 => array(
+				'hook'    => Wpait_Queue::HOOK,
+				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
+				'message' => 'x',
+			),
+		);
+		$this->assertSame(
+			array( 'hook' => Wpait_Queue::HOOK, 'type' => 'post', 'id' => 7, 'target' => 'es' ),
+			$this->queue->describe_action( 101 )
+		);
+		$this->assertNull( $this->queue->describe_action( 999 ) );
 	}
 }

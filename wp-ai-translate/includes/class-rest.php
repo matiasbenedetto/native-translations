@@ -667,7 +667,21 @@ class Wpait_Rest {
 	 */
 	public function handle_retry_job( WP_REST_Request $request ) {
 		$action_id = (int) $request->get_param( 'action_id' );
-		$result    = $this->queue->retry_job( $action_id );
+
+		// Per-item authorization: the Overview is admin-gated, but re-running a job
+		// re-touches its target, so enforce the same edit capability the enqueue
+		// endpoints do. Block only an explicit "forbidden" (the user exists-but-can't
+		// edit this item); a not-found target (e.g. the post was deleted) is harmless
+		// to retry and stays clearable from the failed list.
+		$desc = $this->queue->describe_action( $action_id );
+		if ( $desc && '' !== $desc['type'] && $desc['id'] > 0 ) {
+			$cap = $this->can_edit_target( $desc['type'], $desc['id'] );
+			if ( is_wp_error( $cap ) && 'wpait_forbidden' === $cap->get_error_code() ) {
+				return $cap;
+			}
+		}
+
+		$result = $this->queue->retry_job( $action_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
