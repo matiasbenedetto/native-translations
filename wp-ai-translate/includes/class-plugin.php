@@ -109,6 +109,11 @@ final class Wpait_Plugin {
 		$this->editor->register_hooks();
 		$this->frontend->register_hooks();
 
+		// The Overview REST route must register in REST (non-admin) context too, so it
+		// is wired unconditionally; the admin-screen hooks (columns, filters, menu)
+		// stay admin-only.
+		add_action( 'rest_api_init', array( $this->admin_list, 'register_rest_routes' ) );
+
 		if ( is_admin() ) {
 			$this->admin_list->register_hooks();
 		}

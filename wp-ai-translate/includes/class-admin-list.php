@@ -125,6 +125,8 @@ class Wpait_Admin_List {
 		add_action( 'pre_get_posts', array( $this, 'filter_query' ) );
 		add_action( 'admin_menu', array( $this, 'add_overview_page' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_overview_assets' ) );
+		// Note: the /overview REST route is registered from Wpait_Plugin (unconditionally,
+		// so it works in non-admin REST context), not here.
 
 		// Terms (categories/tags): language column on edit-tags.php, plus a
 		// language/untranslated filter applied through the term query (§6 for terms).
@@ -645,127 +647,8 @@ class Wpait_Admin_List {
 	}
 
 	/* ---------------------------------------------------------------------
-	 * Overview page (§6.2 — optional, simple)
+	 * Missing / by-language data (shared by the REST endpoint, #54)
 	 * ------------------------------------------------------------------- */
-
-	/**
-	 * Registers the Overview submenu under the AI Translate top-level menu.
-	 *
-	 * @return void
-	 */
-	public function add_overview_page(): void {
-		$this->overview_hook = (string) add_submenu_page(
-			Wpait_Admin_Settings::PAGE_SLUG,
-			__( 'AI Translate Overview', 'wp-ai-translate' ),
-			__( 'Overview', 'wp-ai-translate' ),
-			'manage_options',
-			self::OVERVIEW_SLUG,
-			array( $this, 'render_overview' )
-		);
-	}
-
-	/**
-	 * Enqueues wp-api-fetch on the Overview page so the per-row quick-Translate
-	 * actions can call the REST endpoint (apiFetch wires the REST root + nonce).
-	 *
-	 * @param string $hook_suffix Current admin page hook.
-	 * @return void
-	 */
-	public function enqueue_overview_assets( $hook_suffix ): void {
-		if ( '' === $this->overview_hook || $hook_suffix !== $this->overview_hook ) {
-			return;
-		}
-		wp_enqueue_script( 'wp-api-fetch' );
-	}
-
-	/**
-	 * Renders the Overview page: missing-translations list (default) or a
-	 * by-language list, both paginated.
-	 *
-	 * @return void
-	 */
-	public function render_overview(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-
-		$languages = $this->enabled_languages();
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin view navigation.
-		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : 'missing';
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin view navigation.
-		$paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin view navigation.
-		$show_hidden = ! empty( $_GET['show_hidden'] );
-
-		$codes      = wp_list_pluck( $languages, 'code' );
-		$is_lang    = in_array( $view, $codes, true );
-		$base_url   = admin_url( 'admin.php?page=' . self::OVERVIEW_SLUG );
-
-		// Computed once so the "Missing" tab can show a live count on every view and
-		// the table (when shown) reuses it rather than re-scanning. Default WordPress
-		// content (Sample Page / Privacy Policy / Uncategorized) and admin-hidden items
-		// are excluded so the list surfaces real content gaps (#21).
-		$missing_rows  = $this->missing_rows( $codes, $show_hidden );
-		$missing_count = count( $missing_rows );
-
-		// Quick-Translate actions need a usable AI model; mirror the editor's gating.
-		$ai_ok = Wpait_Translator::can_generate_text();
-		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'AI Translate Overview', 'wp-ai-translate' ); ?></h1>
-
-			<?php if ( ! $ai_ok ) : ?>
-				<div class="notice notice-warning inline"><p>
-					<?php
-					printf(
-						/* translators: %s: settings page URL. */
-						wp_kses_post( __( 'AI translation is unavailable, so quick-Translate actions are disabled. Check the <a href="%s">AI provider status</a>.', 'wp-ai-translate' ) ),
-						esc_url( admin_url( 'admin.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ) )
-					);
-					?>
-				</p></div>
-			<?php endif; ?>
-
-			<ul class="subsubsub">
-				<li>
-					<a href="<?php echo esc_url( $base_url ); ?>" class="<?php echo $is_lang ? '' : 'current'; ?>">
-						<?php esc_html_e( 'Missing translations', 'wp-ai-translate' ); ?>
-						<span class="count">(<?php echo (int) $missing_count; ?>)</span>
-					</a><?php echo $languages ? ' |' : ''; ?>
-				</li>
-				<?php foreach ( $languages as $i => $lang ) : ?>
-					<li>
-						<a href="<?php echo esc_url( add_query_arg( 'view', $lang['code'], $base_url ) ); ?>"
-							class="<?php echo ( $view === $lang['code'] ) ? 'current' : ''; ?>">
-							<?php echo esc_html( $lang['name'] ); ?>
-							<span class="count">(<?php echo (int) $this->count_in_language( $lang['code'] ); ?>)</span>
-						</a><?php echo ( $i < count( $languages ) - 1 ) ? ' |' : ''; ?>
-					</li>
-				<?php endforeach; ?>
-			</ul>
-			<br class="clear" />
-
-			<?php
-			if ( $is_lang ) {
-				$this->render_by_language( $view, $paged, $base_url );
-			} else {
-				if ( count( $codes ) > 1 ) {
-					$toggle_url = $show_hidden ? $base_url : add_query_arg( 'show_hidden', '1', $base_url );
-					printf(
-						'<p><a href="%1$s">%2$s</a></p>',
-						esc_url( $toggle_url ),
-						$show_hidden
-							? esc_html__( 'Hide excluded items', 'wp-ai-translate' )
-							: esc_html__( 'Show hidden / default items', 'wp-ai-translate' )
-					);
-				}
-				$this->render_missing( $codes, $missing_rows, $paged, $base_url, $ai_ok, $show_hidden );
-			}
-			?>
-		</div>
-		<?php
-		$this->render_overview_script();
-	}
 
 	/**
 	 * Builds the type-tagged "missing translations" rows across posts and terms:
@@ -951,273 +834,253 @@ class Wpait_Admin_List {
 		return $posts + ( is_wp_error( $terms ) ? 0 : (int) $terms );
 	}
 
+	/* ---------------------------------------------------------------------
+	 * Overview page (§6.2 — DataViews React app, #54)
+	 * ------------------------------------------------------------------- */
+
 	/**
-	 * Inline script powering the Overview's per-row quick-Translate buttons via the
-	 * REST endpoint (apiFetch supplies the nonce). On success the button is marked
-	 * done; on failure the connector's friendly message is shown inline.
+	 * Registers the Overview REST route. Lives here (rather than in {@see Wpait_Rest})
+	 * because this class already owns the cross post+term data computation; the route
+	 * is a thin read wrapper over {@see get_overview_payload()}.
 	 *
 	 * @return void
 	 */
-	private function render_overview_script(): void {
-		$strings = array(
-			'working' => __( 'Translating…', 'wp-ai-translate' ),
-			'done'    => __( '✓ Translated', 'wp-ai-translate' ),
-			'failed'  => __( 'Translation failed.', 'wp-ai-translate' ),
-			'noFetch' => __( 'Could not run the request in this browser.', 'wp-ai-translate' ),
-			'hide'    => __( 'Hide', 'wp-ai-translate' ),
-			'unhide'  => __( 'Unhide', 'wp-ai-translate' ),
-		);
-		?>
-		<script>
-		( function () {
-			var ns = <?php echo wp_json_encode( Wpait_Rest::NS ); ?>;
-			var strings = <?php echo wp_json_encode( $strings ); ?>;
-			document.addEventListener( 'click', function ( e ) {
-				var btn = e.target.closest( '.wpait-ov-translate' );
-				if ( ! btn ) { return; }
-				e.preventDefault();
-				var result = btn.parentNode.querySelector( '.wpait-ov-result' );
-				if ( ! window.wp || ! wp.apiFetch ) {
-					if ( result ) { result.textContent = strings.noFetch; }
-					return;
-				}
-				btn.disabled = true;
-				if ( result ) { result.textContent = strings.working; }
-				wp.apiFetch( {
-					path: '/' + ns + '/translate',
-					method: 'POST',
-					data: {
-						source_id: parseInt( btn.getAttribute( 'data-id' ), 10 ),
-						target_code: btn.getAttribute( 'data-code' ),
-						type: btn.getAttribute( 'data-type' )
-					}
-				} ).then( function () {
-					btn.replaceWith( document.createTextNode( strings.done + ' ' ) );
-					if ( result ) { result.textContent = ''; }
-				} ).catch( function ( err ) {
-					btn.disabled = false;
-					if ( result ) { result.textContent = ( err && err.message ) ? err.message : strings.failed; }
-				} );
-			} );
-
-			// Hide / Unhide a row from the missing list.
-			document.addEventListener( 'click', function ( e ) {
-				var btn = e.target.closest( '.wpait-ov-hide' );
-				if ( ! btn ) { return; }
-				e.preventDefault();
-				if ( ! window.wp || ! wp.apiFetch ) { return; }
-				var row = btn.closest( 'tr' );
-				var willHide = btn.getAttribute( 'data-hidden' ) !== '1';
-				btn.disabled = true;
-				wp.apiFetch( {
-					path: '/' + ns + '/overview-visibility',
-					method: 'POST',
-					data: {
-						object_id: parseInt( btn.getAttribute( 'data-id' ), 10 ),
-						type: btn.getAttribute( 'data-type' ),
-						hidden: willHide
-					}
-				} ).then( function () {
-					if ( willHide && row ) {
-						// Hiding removes it from the current (non-"show hidden") view.
-						row.parentNode.removeChild( row );
-					} else {
-						btn.setAttribute( 'data-hidden', willHide ? '1' : '0' );
-						btn.textContent = willHide ? strings.unhide : strings.hide;
-						btn.disabled = false;
-					}
-				} ).catch( function () { btn.disabled = false; } );
-			} );
-		}() );
-		</script>
-		<?php
-	}
-
-	/**
-	 * Renders the paginated "missing translations" table across posts and pages.
-	 *
-	 * @param string[]                       $codes    Enabled language codes.
-	 * @param array<int,array<string,mixed>> $rows     Precomputed missing rows.
-	 * @param int                            $paged       Current page (1-based).
-	 * @param string                         $base_url    Page base URL.
-	 * @param bool                           $ai_ok       Whether quick-Translate is available.
-	 * @param bool                           $show_hidden Whether hidden/default items are shown.
-	 * @return void
-	 */
-	private function render_missing( array $codes, array $rows, int $paged, string $base_url, bool $ai_ok, bool $show_hidden = false ): void {
-		if ( count( $codes ) <= 1 ) {
-			echo '<p>' . esc_html__( 'Configure at least two languages to track missing translations.', 'wp-ai-translate' ) . '</p>';
-			return;
-		}
-
-		$total = count( $rows );
-		// Clamp the requested page so a stale ?paged beyond the end does not show
-		// an empty table while items remain on earlier pages.
-		$pages     = max( 1, (int) ceil( $total / self::PER_PAGE ) );
-		$paged     = min( $paged, $pages );
-		$page_rows = array_slice( $rows, ( $paged - 1 ) * self::PER_PAGE, self::PER_PAGE );
-
-		if ( $this->scan_truncated ) {
-			echo '<div class="notice notice-warning inline"><p>'
-				. esc_html( $this->truncation_message() ) . '</p></div>';
-		}
-		?>
-		<table class="widefat striped">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Title', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Type', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Language', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Missing', 'wp-ai-translate' ); ?></th>
-					<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php if ( empty( $page_rows ) ) : ?>
-					<tr><td colspan="5"><?php esc_html_e( 'Nothing is missing translations.', 'wp-ai-translate' ); ?></td></tr>
-				<?php endif; ?>
-				<?php
-				foreach ( $page_rows as $row ) :
-					if ( 'term' === $row['type'] ) {
-						$edit  = get_edit_term_link( $row['id'] );
-						$term  = get_term( $row['id'] );
-						$title = $term instanceof WP_Term ? $term->name : '';
-						$type  = $term instanceof WP_Term ? $term->taxonomy : 'term';
-						$own   = $this->store->get_language( 'term', $row['id'] );
-					} else {
-						$edit  = get_edit_post_link( $row['id'] );
-						$title = get_the_title( $row['id'] );
-						$type  = get_post_type( $row['id'] );
-						$own   = $this->store->get_language( 'post', $row['id'] );
-					}
-					?>
-					<tr>
-						<td>
-							<?php if ( $edit ) : ?>
-								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( $title ); ?></a>
-							<?php else : ?>
-								<?php echo esc_html( $title ); ?>
-							<?php endif; ?>
-						</td>
-						<td><?php echo esc_html( $type ); ?></td>
-						<td><?php echo esc_html( '' !== $own ? $this->label( $own ) : '—' ); ?></td>
-						<td>
-							<?php foreach ( $row['missing'] as $miss_code ) : ?>
-								<?php if ( $ai_ok ) : ?>
-									<button type="button" class="button button-small wpait-ov-translate"
-										data-id="<?php echo esc_attr( (string) $row['id'] ); ?>"
-										data-type="<?php echo esc_attr( (string) $row['type'] ); ?>"
-										data-code="<?php echo esc_attr( (string) $miss_code ); ?>">
-										<?php
-										printf(
-											/* translators: %s: target language label. */
-											esc_html__( 'Translate to %s', 'wp-ai-translate' ),
-											esc_html( $this->label( $miss_code ) )
-										);
-										?>
-									</button>
-								<?php else : ?>
-									<span class="wpait-missing-lang"><?php echo esc_html( $this->label( $miss_code ) ); ?></span>
-								<?php endif; ?>
-							<?php endforeach; ?>
-							<span class="wpait-ov-result" aria-live="polite"></span>
-						</td>
-						<?php $hidden = $show_hidden && '' !== $this->get_overview_meta( $row['type'], (int) $row['id'] ); ?>
-						<td>
-							<button type="button" class="button-link wpait-ov-hide"
-								data-id="<?php echo esc_attr( (string) $row['id'] ); ?>"
-								data-type="<?php echo esc_attr( (string) $row['type'] ); ?>"
-								data-hidden="<?php echo $hidden ? '1' : '0'; ?>">
-								<?php echo $hidden ? esc_html__( 'Unhide', 'wp-ai-translate' ) : esc_html__( 'Hide', 'wp-ai-translate' ); ?>
-							</button>
-						</td>
-					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
-		<?php
-		$this->render_pagination( $total, $paged, $base_url );
-	}
-
-	/**
-	 * Renders the paginated by-language list for one language.
-	 *
-	 * @param string $code     Language code.
-	 * @param int    $paged    Current page (1-based).
-	 * @param string $base_url Page base URL.
-	 * @return void
-	 */
-	private function render_by_language( string $code, int $paged, string $base_url ): void {
-		$args = array(
-			'post_type'      => Wpait_Languages::OBJECT_TYPES,
-			'post_status'    => 'any',
-			'posts_per_page' => self::PER_PAGE,
-			'paged'          => $paged,
-			'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
-				array(
-					'taxonomy' => Wpait_Languages::TAXONOMY,
-					'field'    => 'slug',
-					'terms'    => $code,
+	public function register_rest_routes(): void {
+		register_rest_route(
+			Wpait_Rest::NS,
+			'/overview',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_overview' ),
+				'permission_callback' => static function () {
+					return current_user_can( 'manage_options' );
+				},
+				'args'                => array(
+					'view'        => array( 'type' => 'string', 'default' => 'missing', 'sanitize_callback' => 'sanitize_key' ),
+					'page'        => array( 'type' => 'integer', 'default' => 1, 'sanitize_callback' => 'absint' ),
+					'per_page'    => array( 'type' => 'integer', 'default' => self::PER_PAGE, 'sanitize_callback' => 'absint' ),
+					'orderby'     => array( 'type' => 'string', 'default' => 'title', 'enum' => array( 'title', 'type' ), 'sanitize_callback' => 'sanitize_key' ),
+					'order'       => array( 'type' => 'string', 'default' => 'asc', 'enum' => array( 'asc', 'desc' ), 'sanitize_callback' => 'sanitize_key' ),
+					'search'      => array( 'type' => 'string', 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ),
+					'show_hidden' => array( 'type' => 'boolean', 'default' => false ),
 				),
+			)
+		);
+	}
+
+	/**
+	 * `GET /overview` — paginated, sortable, searchable Overview data for the
+	 * DataViews app. Admin-only (gated in the route's permission callback).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function handle_overview( WP_REST_Request $request ): WP_REST_Response {
+		$args = array(
+			'view'        => (string) $request->get_param( 'view' ),
+			'page'        => max( 1, (int) $request->get_param( 'page' ) ),
+			'per_page'    => max( 1, (int) $request->get_param( 'per_page' ) ),
+			'orderby'     => (string) $request->get_param( 'orderby' ),
+			'order'       => (string) $request->get_param( 'order' ),
+			'search'      => (string) $request->get_param( 'search' ),
+			'show_hidden' => (bool) $request->get_param( 'show_hidden' ),
+		);
+
+		return rest_ensure_response( $this->get_overview_payload( $args ) );
+	}
+
+	/**
+	 * Builds the full Overview REST payload: the requested page of rows plus the
+	 * metadata the DataViews app needs (languages, counts, AI status, truncation).
+	 *
+	 * @param array<string,mixed> $args view|page|per_page|orderby|order|search|show_hidden.
+	 * @return array<string,mixed>
+	 */
+	public function get_overview_payload( array $args ): array {
+		$languages = $this->enabled_languages();
+		$codes     = wp_list_pluck( $languages, 'code' );
+
+		$view        = (string) ( $args['view'] ?? 'missing' );
+		$page        = max( 1, (int) ( $args['page'] ?? 1 ) );
+		$per_page    = max( 1, (int) ( $args['per_page'] ?? self::PER_PAGE ) );
+		$orderby     = in_array( ( $args['orderby'] ?? 'title' ), array( 'title', 'type' ), true ) ? $args['orderby'] : 'title';
+		$order       = 'desc' === ( $args['order'] ?? 'asc' ) ? 'desc' : 'asc';
+		$search      = trim( (string) ( $args['search'] ?? '' ) );
+		$show_hidden = ! empty( $args['show_hidden'] );
+		$is_lang     = in_array( $view, $codes, true );
+
+		$this->scan_truncated = false;
+
+		// Build the full row set for the requested view, then sort/search/paginate
+		// it in PHP (admin-only + bounded by MAX_SCAN per N6).
+		$rows = $is_lang
+			? $this->language_overview_rows( $view, $languages )
+			: $this->missing_overview_rows( $codes, $languages, $show_hidden );
+
+		// Search filter (title match, case-insensitive).
+		if ( '' !== $search ) {
+			$needle = function_exists( 'mb_strtolower' ) ? mb_strtolower( $search ) : strtolower( $search );
+			$rows   = array_values(
+				array_filter(
+					$rows,
+					static function ( $row ) use ( $needle ) {
+						$hay = function_exists( 'mb_strtolower' ) ? mb_strtolower( $row['title'] ) : strtolower( $row['title'] );
+						return false !== strpos( $hay, $needle );
+					}
+				)
+			);
+		}
+
+		// Sort.
+		usort(
+			$rows,
+			static function ( $a, $b ) use ( $orderby, $order ) {
+				$key = 'type' === $orderby ? 'type_label' : 'title';
+				$cmp = strcasecmp( (string) $a[ $key ], (string) $b[ $key ] );
+				if ( 0 === $cmp && 'type' === $orderby ) {
+					$cmp = strcasecmp( (string) $a['title'], (string) $b['title'] );
+				}
+				return 'desc' === $order ? -$cmp : $cmp;
+			}
+		);
+
+		$total       = count( $rows );
+		$total_pages = max( 1, (int) ceil( $total / $per_page ) );
+		$page        = min( $page, $total_pages );
+		$page_rows   = array_slice( $rows, ( $page - 1 ) * $per_page, $per_page );
+
+		$by_language = array();
+		foreach ( $codes as $code ) {
+			$by_language[ $code ] = $this->count_in_language( $code );
+		}
+
+		return array(
+			'rows'          => array_values( $page_rows ),
+			'total'         => $total,
+			'total_pages'   => $total_pages,
+			'languages'     => array_map(
+				static function ( $lang ) {
+					return array( 'code' => $lang['code'], 'name' => $lang['name'] );
+				},
+				$languages
+			),
+			'ai_ok'         => Wpait_Translator::can_generate_text(),
+			'scan_truncated' => $this->scan_truncated,
+			'counts'        => array(
+				'missing'     => $this->missing_count( $codes, $show_hidden ),
+				'by_language' => $by_language,
 			),
 		);
-		$query = new WP_Query( $args );
-
-		// Clamp a stale out-of-range ?paged to the last page so it shows real items
-		// instead of an empty table while content exists on earlier pages (mirrors
-		// the clamp in render_missing()).
-		if ( $paged > 1 && $query->max_num_pages > 0 && $paged > $query->max_num_pages ) {
-			$paged         = (int) $query->max_num_pages;
-			$args['paged'] = $paged;
-			$query         = new WP_Query( $args );
-		}
-		?>
-		<table class="widefat striped">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Title', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Type', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Status', 'wp-ai-translate' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php if ( ! $query->have_posts() ) : ?>
-					<tr><td colspan="3"><?php esc_html_e( 'No content in this language yet.', 'wp-ai-translate' ); ?></td></tr>
-				<?php endif; ?>
-				<?php
-				while ( $query->have_posts() ) :
-					$query->the_post();
-					$edit = get_edit_post_link( get_the_ID() );
-					?>
-					<tr>
-						<td>
-							<?php if ( $edit ) : ?>
-								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( get_the_title() ); ?></a>
-							<?php else : ?>
-								<?php echo esc_html( get_the_title() ); ?>
-							<?php endif; ?>
-						</td>
-						<td><?php echo esc_html( get_post_type() ); ?></td>
-						<td><?php echo esc_html( get_post_status() ); ?></td>
-					</tr>
-				<?php endwhile; ?>
-			</tbody>
-		</table>
-		<?php
-		$this->render_pagination( (int) $query->found_posts, $paged, add_query_arg( 'view', $code, $base_url ) );
-		wp_reset_postdata();
-
-		$this->render_terms_by_language( $code );
 	}
 
 	/**
-	 * Renders the categories/tags assigned to a language, below the posts table on
-	 * the by-language Overview view. Bounded; terms are typically few.
+	 * Builds the "missing translations" rows shaped for the REST/DataViews payload.
 	 *
-	 * @param string $code Language code.
-	 * @return void
+	 * @param string[]                       $codes       Enabled language codes.
+	 * @param array<int,array<string,mixed>> $languages   Enabled language rows.
+	 * @param bool                           $show_hidden Include admin-hidden items.
+	 * @return array<int,array<string,mixed>>
 	 */
-	private function render_terms_by_language( string $code ): void {
+	private function missing_overview_rows( array $codes, array $languages, bool $show_hidden ): array {
+		$name_by_code = wp_list_pluck( $languages, 'name', 'code' );
+		$out          = array();
+
+		foreach ( $this->missing_rows( $codes, $show_hidden ) as $row ) {
+			$type = (string) $row['type'];
+			$id   = (int) $row['id'];
+
+			if ( 'term' === $type ) {
+				$term  = get_term( $id );
+				$title = $term instanceof WP_Term ? $term->name : '';
+				$tax   = $term instanceof WP_Term ? $term->taxonomy : 'term';
+				$edit  = get_edit_term_link( $id );
+				$link  = get_term_link( $id );
+				$view_url = is_wp_error( $link ) ? '' : (string) $link;
+				$own   = $this->store->get_language( 'term', $id );
+			} else {
+				$title    = get_the_title( $id );
+				$tax      = '';
+				$edit     = get_edit_post_link( $id, 'raw' );
+				$post     = get_post( $id );
+				$view_url = ( $post instanceof WP_Post && 'publish' === $post->post_status ) ? (string) get_permalink( $id ) : (string) get_preview_post_link( $id );
+				$own      = $this->store->get_language( 'post', $id );
+			}
+
+			$missing = array();
+			foreach ( $row['missing'] as $miss_code ) {
+				$missing[] = array(
+					'code' => $miss_code,
+					'name' => isset( $name_by_code[ $miss_code ] ) ? (string) $name_by_code[ $miss_code ] : $miss_code,
+				);
+			}
+
+			$out[] = array(
+				'key'        => $type . ':' . $id,
+				'type'       => $type,
+				'id'         => $id,
+				'title'      => '' !== $title ? $title : __( '(no title)', 'wp-ai-translate' ),
+				'type_label' => $this->type_label( $type, $tax, $id ),
+				'language'   => '' !== $own ? array( 'code' => $own, 'name' => $this->languages->name( $own ) ) : null,
+				'missing'    => $missing,
+				'edit_url'   => $edit ? (string) $edit : '',
+				'view_url'   => $view_url,
+				'hidden'     => '' !== $this->get_overview_meta( $type, $id ),
+				'taxonomy'   => $tax,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Builds the by-language rows (posts + terms assigned to a language) shaped for
+	 * the REST/DataViews payload.
+	 *
+	 * @param string                         $code      Language code.
+	 * @param array<int,array<string,mixed>> $languages Enabled language rows.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function language_overview_rows( string $code, array $languages ): array {
+		$out  = array();
+		$name = $this->languages->name( $code );
+
+		$query = new WP_Query(
+			array(
+				'post_type'           => Wpait_Languages::OBJECT_TYPES,
+				'post_status'         => 'any',
+				'posts_per_page'      => self::MAX_SCAN,
+				'no_found_rows'       => true,
+				'ignore_sticky_posts' => true,
+				'fields'              => 'ids',
+				'tax_query'           => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+					array(
+						'taxonomy' => Wpait_Languages::TAXONOMY,
+						'field'    => 'slug',
+						'terms'    => $code,
+					),
+				),
+			)
+		);
+		foreach ( (array) $query->posts as $post_id ) {
+			$post_id  = (int) $post_id;
+			$post     = get_post( $post_id );
+			$view_url = ( $post instanceof WP_Post && 'publish' === $post->post_status ) ? (string) get_permalink( $post_id ) : (string) get_preview_post_link( $post_id );
+			$out[]    = array(
+				'key'        => 'post:' . $post_id,
+				'type'       => 'post',
+				'id'         => $post_id,
+				'title'      => get_the_title( $post_id ) ?: __( '(no title)', 'wp-ai-translate' ),
+				'type_label' => $this->type_label( 'post', '', $post_id ),
+				'language'   => array( 'code' => $code, 'name' => $name ),
+				'missing'    => array(),
+				'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
+				'view_url'   => $view_url,
+				'hidden'     => false,
+				'taxonomy'   => '',
+			);
+		}
+		wp_reset_postdata();
+
 		$this->in_term_filter = true;
 		$terms                = get_terms(
 			array(
@@ -1233,80 +1096,172 @@ class Wpait_Admin_List {
 			)
 		);
 		$this->in_term_filter = false;
-
 		if ( is_wp_error( $terms ) ) {
 			$terms = array();
 		}
-		?>
-		<h2><?php esc_html_e( 'Categories &amp; tags', 'wp-ai-translate' ); ?></h2>
-		<table class="widefat striped">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Name', 'wp-ai-translate' ); ?></th>
-					<th><?php esc_html_e( 'Taxonomy', 'wp-ai-translate' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php if ( empty( $terms ) ) : ?>
-					<tr><td colspan="2"><?php esc_html_e( 'No categories or tags in this language yet.', 'wp-ai-translate' ); ?></td></tr>
-				<?php endif; ?>
-				<?php
-				foreach ( $terms as $term ) :
-					$edit = get_edit_term_link( $term->term_id );
-					?>
-					<tr>
-						<td>
-							<?php if ( $edit ) : ?>
-								<a href="<?php echo esc_url( $edit ); ?>"><?php echo esc_html( $term->name ); ?></a>
-							<?php else : ?>
-								<?php echo esc_html( $term->name ); ?>
-							<?php endif; ?>
-						</td>
-						<td><?php echo esc_html( $term->taxonomy ); ?></td>
-					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
-		<?php
+		foreach ( $terms as $term ) {
+			$link  = get_term_link( $term->term_id );
+			$out[] = array(
+				'key'        => 'term:' . (int) $term->term_id,
+				'type'       => 'term',
+				'id'         => (int) $term->term_id,
+				'title'      => $term->name,
+				'type_label' => $this->type_label( 'term', $term->taxonomy, (int) $term->term_id ),
+				'language'   => array( 'code' => $code, 'name' => $name ),
+				'missing'    => array(),
+				'edit_url'   => (string) get_edit_term_link( $term->term_id ),
+				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
+				'hidden'     => false,
+				'taxonomy'   => $term->taxonomy,
+			);
+		}
+
+		return $out;
 	}
 
 	/**
-	 * Renders simple prev/next pagination for the Overview tables.
+	 * Count of items missing at least one translation, honouring the hide filter.
 	 *
-	 * @param int    $total    Total item count.
-	 * @param int    $paged    Current page.
-	 * @param string $base_url Base URL (already carrying any view arg).
+	 * @param string[] $codes       Enabled language codes.
+	 * @param bool     $show_hidden Include admin-hidden items.
+	 * @return int
+	 */
+	private function missing_count( array $codes, bool $show_hidden ): int {
+		return count( $this->missing_rows( $codes, $show_hidden ) );
+	}
+
+	/**
+	 * Human label for an item's type: Post / Page / Category / Tag (or the raw
+	 * post-type / taxonomy for anything unexpected).
+	 *
+	 * @param string $type     'post' | 'term'.
+	 * @param string $taxonomy Taxonomy slug for terms.
+	 * @param int    $id       Object id (used to resolve a post's exact type).
+	 * @return string
+	 */
+	private function type_label( string $type, string $taxonomy, int $id ): string {
+		if ( 'term' === $type ) {
+			if ( 'category' === $taxonomy ) {
+				return __( 'Category', 'wp-ai-translate' );
+			}
+			if ( 'post_tag' === $taxonomy ) {
+				return __( 'Tag', 'wp-ai-translate' );
+			}
+			return $taxonomy;
+		}
+
+		$post_type = get_post_type( $id );
+		if ( 'page' === $post_type ) {
+			return __( 'Page', 'wp-ai-translate' );
+		}
+		if ( 'post' === $post_type ) {
+			return __( 'Post', 'wp-ai-translate' );
+		}
+		return (string) $post_type;
+	}
+
+	/**
+	 * Registers the Overview submenu under the AI Translate top-level menu.
+	 *
 	 * @return void
 	 */
-	private function render_pagination( int $total, int $paged, string $base_url ): void {
-		$pages = (int) ceil( $total / self::PER_PAGE );
-		if ( $pages <= 1 ) {
+	public function add_overview_page(): void {
+		$this->overview_hook = (string) add_submenu_page(
+			Wpait_Admin_Settings::PAGE_SLUG,
+			__( 'AI Translate Overview', 'wp-ai-translate' ),
+			__( 'Overview', 'wp-ai-translate' ),
+			'manage_options',
+			self::OVERVIEW_SLUG,
+			array( $this, 'render_overview' )
+		);
+	}
+
+	/**
+	 * Enqueues the DataViews Overview React app (and its styles) on the Overview
+	 * page. apiFetch (a build dependency) wires the REST root + nonce.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_overview_assets( $hook_suffix ): void {
+		if ( '' === $this->overview_hook || $hook_suffix !== $this->overview_hook ) {
 			return;
 		}
-		echo '<div class="tablenav"><div class="tablenav-pages">';
-		echo '<span class="displaying-num">' . esc_html(
-			sprintf(
-				/* translators: %d: number of items. */
-				_n( '%d item', '%d items', $total, 'wp-ai-translate' ),
-				$total
-			)
-		) . '</span> ';
-		if ( $paged > 1 ) {
-			printf(
-				'<a class="button" href="%s">%s</a> ',
-				esc_url( add_query_arg( 'paged', $paged - 1, $base_url ) ),
-				esc_html__( '‹ Previous', 'wp-ai-translate' )
-			);
+
+		$asset_file = WPAIT_PLUGIN_DIR . 'build/overview/index.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			// Build artifact missing; the page renders its <noscript> fallback only.
+			return;
 		}
-		if ( $paged < $pages ) {
-			printf(
-				'<a class="button" href="%s">%s</a>',
-				esc_url( add_query_arg( 'paged', $paged + 1, $base_url ) ),
-				esc_html__( 'Next ›', 'wp-ai-translate' )
+		$asset = require $asset_file;
+
+		wp_enqueue_script(
+			'wpait-overview',
+			WPAIT_PLUGIN_URL . 'build/overview/index.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		// wp-scripts emits the combined component/dataviews CSS as style-index.css.
+		$style_file = WPAIT_PLUGIN_DIR . 'build/overview/style-index.css';
+		if ( file_exists( $style_file ) ) {
+			wp_enqueue_style(
+				'wpait-overview',
+				WPAIT_PLUGIN_URL . 'build/overview/style-index.css',
+				array( 'wp-components' ),
+				$asset['version']
 			);
+		} else {
+			wp_enqueue_style( 'wp-components' );
 		}
-		echo '</div></div>';
+
+		$languages = array_map(
+			static function ( $lang ) {
+				return array( 'code' => $lang['code'], 'name' => $lang['name'] );
+			},
+			$this->enabled_languages()
+		);
+
+		$config = array(
+			'namespace' => Wpait_Rest::NS,
+			'languages' => array_values( $languages ),
+			'aiOk'      => Wpait_Translator::can_generate_text(),
+			'perPage'   => self::PER_PAGE,
+			'settingsUrl' => admin_url( 'admin.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ),
+		);
+
+		wp_add_inline_script(
+			'wpait-overview',
+			'window.wpaitOverview = ' . wp_json_encode( $config ) . ';',
+			'before'
+		);
+
+		wp_set_script_translations( 'wpait-overview', 'wp-ai-translate' );
 	}
+
+	/**
+	 * Renders the Overview page: missing-translations list (default) or a
+	 * by-language list, both paginated.
+	 *
+	 * @return void
+	 */
+	public function render_overview(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'AI Translate Overview', 'wp-ai-translate' ); ?></h1>
+			<div id="wpait-overview-app">
+				<noscript>
+					<?php esc_html_e( 'The AI Translate Overview requires JavaScript to display the translations table.', 'wp-ai-translate' ); ?>
+				</noscript>
+			</div>
+		</div>
+		<?php
+	}
+
 
 	/**
 	 * Emits the N6 scan-truncation warning as a top-level admin notice (used on the
