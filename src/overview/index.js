@@ -98,6 +98,10 @@ function Overview() {
 	const [ failedJobs, setFailedJobs ] = useState( [] );
 	const [ showFailed, setShowFailed ] = useState( false );
 	const [ retryingId, setRetryingId ] = useState( 0 );
+	// Queued + processing jobs the user can inspect (#81).
+	const [ queueJobs, setQueueJobs ] = useState( [] );
+	const [ showQueue, setShowQueue ] = useState( false );
+	const showQueueRef = useRef( false );
 
 	const languages = cfg.languages || [];
 	const isUnmarked = activeView === 'unmarked';
@@ -214,6 +218,44 @@ function Overview() {
 		},
 		[ loadFailed, pollOnce, startPolling ]
 	);
+
+	// Load the queued + processing jobs list on demand (#81).
+	const loadQueue = useCallback( () => {
+		return apiFetch( { path: `/${ cfg.namespace }/queue-jobs` } )
+			.then( ( res ) => {
+				setQueueJobs( res.jobs || [] );
+				return res.jobs || [];
+			} )
+			.catch( () => {
+				setQueueJobs( [] );
+				return [];
+			} );
+	}, [] );
+
+	const toggleQueue = useCallback( () => {
+		setShowQueue( ( prev ) => {
+			const next = ! prev;
+			showQueueRef.current = next;
+			if ( next ) {
+				loadQueue();
+			}
+			return next;
+		} );
+	}, [ loadQueue ] );
+
+	// While the queued-jobs list is open, refresh it on each poll tick so items
+	// move/clear as they process.
+	useEffect( () => {
+		if ( ! showQueue ) {
+			return undefined;
+		}
+		const id = setInterval( () => {
+			if ( queue.pending + queue.running > 0 ) {
+				loadQueue();
+			}
+		}, 5000 );
+		return () => clearInterval( id );
+	}, [ showQueue, loadQueue, queue.pending, queue.running ] );
 
 	// On mount: if the queue is already busy, show the banner and start polling.
 	useEffect( () => {
@@ -549,10 +591,45 @@ function Overview() {
 
 			{ queue.pending + queue.running > 0 && (
 				<Notice status="info" isDismissible={ false }>
-					{ sprintf(
-						/* translators: %d: number of translations being processed. */
-						__( '%d translation(s) processing in the background…', 'wp-ai-translate' ),
-						queue.pending + queue.running
+					<span>
+						{ sprintf(
+							/* translators: %d: number of translations being processed. */
+							__( '%d translation(s) processing in the background…', 'wp-ai-translate' ),
+							queue.pending + queue.running
+						) }
+					</span>{ ' ' }
+					<button
+						type="button"
+						className="button-link"
+						onClick={ toggleQueue }
+					>
+						{ showQueue
+							? __( 'Hide queue', 'wp-ai-translate' )
+							: __( 'Show queue', 'wp-ai-translate' ) }
+					</button>
+					{ showQueue && (
+						<ul className="wpait-queue-list" style={ { margin: '8px 0 0' } }>
+							{ queueJobs.length === 0 && (
+								<li>{ __( 'No queued jobs.', 'wp-ai-translate' ) }</li>
+							) }
+							{ queueJobs.map( ( job ) => (
+								<li key={ job.action_id }>
+									<strong>{ job.title }</strong>
+									{ 'translate' === job.kind && job.target
+										? ` → ${ job.target }`
+										: '' }
+									{ 'detect' === job.kind
+										? ` — ${ __( 'detect language', 'wp-ai-translate' ) }`
+										: '' }
+									{ ' ' }
+									<span className="wpait-queue-state">
+										{ 'running' === job.state
+											? __( '(processing…)', 'wp-ai-translate' )
+											: __( '(queued)', 'wp-ai-translate' ) }
+									</span>
+								</li>
+							) ) }
+						</ul>
 					) }
 				</Notice>
 			) }

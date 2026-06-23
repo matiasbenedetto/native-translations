@@ -196,6 +196,16 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/queue-jobs',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_queue_jobs' ),
+				'permission_callback' => array( $this, 'permission_bulk_enqueue' ),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/retry-job',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -656,6 +666,17 @@ class Wpait_Rest {
 	 */
 	public function handle_failed_jobs() {
 		return rest_ensure_response( array( 'jobs' => $this->queue->get_failed_jobs() ) );
+	}
+
+	/**
+	 * `GET /queue-jobs` — lists this plugin's queued + processing background jobs
+	 * (#81) so the Overview can show which translations are waiting/running, not
+	 * just a count.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function handle_queue_jobs() {
+		return rest_ensure_response( array( 'jobs' => $this->queue->get_pending_jobs() ) );
 	}
 
 	/**

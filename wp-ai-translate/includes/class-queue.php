@@ -282,47 +282,91 @@ class Wpait_Queue {
 	 * @return array<int,array{action_id:int,kind:string,type:string,id:int,target:string,title:string,message:string}>
 	 */
 	public function get_failed_jobs( int $limit = 50 ): array {
+		$jobs = $this->list_jobs( array( ActionScheduler_Store::STATUS_FAILED ), $limit );
+		foreach ( $jobs as &$job ) {
+			$job['message'] = $this->failure_message( $job['action_id'] );
+		}
+		unset( $job );
+		return $jobs;
+	}
+
+	/**
+	 * Lists this plugin's queued (pending) and currently-running jobs for the
+	 * Overview, so the user can see which translations are waiting/processing — not
+	 * just a count (#81). Each entry carries a 'state' of 'pending' or 'running'.
+	 *
+	 * @param int $limit Max jobs to return.
+	 * @return array<int,array{action_id:int,kind:string,type:string,id:int,target:string,title:string,state:string}>
+	 */
+	public function get_pending_jobs( int $limit = 100 ): array {
+		// Running first (they're the active work), then pending, oldest-first so the
+		// list reads as the processing order.
+		$running = $this->list_jobs( array( ActionScheduler_Store::STATUS_RUNNING ), $limit, 'ASC' );
+		foreach ( $running as &$job ) {
+			$job['state'] = 'running';
+		}
+		unset( $job );
+
+		$remaining = max( 0, $limit - count( $running ) );
+		$pending   = $remaining > 0 ? $this->list_jobs( array( ActionScheduler_Store::STATUS_PENDING ), $remaining, 'ASC' ) : array();
+		foreach ( $pending as &$job ) {
+			$job['state'] = 'pending';
+		}
+		unset( $job );
+
+		return array_merge( $running, $pending );
+	}
+
+	/**
+	 * Shared query: resolves this plugin's actions in the given statuses to a list
+	 * of `{action_id,kind,type,id,target,title}` (newest- or oldest-first).
+	 *
+	 * @param string[] $statuses Action Scheduler status constants.
+	 * @param int      $limit    Max actions.
+	 * @param string   $order    'ASC' or 'DESC' by modified time.
+	 * @return array<int,array{action_id:int,kind:string,type:string,id:int,target:string,title:string}>
+	 */
+	private function list_jobs( array $statuses, int $limit, string $order = 'DESC' ): array {
 		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
 			return array();
 		}
 		$store = ActionScheduler::store();
-		// 'select' returns an array of action ids (vs 'count').
-		$ids = $store->query_actions(
-			array(
-				'group'    => self::GROUP,
-				'status'   => ActionScheduler_Store::STATUS_FAILED,
-				'per_page' => max( 1, $limit ),
-				'orderby'  => 'modified',
-				'order'    => 'DESC',
-			),
-			'select'
-		);
-
-		$jobs = array();
-		foreach ( (array) $ids as $action_id ) {
-			$action = $store->fetch_action( (int) $action_id );
-			if ( ! $action || ! method_exists( $action, 'get_hook' ) ) {
-				continue;
-			}
-			$hook = $action->get_hook();
-			if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
-				continue;
-			}
-			$args    = $action->get_args();
-			$payload = isset( $args[0] ) && is_array( $args[0] ) ? $args[0] : array();
-			$type    = isset( $payload['type'] ) ? (string) $payload['type'] : '';
-			$id      = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
-			$target  = isset( $payload['target'] ) ? (string) $payload['target'] : '';
-
-			$jobs[] = array(
-				'action_id' => (int) $action_id,
-				'kind'      => self::DETECT_HOOK === $hook ? 'detect' : 'translate',
-				'type'      => $type,
-				'id'        => $id,
-				'target'    => $target,
-				'title'     => $this->resolve_title( $type, $id ),
-				'message'   => $this->failure_message( (int) $action_id ),
+		$jobs  = array();
+		foreach ( $statuses as $status ) {
+			// 'select' returns an array of action ids (vs 'count').
+			$ids = $store->query_actions(
+				array(
+					'group'    => self::GROUP,
+					'status'   => $status,
+					'per_page' => max( 1, $limit ),
+					'orderby'  => 'modified',
+					'order'    => $order,
+				),
+				'select'
 			);
+			foreach ( (array) $ids as $action_id ) {
+				$action = $store->fetch_action( (int) $action_id );
+				if ( ! $action || ! method_exists( $action, 'get_hook' ) ) {
+					continue;
+				}
+				$hook = $action->get_hook();
+				if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+					continue;
+				}
+				$args    = $action->get_args();
+				$payload = isset( $args[0] ) && is_array( $args[0] ) ? $args[0] : array();
+				$type    = isset( $payload['type'] ) ? (string) $payload['type'] : '';
+				$id      = isset( $payload['id'] ) ? (int) $payload['id'] : 0;
+
+				$jobs[] = array(
+					'action_id' => (int) $action_id,
+					'kind'      => self::DETECT_HOOK === $hook ? 'detect' : 'translate',
+					'type'      => $type,
+					'id'        => $id,
+					'target'    => isset( $payload['target'] ) ? (string) $payload['target'] : '',
+					'title'     => $this->resolve_title( $type, $id ),
+				);
+			}
 		}
 		return $jobs;
 	}

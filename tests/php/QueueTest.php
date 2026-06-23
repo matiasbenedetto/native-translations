@@ -376,6 +376,36 @@ final class QueueTest extends TestCase {
 		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
 	}
 
+	public function test_get_pending_jobs_lists_running_then_pending(): void {
+		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Running Post' );
+		Wpait_Test_State::$posts[8] = array( 'ID' => 8, 'post_type' => 'post', 'post_title' => 'Queued Post' );
+		Wpait_Test_State::$as_actions = array(
+			201 => array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => 8, 'target' => 'es' ) ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			),
+			202 => array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'fr' ) ),
+				'status' => ActionScheduler_Store::STATUS_RUNNING,
+			),
+		);
+
+		$jobs = $this->queue->get_pending_jobs();
+		$this->assertCount( 2, $jobs );
+		// Running first.
+		$this->assertSame( 'running', $jobs[0]['state'] );
+		$this->assertSame( 'Running Post', $jobs[0]['title'] );
+		$this->assertSame( 'fr', $jobs[0]['target'] );
+		$this->assertSame( 'pending', $jobs[1]['state'] );
+		$this->assertSame( 'Queued Post', $jobs[1]['title'] );
+	}
+
+	public function test_get_pending_jobs_empty_when_idle(): void {
+		$this->assertSame( array(), $this->queue->get_pending_jobs() );
+	}
+
 	public function test_describe_action_resolves_payload(): void {
 		Wpait_Test_State::$as_failed_actions = array(
 			101 => array(

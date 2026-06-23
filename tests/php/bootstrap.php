@@ -197,6 +197,14 @@ final class Wpait_Test_State {
 	/** @var array<int,int> Action ids passed to delete_action(). */
 	public static array $as_deleted = array();
 
+	/**
+	 * Non-failed actions (pending/running) keyed by id, each
+	 * `[ hook, args, status ]`, used by the queue-listing stubs (#81).
+	 *
+	 * @var array<int,array{hook:string,args:array,status:string}>
+	 */
+	public static array $as_actions = array();
+
 	/** @var bool When true, as_schedule_single_action() returns 0 (scheduling failed). */
 	public static bool $as_schedule_fails = false;
 
@@ -242,6 +250,7 @@ final class Wpait_Test_State {
 		self::$as_scheduled_single = array();
 		self::$as_failed_actions = array();
 		self::$as_deleted       = array();
+		self::$as_actions       = array();
 		self::$as_schedule_fails = false;
 		$_GET                   = array();
 	}
@@ -1098,16 +1107,24 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 			$status = $args['status'] ?? '';
 			if ( 'count' !== $return_format ) {
 				// 'select' returns an array of action ids (mirrors the real store).
-				return self::STATUS_FAILED === $status
-					? array_map( 'intval', array_keys( Wpait_Test_State::$as_failed_actions ) )
+				$ids = self::STATUS_FAILED === $status
+					? array_keys( Wpait_Test_State::$as_failed_actions )
 					: array();
+				foreach ( Wpait_Test_State::$as_actions as $id => $rec ) {
+					if ( ( $rec['status'] ?? '' ) === $status ) {
+						$ids[] = $id;
+					}
+				}
+				return array_map( 'intval', $ids );
 			}
 			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
 		}
 
 		/** @return Wpait_Fake_AS_Action|null */
 		public function fetch_action( $action_id ) {
-			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ] ?? null;
+			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ]
+				?? Wpait_Test_State::$as_actions[ (int) $action_id ]
+				?? null;
 			return $rec ? new Wpait_Fake_AS_Action( $rec['hook'], $rec['args'] ) : null;
 		}
 
