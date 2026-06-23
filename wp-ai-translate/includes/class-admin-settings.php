@@ -296,9 +296,13 @@ class Wpait_Admin_Settings {
 	 */
 	private function add_reconcile_notices( array $report ): void {
 		$map = array(
+			/* translators: %s: comma-separated list of language names. */
 			'added'    => __( 'Added languages: %s', 'wp-ai-translate' ),
+			/* translators: %s: comma-separated list of language names. */
 			'updated'  => __( 'Updated languages: %s', 'wp-ai-translate' ),
+			/* translators: %s: comma-separated list of language names. */
 			'disabled' => __( 'Disabled languages: %s', 'wp-ai-translate' ),
+			/* translators: %s: comma-separated list of language names. */
 			'removed'  => __( 'Removed languages: %s', 'wp-ai-translate' ),
 		);
 		foreach ( $map as $key => $template ) {

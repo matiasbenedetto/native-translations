@@ -187,10 +187,12 @@
 				var confirming = self.confirm && self.confirm.code === l.code ? self.confirm.action : '';
 
 				if ( 'recreate' === confirming ) {
+					/* translators: %s: language name. */
 					row.appendChild( el( 'span', { 'class': 'description', text: sprintf( __( 'Overwrite the %s translation? A revision is saved first. ', 'wp-ai-translate' ), l.name ) } ) );
 					var rYes = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Yes, regenerate', 'wp-ai-translate' ) } );
 					rYes.disabled = working;
 					rYes.addEventListener( 'click', function () {
+						/* translators: %s: language name. */
 						self.act( 'recreate', { object_id: existing.id, type: 'term' }, l.code, { successMsg: sprintf( __( '%s translation regenerated.', 'wp-ai-translate' ), l.name ) } );
 					} );
 					var rNo = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'wp-ai-translate' ) } );
@@ -202,10 +204,12 @@
 					return;
 				}
 				if ( 'delete' === confirming ) {
+					/* translators: %s: language name. */
 					row.appendChild( el( 'span', { 'class': 'description', text: sprintf( __( 'Delete the %s translation and unlink it? ', 'wp-ai-translate' ), l.name ) } ) );
 					var dYes = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Yes, delete', 'wp-ai-translate' ) } );
 					dYes.disabled = working;
 					dYes.addEventListener( 'click', function () {
+						/* translators: %s: language name. */
 						self.act( 'delete', { object_id: existing.id, type: 'term' }, 'del-' + l.code, { reload: true, successMsg: sprintf( __( '%s translation deleted.', 'wp-ai-translate' ), l.name ) } );
 					} );
 					var dNo = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'wp-ai-translate' ) } );
@@ -238,6 +242,7 @@
 				row.appendChild( document.createTextNode( ' ' ) );
 				var unlinkBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: __( 'Unlink', 'wp-ai-translate' ) } );
 				unlinkBtn.addEventListener( 'click', function () {
+					/* translators: %s: language name. */
 					self.act( 'unlink', { object_id: existing.id, type: 'term' }, 'unlink-' + l.code, { reload: true, successMsg: sprintf( __( '%s translation unlinked.', 'wp-ai-translate' ), l.name ) } );
 				} );
 				row.appendChild( unlinkBtn );
