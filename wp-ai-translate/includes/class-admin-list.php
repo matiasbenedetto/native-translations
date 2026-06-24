@@ -124,6 +124,7 @@ class Wpait_Admin_List {
 		add_action( 'restrict_manage_posts', array( $this, 'render_filter' ) );
 		add_action( 'pre_get_posts', array( $this, 'filter_query' ) );
 		add_action( 'admin_menu', array( $this, 'add_overview_page' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_list_assets' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_overview_assets' ) );
 		// Note: the /overview REST route is registered from Wpait_Plugin (unconditionally,
 		// so it works in non-admin REST context), not here.
@@ -183,20 +184,7 @@ class Wpait_Admin_List {
 			return;
 		}
 
-		echo '<strong>' . $this->languages->label_html( $code ) . '</strong>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- label_html() returns escaped HTML.
-
-		$siblings = $this->store->get_translations( 'post', $post_id );
-		if ( empty( $siblings ) ) {
-			return;
-		}
-
-		$links = array();
-		foreach ( $siblings as $sib_code => $sib_id ) {
-			$links[] = $this->sibling_link( get_edit_post_link( (int) $sib_id ), (string) $sib_code );
-		}
-
-		echo '<br /><span class="description">'
-			. wp_kses_post( implode( ', ', $links ) ) . '</span>';
+		echo $this->language_column_html( 'post', $post_id, $code ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- language_column_html() returns escaped HTML.
 	}
 
 	/* ---------------------------------------------------------------------
@@ -328,18 +316,7 @@ class Wpait_Admin_List {
 				. esc_html__( 'No language', 'wp-ai-translate' ) . '</span>';
 		}
 
-		$out      = '<strong>' . $this->languages->label_html( $code ) . '</strong>';
-		$siblings = $this->store->get_translations( 'term', $term_id );
-		if ( empty( $siblings ) ) {
-			return $out;
-		}
-
-		$links = array();
-		foreach ( $siblings as $sib_code => $sib_id ) {
-			$links[] = $this->sibling_link( get_edit_term_link( (int) $sib_id ), (string) $sib_code );
-		}
-
-		return $out . '<br /><span class="description">' . wp_kses_post( implode( ', ', $links ) ) . '</span>';
+		return $this->language_column_html( 'term', $term_id, $code );
 	}
 
 	/**
@@ -1307,6 +1284,37 @@ class Wpait_Admin_List {
 	}
 
 	/**
+	 * Enqueues list-table styles for the post/page/category/tag language columns.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_list_assets( $hook_suffix ): void {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen ) {
+			return;
+		}
+
+		$is_post_list = 'edit.php' === $hook_suffix
+			&& 'edit' === $screen->base
+			&& in_array( $screen->post_type, Wpait_Languages::OBJECT_TYPES, true );
+		$is_term_list = 'edit-tags.php' === $hook_suffix
+			&& 'edit-tags' === $screen->base
+			&& in_array( $screen->taxonomy, self::TERM_TAXONOMIES, true );
+
+		if ( ! $is_post_list && ! $is_term_list ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'wpait-admin-list',
+			WPAIT_PLUGIN_URL . 'assets/css/admin-list.css',
+			array(),
+			WPAIT_VERSION
+		);
+	}
+
+	/**
 	 * Enqueues the DataViews Overview React app (and its styles) on the Overview
 	 * page. apiFetch (a build dependency) wires the REST root + nonce.
 	 *
@@ -1431,37 +1439,61 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Builds an accessible "edit the sibling translation" link for the Language
-	 * column. The flag (if any) is decorative (aria-hidden) with the language name
-	 * carried as screen-reader text and a hover `title`/`aria-label`, so the link is
-	 * meaningful on hover, to assistive tech, and where flag emoji don't render. With
-	 * no flag, the uppercased code is the visible label (#24).
+	 * Builds the post/term list-table language cell.
 	 *
-	 * @param string|false|null $edit_url Edit URL, or falsey when not editable.
-	 * @param string            $code     Sibling language code.
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @param string $code Current language code.
 	 * @return string
 	 */
-	private function sibling_link( $edit_url, string $code ): string {
-		$flag = $this->languages->flag( $code );
-		$name = $this->languages->name( $code );
-		$label = sprintf(
-			/* translators: %s: language name. */
-			__( 'Edit the %s translation', 'wp-ai-translate' ),
-			'' !== $name ? $name : strtoupper( $code )
-		);
-
+	private function language_column_html( string $type, int $id, string $code ): string {
+		$flag = $this->languages->flag_html_for_code( $code );
+		$out  = '<span class="wpait-language-cell">';
 		if ( '' !== $flag ) {
-			$inner = '<span class="wpait-flag" aria-hidden="true">' . Wpait_Languages::flag_html( $flag ) . '</span>'
-				. '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
-		} else {
-			$inner = esc_html( strtoupper( $code ) );
+			$out .= '<span class="wpait-flag" aria-hidden="true">' . $flag . '</span>';
+		}
+		$out .= '<strong>' . esc_html( $code ) . '</strong>';
+
+		$source = $this->original_source_link( $type, $id, $code );
+		if ( '' !== $source ) {
+			$out .= ' <span class="description">'
+				. sprintf(
+					/* translators: %s: linked original language code. */
+					esc_html__( 'translated from %s', 'wp-ai-translate' ),
+					$source
+				)
+				. '</span>';
 		}
 
-		if ( ! $edit_url ) {
-			return $inner;
+		return $out . '</span>';
+	}
+
+	/**
+	 * Builds the linked original language code for translated list-table rows.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Object id.
+	 * @param string $code Current language code.
+	 * @return string
+	 */
+	private function original_source_link( string $type, int $id, string $code ): string {
+		$settings = Wpait_Admin_Settings::get_settings();
+		$original = isset( $settings['default_language'] ) ? (string) $settings['default_language'] : '';
+		if ( '' === $original || $original === $code ) {
+			return '';
 		}
 
-		return '<a href="' . esc_url( $edit_url ) . '" title="' . esc_attr( $label ) . '" aria-label="' . esc_attr( $label ) . '">'
-			. $inner . '</a>';
+		$members = $this->store->get_translations( $type, $id, array( 'include_self' => true ) );
+		if ( empty( $members[ $original ] ) || (int) $members[ $original ] === $id ) {
+			return '';
+		}
+
+		$source_id = (int) $members[ $original ];
+		$url       = 'term' === $type ? get_edit_term_link( $source_id ) : get_edit_post_link( $source_id );
+		if ( ! $url ) {
+			return esc_html( $original );
+		}
+
+		return '<a href="' . esc_url( $url ) . '">' . esc_html( $original ) . '</a>';
 	}
 }
