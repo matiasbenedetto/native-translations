@@ -49,7 +49,7 @@ final class AdminSettingsTest extends TestCase {
 		$catalog = Wpait_Admin_Settings::default_catalog();
 		$this->assertNotEmpty( $catalog );
 		foreach ( $catalog as $code => $entry ) {
-			$this->assertMatchesRegularExpression( '/^[a-z]{2,3}$/', $code, "code '$code' should be a short lowercase code" );
+			$this->assertMatchesRegularExpression( '/^[a-z]{2,3}(-[a-z]{2,3})?$/', $code, "code '$code' should be a lowercase code" );
 			foreach ( array( 'locale', 'name', 'native', 'flag' ) as $field ) {
 				$this->assertArrayHasKey( $field, $entry, "code '$code' missing '$field'" );
 				$this->assertNotSame( '', $entry[ $field ], "code '$code' has empty '$field'" );
@@ -61,6 +61,19 @@ final class AdminSettingsTest extends TestCase {
 				"catalog locale '{$entry['locale']}' (code '$code') should be valid"
 			);
 		}
+	}
+
+	public function test_locale_catalog_contains_regional_variants_with_derived_codes(): void {
+		$entry = Wpait_Admin_Settings::catalog_entry_for_locale( 'es_AR' );
+		$this->assertNotNull( $entry );
+		$this->assertSame( 'es-ar', $entry['code'] );
+		$this->assertSame( 'Spanish / Argentina', $entry['name'] );
+		$this->assertSame( 'Español (Argentina)', $entry['native'] );
+		$this->assertSame( 'ar', $entry['flag'] );
+
+		$this->assertContains( 'zh_HK', Wpait_Admin_Settings::common_locales() );
+		$this->assertSame( 'pt-br', Wpait_Admin_Settings::code_for_locale( 'pt_BR' ) );
+		$this->assertSame( 'ja', Wpait_Admin_Settings::code_for_locale( 'ja' ) );
 	}
 
 	public function test_common_locales_are_derived_from_catalog(): void {
@@ -140,5 +153,106 @@ final class AdminSettingsTest extends TestCase {
 		);
 		// 'de' isn't configured, so it falls back to the first configured code.
 		$this->assertSame( 'en', $out['default_language'] );
+	}
+
+	public function test_sanitize_derives_new_language_from_catalog_locale(): void {
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'languages' => array(
+					array(
+						'locale'  => 'es_AR',
+						'code'    => 'malicious',
+						'name'    => 'Wrong',
+						'native'  => 'Wrong native',
+						'flag'    => 'xx',
+						'enabled' => '',
+					),
+				),
+			)
+		);
+
+		$this->assertCount( 1, $out['languages'] );
+		$lang = $out['languages'][0];
+		$this->assertSame( 'es-ar', $lang['code'] );
+		$this->assertSame( 'es_AR', $lang['locale'] );
+		$this->assertSame( 'Spanish / Argentina', $lang['name'] );
+		$this->assertSame( 'Español (Argentina)', $lang['native'] );
+		$this->assertSame( 'ar', $lang['flag'] );
+		$this->assertTrue( $lang['enabled'] );
+	}
+
+	public function test_sanitize_preserves_existing_language_metadata_by_code(): void {
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'languages' => array(
+				array(
+					'code'    => 'es',
+					'locale'  => 'es_AR',
+					'name'    => 'Spanish',
+					'native'  => 'Español (Argentina)',
+					'flag'    => 'ar',
+					'enabled' => true,
+				),
+			),
+		);
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'languages' => array(
+					array(
+						'code'   => 'es',
+						'locale' => 'es_MX',
+						'name'   => 'Wrong',
+						'native' => 'Wrong native',
+						'flag'   => 'mx',
+					),
+				),
+			)
+		);
+
+		$lang = $out['languages'][0];
+		$this->assertSame( 'es', $lang['code'] );
+		$this->assertSame( 'es_AR', $lang['locale'] );
+		$this->assertSame( 'Spanish', $lang['name'] );
+		$this->assertSame( 'Español (Argentina)', $lang['native'] );
+		$this->assertSame( 'ar', $lang['flag'] );
+		$this->assertFalse( $lang['enabled'] );
+	}
+
+	public function test_sanitize_skips_duplicate_catalog_locales(): void {
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'languages' => array(
+					array( 'locale' => 'es_AR' ),
+					array( 'locale' => 'es_AR' ),
+				),
+			)
+		);
+
+		$this->assertSame( array( 'es-ar' ), wp_list_pluck( $out['languages'], 'code' ) );
+	}
+
+	public function test_sanitize_keeps_legacy_custom_language_rows(): void {
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'languages' => array(
+					array(
+						'code'    => 'xx',
+						'locale'  => 'xx_YY',
+						'name'    => 'Custom',
+						'native'  => 'Custom native',
+						'flag'    => 'zz',
+						'enabled' => '1',
+					),
+				),
+			)
+		);
+
+		$lang = $out['languages'][0];
+		$this->assertSame( 'xx', $lang['code'] );
+		$this->assertSame( 'xx_YY', $lang['locale'] );
+		$this->assertSame( 'Custom', $lang['name'] );
+		$this->assertSame( 'Custom native', $lang['native'] );
+		$this->assertSame( 'zz', $lang['flag'] );
+		$this->assertTrue( $lang['enabled'] );
 	}
 }
