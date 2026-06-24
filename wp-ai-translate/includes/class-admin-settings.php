@@ -402,7 +402,8 @@ class Wpait_Admin_Settings {
 		$languages       = array();
 		$invalid_locales = array();
 		$old_by_code     = array();
-		foreach ( $old['languages'] as $old_row ) {
+		$old_languages   = isset( $old['languages'] ) && is_array( $old['languages'] ) ? $old['languages'] : array();
+		foreach ( $old_languages as $old_row ) {
 			if ( ! is_array( $old_row ) ) {
 				continue;
 			}
@@ -426,7 +427,17 @@ class Wpait_Admin_Settings {
 			} else {
 				$entry = '' !== $locale ? self::catalog_entry_for_locale( $locale ) : null;
 				if ( $entry ) {
-					$language = self::language_from_catalog_entry( $entry );
+					// A picked locale derives its code from the locale (e.g. es_ES ->
+					// es-es). If that code already belongs to a configured language,
+					// reuse the stored row (only toggling enabled) rather than letting
+					// the catalog defaults clobber it — this keeps the existing term
+					// and its content intact instead of creating a parallel language.
+					if ( isset( $old_by_code[ $entry['code'] ] ) ) {
+						$language            = $old_by_code[ $entry['code'] ];
+						$language['enabled'] = ! empty( $row['enabled'] );
+					} else {
+						$language = self::language_from_catalog_entry( $entry );
+					}
 				} elseif ( '' !== $code ) {
 					$language = self::normalize_language_row( $row );
 					if ( ! self::is_valid_locale( $language['locale'] ) ) {
@@ -968,7 +979,13 @@ class Wpait_Admin_Settings {
 					var q = search ? search.value.trim().toLowerCase() : '';
 					var shown = 0;
 					panel.querySelectorAll( '.wpait-locale-option' ).forEach( function ( option ) {
-						var match = ! q || option.textContent.toLowerCase().indexOf( q ) !== -1;
+						var haystack = (
+							option.textContent + ' ' +
+							( option.getAttribute( 'data-native' ) || '' ) + ' ' +
+							( option.getAttribute( 'data-code' ) || '' ) + ' ' +
+							( option.getAttribute( 'data-locale' ) || '' )
+						).toLowerCase();
+						var match = ! q || haystack.indexOf( q ) !== -1;
 						option.hidden = option.disabled || ! match;
 						if ( ! option.hidden ) {
 							shown++;
@@ -978,6 +995,22 @@ class Wpait_Admin_Settings {
 					if ( empty ) {
 						empty.hidden = shown > 0;
 					}
+				}
+
+				// Disable "Add language" once every catalog option has been consumed,
+				// and re-enable it when a pending row frees one up again.
+				function updateAddButton() {
+					if ( ! addBtn || ! panel ) { return; }
+					var available = panel.querySelector( '.wpait-locale-option:not([disabled])' );
+					addBtn.disabled = ! available;
+				}
+
+				// Collapse the whole add-language panel (menu + selection), used by
+				// Cancel, Escape, and outside-click so they can't leave it half-open.
+				function closePanel() {
+					if ( panel ) { panel.hidden = true; }
+					closeMenu();
+					resetPicker();
 				}
 
 				function addLanguageRow( data ) {
@@ -1040,11 +1073,7 @@ class Wpait_Admin_Settings {
 				}
 
 				if ( cancelBtn && panel ) {
-					cancelBtn.addEventListener( 'click', function () {
-						panel.hidden = true;
-						closeMenu();
-						resetPicker();
-					} );
+					cancelBtn.addEventListener( 'click', closePanel );
 				}
 
 				if ( toggle ) {
@@ -1079,9 +1108,8 @@ class Wpait_Admin_Settings {
 							option.disabled = true;
 							option.hidden = true;
 						}
-						panel.hidden = true;
-						closeMenu();
-						resetPicker();
+						closePanel();
+						updateAddButton();
 					} );
 				}
 
@@ -1102,19 +1130,20 @@ class Wpait_Admin_Settings {
 							}
 						}
 						filterOptions();
+						updateAddButton();
 						refreshEmptyState();
 					} );
 				}
 
 				document.addEventListener( 'click', function ( e ) {
-					if ( panel && ! panel.contains( e.target ) && e.target !== addBtn ) {
-						closeMenu();
+					if ( panel && ! panel.hidden && ! panel.contains( e.target ) && e.target !== addBtn ) {
+						closePanel();
 					}
 				} );
 
 				document.addEventListener( 'keydown', function ( e ) {
-					if ( 'Escape' === e.key ) {
-						closeMenu();
+					if ( 'Escape' === e.key && panel && ! panel.hidden ) {
+						closePanel();
 					}
 				} );
 

@@ -255,4 +255,38 @@ final class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'zz', $lang['flag'] );
 		$this->assertTrue( $lang['enabled'] );
 	}
+
+	public function test_sanitize_catalog_locale_does_not_clobber_existing_language_by_derived_code(): void {
+		// An existing language stored under the code a picked locale would derive
+		// (es_ES -> 'es-es') must be preserved, not overwritten by catalog defaults,
+		// so re-picking its locale can't fork a second term / orphan its content.
+		Wpait_Test_State::$options['wpait_settings'] = array(
+			'languages' => array(
+				array(
+					'code'    => 'es-es',
+					'locale'  => 'es_AR',
+					'name'    => 'Custom Spanish',
+					'native'  => 'Español personalizado',
+					'flag'    => 'ar',
+					'enabled' => true,
+				),
+			),
+		);
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'languages' => array(
+					array( 'locale' => 'es_ES' ),
+				),
+			)
+		);
+
+		$this->assertCount( 1, $out['languages'] );
+		$lang = $out['languages'][0];
+		$this->assertSame( 'es-es', $lang['code'] );
+		$this->assertSame( 'es_AR', $lang['locale'], 'existing locale preserved, not replaced by es_ES' );
+		$this->assertSame( 'Custom Spanish', $lang['name'] );
+		$this->assertSame( 'Español personalizado', $lang['native'] );
+		$this->assertSame( 'ar', $lang['flag'] );
+	}
 }
