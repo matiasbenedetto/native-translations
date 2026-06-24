@@ -1494,6 +1494,14 @@ class Wpait_Admin_List {
 			return esc_html( $original );
 		}
 
-		return '<a href="' . esc_url( $url ) . '">' . esc_html( $original ) . '</a>';
+		$name  = $this->languages->name( $original );
+		$label = sprintf(
+			/* translators: %s: language name. */
+			__( 'Edit the %s original', 'wp-ai-translate' ),
+			'' !== $name ? $name : strtoupper( $original )
+		);
+
+		return '<a href="' . esc_url( $url ) . '" title="' . esc_attr( $label ) . '" aria-label="' . esc_attr( $label ) . '">'
+			. esc_html( $original ) . '</a>';
 	}
 }

@@ -78,6 +78,7 @@ final class AdminListTest extends TestCase {
 		$this->assertStringContainsString( '<strong>es</strong>', $html );
 		$this->assertStringContainsString( 'translated from', $html );
 		$this->assertStringContainsString( 'href="https://example.test/wp-admin/post.php?post=10&#038;action=edit"', $html );
+		$this->assertStringContainsString( 'aria-label="Edit the English original"', $html );
 		$this->assertStringContainsString( '>en</a>', $html );
 		$this->assertStringNotContainsString( 'Spanish', $html );
 	}
@@ -106,6 +107,7 @@ final class AdminListTest extends TestCase {
 		$this->assertStringContainsString( '<strong>es</strong>', $html );
 		$this->assertStringContainsString( 'translated from', $html );
 		$this->assertStringContainsString( 'href="https://example.test/wp-admin/term.php?tag_ID=20"', $html );
+		$this->assertStringContainsString( 'aria-label="Edit the English original"', $html );
 		$this->assertStringContainsString( '>en</a>', $html );
 		$this->assertStringNotContainsString( 'Spanish', $html );
 	}
