@@ -24,9 +24,10 @@ final class AdminListTest extends TestCase {
 		Wpait_Test_State::reset();
 		Wpait_Languages::flush_index();
 		Wpait_Test_State::$options['wpait_settings'] = array(
-			'languages' => array(
-				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
-				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
+			'default_language' => 'en',
+			'languages'        => array(
+				array( 'code' => 'en', 'name' => 'English', 'flag' => 'us', 'enabled' => true ),
+				array( 'code' => 'es', 'name' => 'Spanish', 'flag' => 'es', 'enabled' => true ),
 			),
 		);
 		$this->list = new Wpait_Admin_List( new Wpait_Translation_Store(), new Wpait_Languages() );
@@ -59,6 +60,56 @@ final class AdminListTest extends TestCase {
 		if ( '' !== $group ) {
 			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
 		}
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * Language column rendering (#89)
+	 * ------------------------------------------------------------------ */
+
+	public function test_post_language_column_shows_flagcdn_code_and_linked_original_for_translation(): void {
+		$this->seed_post( 10, 'en', 'g1' );
+		$this->seed_post( 11, 'es', 'g1' );
+
+		ob_start();
+		$this->list->render_column( Wpait_Admin_List::COLUMN, 11 );
+		$html = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
+		$this->assertStringContainsString( '<strong>es</strong>', $html );
+		$this->assertStringContainsString( 'translated from', $html );
+		$this->assertStringContainsString( 'href="https://example.test/wp-admin/post.php?post=10&#038;action=edit"', $html );
+		$this->assertStringContainsString( 'aria-label="Edit the English original"', $html );
+		$this->assertStringContainsString( '>en</a>', $html );
+		$this->assertStringNotContainsString( 'Spanish', $html );
+	}
+
+	public function test_post_language_column_original_only_shows_flag_and_code(): void {
+		$this->seed_post( 10, 'en', 'g1' );
+		$this->seed_post( 11, 'es', 'g1' );
+
+		ob_start();
+		$this->list->render_column( Wpait_Admin_List::COLUMN, 10 );
+		$html = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'https://flagcdn.com/us.svg', $html );
+		$this->assertStringContainsString( '<strong>en</strong>', $html );
+		$this->assertStringNotContainsString( 'translated from', $html );
+		$this->assertStringNotContainsString( 'post=11', $html );
+	}
+
+	public function test_term_language_column_shows_flagcdn_code_and_linked_original_for_translation(): void {
+		$this->seed_term( 20, 'en', 'tg1' );
+		$this->seed_term( 21, 'es', 'tg1' );
+
+		$html = $this->list->render_term_column( '', Wpait_Admin_List::COLUMN, 21 );
+
+		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
+		$this->assertStringContainsString( '<strong>es</strong>', $html );
+		$this->assertStringContainsString( 'translated from', $html );
+		$this->assertStringContainsString( 'href="https://example.test/wp-admin/term.php?tag_ID=20"', $html );
+		$this->assertStringContainsString( 'aria-label="Edit the English original"', $html );
+		$this->assertStringContainsString( '>en</a>', $html );
+		$this->assertStringNotContainsString( 'Spanish', $html );
 	}
 
 	/* ------------------------------------------------------------------ *

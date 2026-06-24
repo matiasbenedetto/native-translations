@@ -338,6 +338,14 @@ function __( $text, $domain = 'default' ) {
 	return $text;
 }
 
+function esc_html__( $text, $domain = 'default' ) {
+	return esc_html( __( $text, $domain ) );
+}
+
+function esc_html_e( $text, $domain = 'default' ) {
+	echo esc_html__( $text, $domain );
+}
+
 function wp_supports_ai(): bool {
 	return Wpait_Test_State::$supports_ai;
 }
