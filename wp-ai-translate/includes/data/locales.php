@@ -45,6 +45,7 @@ return array(
 	array( 'en_NZ', 'English (New Zealand)', 'English (New Zealand)', 'nz' ),
 	array( 'en_ZA', 'English (South Africa)', 'English (South Africa)', 'za' ),
 	array( 'en_GB', 'English (UK)', 'English (UK)', 'gb' ),
+	array( 'en_US', 'English (United States)', 'English (United States)', 'us' ),
 	array( 'eo', 'Esperanto', 'Esperanto', '' ),
 	array( 'et', 'Estonian', 'Eesti', '' ),
 	array( 'fi', 'Finnish', 'Suomi', '' ),

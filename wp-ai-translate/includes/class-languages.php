@@ -139,15 +139,16 @@ class Wpait_Languages {
 	}
 
 	/**
-	 * Whether a stored flag value is an ISO 3166-1 alpha-2 region code (e.g. "es"),
-	 * as opposed to a legacy free-text emoji. Region codes are rendered as flag
-	 * images via flagcdn (#80); anything else is treated as literal text.
+	 * Whether a stored flag value is a flagcdn region code: an ISO 3166-1 alpha-2
+	 * code (e.g. "es") or a subdivision code (e.g. "gb-wls", "gb-sct"), as opposed
+	 * to a legacy free-text emoji. Region codes are rendered as flag images via
+	 * flagcdn (#80); anything else is treated as literal text.
 	 *
 	 * @param string $flag Stored flag value.
 	 * @return bool
 	 */
 	public static function is_region_code( string $flag ): bool {
-		return 1 === preg_match( '/^[a-z]{2}$/', $flag );
+		return 1 === preg_match( '/^[a-z]{2}(-[a-z]{3})?$/', $flag );
 	}
 
 	/**

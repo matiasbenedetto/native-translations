@@ -17,6 +17,74 @@ class Wpait_Admin_Settings {
 	const PAGE_SLUG = 'wp-ai-translate';
 
 	/**
+	 * Fallback flag region for language-only locales (#88). WordPress ships many
+	 * locales as a bare language subtag (e.g. 'el', 'ja') with no region, so the
+	 * bundled catalog leaves their flag blank. This map gives each such language
+	 * the flag of its conventional home country/region so the picker shows a flag
+	 * wherever one can be matched. Keyed by language subtag, value is a flagcdn
+	 * region code (two-letter, or a 'gb-xxx' subdivision). Languages with no single
+	 * home country (Arabic, Esperanto, Kurdish, Tibetan, ...) are intentionally
+	 * omitted and stay flagless. Region-bearing locales (de_DE, fr_FR) already carry
+	 * a flag in the catalog and never consult this map.
+	 *
+	 * @var array<string,string>
+	 */
+	const LANGUAGE_FLAG_FALLBACK = array(
+		'af'  => 'za', // Afrikaans → South Africa.
+		'sq'  => 'al', // Albanian → Albania.
+		'am'  => 'et', // Amharic → Ethiopia.
+		'arg' => 'es', // Aragonese → Spain.
+		'hy'  => 'am', // Armenian → Armenia.
+		'as'  => 'in', // Assamese → India.
+		'az'  => 'az', // Azerbaijani → Azerbaijan.
+		'eu'  => 'es', // Basque → Spain.
+		'bel' => 'by', // Belarusian → Belarus.
+		'ca'  => 'es', // Catalan → Spain.
+		'ceb' => 'ph', // Cebuano → Philippines.
+		'hr'  => 'hr', // Croatian → Croatia.
+		'dzo' => 'bt', // Dzongkha → Bhutan.
+		'et'  => 'ee', // Estonian → Estonia.
+		'fi'  => 'fi', // Finnish → Finland.
+		'fy'  => 'nl', // Frisian → Netherlands.
+		'fur' => 'it', // Friulian → Italy.
+		'el'  => 'gr', // Greek → Greece.
+		'gu'  => 'in', // Gujarati → India.
+		'haz' => 'af', // Hazaragi → Afghanistan.
+		'ja'  => 'jp', // Japanese → Japan.
+		'kab' => 'dz', // Kabyle → Algeria.
+		'kn'  => 'in', // Kannada → India.
+		'kk'  => 'kz', // Kazakh → Kazakhstan.
+		'km'  => 'kh', // Khmer → Cambodia.
+		'kir' => 'kg', // Kyrgyz → Kyrgyzstan.
+		'lo'  => 'la', // Lao → Laos.
+		'lv'  => 'lv', // Latvian → Latvia.
+		'dsb' => 'de', // Lower Sorbian → Germany.
+		'mr'  => 'in', // Marathi → India.
+		'mn'  => 'mn', // Mongolian → Mongolia.
+		'ary' => 'ma', // Moroccan Arabic → Morocco.
+		'oci' => 'fr', // Occitan → France.
+		'ps'  => 'af', // Pashto → Afghanistan.
+		'rhg' => 'mm', // Rohingya → Myanmar.
+		'sah' => 'ru', // Sakha → Russia.
+		'skr' => 'pk', // Saraiki → Pakistan.
+		'gd'  => 'gb-sct', // Scottish Gaelic → Scotland.
+		'szl' => 'pl', // Silesian → Poland.
+		'snd' => 'pk', // Sindhi → Pakistan.
+		'azb' => 'ir', // South Azerbaijani → Iran.
+		'sw'  => 'tz', // Swahili → Tanzania.
+		'tl'  => 'ph', // Tagalog → Philippines.
+		'tah' => 'pf', // Tahitian → French Polynesia.
+		'te'  => 'in', // Telugu → India.
+		'th'  => 'th', // Thai → Thailand.
+		'uk'  => 'ua', // Ukrainian → Ukraine.
+		'hsb' => 'de', // Upper Sorbian → Germany.
+		'ur'  => 'pk', // Urdu → Pakistan.
+		'vi'  => 'vn', // Vietnamese → Vietnam.
+		'cy'  => 'gb-wls', // Welsh → Wales.
+		'yor' => 'ng', // Yoruba → Nigeria.
+	);
+
+	/**
 	 * Hook suffix returned by add_submenu_page for the Settings page, used to
 	 * gate asset enqueuing without hardcoding the (fragile) hook string.
 	 *
@@ -132,7 +200,8 @@ class Wpait_Admin_Settings {
 	 * bundled data rows and for entries injected via the `wpait_locale_catalog`
 	 * filter) and guarantees the shape the UI relies on: a derived code, a non-empty
 	 * display name, a native label (falling back to the name), and a flag that is
-	 * either a two-letter region code or blank.
+	 * either a flagcdn region code (two-letter, or a "gb-xxx" subdivision) or blank.
+	 * A blank flag is back-filled from LANGUAGE_FLAG_FALLBACK by language subtag.
 	 *
 	 * @param string $locale WordPress locale.
 	 * @param string $name   Display name (e.g. "Spanish (Argentina)").
@@ -143,8 +212,14 @@ class Wpait_Admin_Settings {
 	private static function locale_catalog_entry( string $locale, string $name, string $native, string $flag ): array {
 		$name = '' !== trim( $name ) ? $name : $locale;
 		$flag = strtolower( $flag );
-		if ( 1 !== preg_match( '/^[a-z]{2}$/', $flag ) ) {
+		if ( 1 !== preg_match( '/^[a-z]{2}(-[a-z]{3})?$/', $flag ) ) {
 			$flag = '';
+		}
+		if ( '' === $flag ) {
+			// Language-only locale with no region flag: fall back to the conventional
+			// home country/region for that language so the picker shows a flag (#88).
+			$language = strtolower( strtok( $locale, '_-' ) );
+			$flag     = self::LANGUAGE_FLAG_FALLBACK[ $language ] ?? '';
 		}
 		return array(
 			'locale' => $locale,
