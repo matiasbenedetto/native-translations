@@ -9,407 +9,409 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-06-24T14:00:23+00:00\n"
+"POT-Creation-Date: 2026-06-25T14:17:17+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-ai-translate\n"
 
-#: src/editor-panel/index.js:28
+#: editor-panel/index.js:28
 msgid "Published"
 msgstr ""
 
-#: src/editor-panel/index.js:29
+#: editor-panel/index.js:29
 msgid "Draft"
 msgstr ""
 
-#: src/editor-panel/index.js:30
+#: editor-panel/index.js:30
 msgid "Pending"
 msgstr ""
 
-#: src/editor-panel/index.js:31
+#: editor-panel/index.js:31
 msgid "Scheduled"
 msgstr ""
 
-#: src/editor-panel/index.js:32
+#: editor-panel/index.js:32
 msgid "Private"
 msgstr ""
 
-#: src/editor-panel/index.js:33
+#: editor-panel/index.js:33
 msgid "Trash"
 msgstr ""
 
-#: src/editor-panel/index.js:64
+#: editor-panel/index.js:64
 #: assets/js/term-panel.js:69
 msgid "Could not load translations."
 msgstr ""
 
-#: src/editor-panel/index.js:88
+#: editor-panel/index.js:88
 #: assets/js/term-panel.js:94
 msgid "Request failed."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:102
+#: editor-panel/index.js:102
 #, js-format
 msgid "%s translation created as a draft."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:108
+#: editor-panel/index.js:108
 #: assets/js/term-panel.js:196
 #, js-format
 msgid "%s translation regenerated."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:115
+#: editor-panel/index.js:115
 #, js-format
 msgid "%s translation unlinked from this group."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:122
+#: editor-panel/index.js:122
 #, js-format
 msgid "%s translation moved to Trash."
 msgstr ""
 
-#: src/editor-panel/index.js:137
+#: editor-panel/index.js:137
 #: assets/js/term-panel.js:137
 msgid "— Not set —"
 msgstr ""
 
-#: src/editor-panel/index.js:143
+#: editor-panel/index.js:143
 #: includes/class-editor.php:203
 msgid "Translations"
 msgstr ""
 
-#: src/editor-panel/index.js:158
+#: editor-panel/index.js:158
 #: assets/js/term-panel.js:117
 msgid "No AI provider is configured, so new translations cannot be generated."
 msgstr ""
 
-#: src/editor-panel/index.js:164
+#: editor-panel/index.js:164
 msgid "Save this content before generating translations."
 msgstr ""
 
-#: src/editor-panel/index.js:171
+#: editor-panel/index.js:171
 msgid "Language of this content"
 msgstr ""
 
-#: src/editor-panel/index.js:180
+#: editor-panel/index.js:180
 msgid "This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it."
 msgstr ""
 
-#: src/editor-panel/index.js:190
+#: editor-panel/index.js:190
 msgid "Set the language of this content above to generate translations."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:213
+#: editor-panel/index.js:213
 #, js-format
 msgid "This overwrites the current %s translation. A revision is saved first so you can restore it. Continue?"
 msgstr ""
 
-#: src/editor-panel/index.js:218
+#: editor-panel/index.js:218
 #: assets/js/term-panel.js:192
 msgid "Yes, regenerate"
 msgstr ""
 
-#: src/editor-panel/index.js:221
-#: src/editor-panel/index.js:237
+#: editor-panel/index.js:221
+#: editor-panel/index.js:237
+#: includes/class-admin-settings.php:726
 #: assets/js/term-panel.js:198
 #: assets/js/term-panel.js:215
 msgid "Cancel"
 msgstr ""
 
 #. translators: %s: language name.
-#: src/editor-panel/index.js:229
+#: editor-panel/index.js:229
 #, js-format
 msgid "Move the %s translation to Trash and unlink it from this group?"
 msgstr ""
 
-#: src/editor-panel/index.js:234
+#: editor-panel/index.js:234
 msgid "Yes, trash it"
 msgstr ""
 
-#: src/editor-panel/index.js:243
-#: src/overview/index.js:519
+#: editor-panel/index.js:243
+#: overview/index.js:519
 #: assets/js/term-panel.js:225
 msgid "Edit"
 msgstr ""
 
-#: src/editor-panel/index.js:246
-#: src/overview/index.js:530
+#: editor-panel/index.js:246
+#: overview/index.js:530
 #: assets/js/term-panel.js:229
 msgid "View"
 msgstr ""
 
-#: src/editor-panel/index.js:249
+#: editor-panel/index.js:249
 #: assets/js/term-panel.js:235
 msgid "Recreate"
 msgstr ""
 
-#: src/editor-panel/index.js:252
+#: editor-panel/index.js:252
 #: assets/js/term-panel.js:243
 msgid "Unlink"
 msgstr ""
 
-#: src/editor-panel/index.js:255
+#: editor-panel/index.js:255
 #: assets/js/term-panel.js:250
 msgid "Delete"
 msgstr ""
 
-#: src/editor-panel/index.js:262
+#: editor-panel/index.js:262
 #: assets/js/term-panel.js:260
 msgid "Translate"
 msgstr ""
 
-#: src/editor-panel/index.js:266
+#: editor-panel/index.js:266
 msgid "Save this content before translating."
 msgstr ""
 
-#: src/language-switcher/index.js:19
-#: src/post-links/index.js:19
+#: language-switcher/index.js:19
+#: post-links/index.js:19
 msgid "Flag and name"
 msgstr ""
 
-#: src/language-switcher/index.js:20
-#: src/post-links/index.js:20
+#: language-switcher/index.js:20
+#: post-links/index.js:20
 msgid "Flag only"
 msgstr ""
 
-#: src/language-switcher/index.js:21
-#: src/post-links/index.js:21
+#: language-switcher/index.js:21
+#: post-links/index.js:21
 msgid "Name only"
 msgstr ""
 
-#: src/language-switcher/index.js:34
-#: src/post-links/index.js:34
+#: language-switcher/index.js:34
+#: post-links/index.js:34
 msgid "Display"
 msgstr ""
 
-#: src/language-switcher/index.js:36
-#: src/post-links/index.js:36
+#: language-switcher/index.js:36
+#: post-links/index.js:36
 msgid "Show"
 msgstr ""
 
-#: src/language-switcher/index.js:43
+#: language-switcher/index.js:43
 msgid "Mark the current language"
 msgstr ""
 
-#: src/overview/index.js:128
+#: overview/index.js:128
 msgid "Could not load the overview."
 msgstr ""
 
-#: src/overview/index.js:210
+#: overview/index.js:210
 msgid "Job re-queued."
 msgstr ""
 
-#: src/overview/index.js:215
+#: overview/index.js:215
 msgid "Could not re-run the job."
 msgstr ""
 
-#: src/overview/index.js:288
+#: overview/index.js:288
 msgid "Title"
 msgstr ""
 
-#: src/overview/index.js:302
+#: overview/index.js:302
 msgid "Type"
 msgstr ""
 
-#: src/overview/index.js:306
+#: overview/index.js:306
 #: includes/class-admin-list.php:1265
 msgid "Post"
 msgstr ""
 
-#: src/overview/index.js:307
+#: overview/index.js:307
 #: includes/class-admin-list.php:1262
 msgid "Page"
 msgstr ""
 
-#: src/overview/index.js:308
+#: overview/index.js:308
 #: includes/class-admin-list.php:1252
 msgid "Category"
 msgstr ""
 
-#: src/overview/index.js:309
+#: overview/index.js:309
 #: includes/class-admin-list.php:1255
 msgid "Tag"
 msgstr ""
 
-#: src/overview/index.js:319
+#: overview/index.js:319
 #: includes/class-admin-list.php:156
 #: includes/class-admin-list.php:161
 #: includes/class-admin-list.php:287
 #: includes/class-admin-list.php:292
-#: includes/class-admin-settings.php:847
+#: includes/class-admin-settings.php:637
+#: includes/class-admin-settings.php:1201
 #: includes/class-languages.php:267
 msgid "Language"
 msgstr ""
 
-#: src/overview/index.js:328
+#: overview/index.js:328
 msgid "Missing"
 msgstr ""
 
 #. translators: 1: count, 2: language name.
-#: src/overview/index.js:361
+#: overview/index.js:361
 #, js-format
 msgid "%1$d translation(s) to %2$s queued."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/overview/index.js:372
+#: overview/index.js:372
 #, js-format
 msgid "Nothing new to queue for %s."
 msgstr ""
 
-#: src/overview/index.js:379
+#: overview/index.js:379
 msgid "Could not queue the translations."
 msgstr ""
 
 #. translators: 1: count, 2: language name.
-#: src/overview/index.js:407
+#: overview/index.js:407
 #, js-format
 msgid "%1$d item(s) set to %2$s."
 msgstr ""
 
-#: src/overview/index.js:415
+#: overview/index.js:415
 msgid "Could not set the language."
 msgstr ""
 
 #. translators: %d: count.
-#: src/overview/index.js:441
+#: overview/index.js:441
 #, js-format
 msgid "%d detection job(s) queued."
 msgstr ""
 
-#: src/overview/index.js:447
+#: overview/index.js:447
 msgid "Nothing new to detect."
 msgstr ""
 
-#: src/overview/index.js:451
+#: overview/index.js:451
 msgid "Could not queue detection."
 msgstr ""
 
 #. translators: %s: language name.
-#: src/overview/index.js:467
+#: overview/index.js:467
 #, js-format
 msgid "Set language: %s"
 msgstr ""
 
-#: src/overview/index.js:484
+#: overview/index.js:484
 msgid "Detect language (AI)"
 msgstr ""
 
 #. translators: %s: language name.
-#: src/overview/index.js:502
+#: overview/index.js:502
 #, js-format
 msgid "Translate to %s"
 msgstr ""
 
-#: src/overview/index.js:557
+#: overview/index.js:557
 msgid "Hide from list"
 msgstr ""
 
-#: src/overview/index.js:565
+#: overview/index.js:565
 msgid "Unhide"
 msgstr ""
 
-#: src/overview/index.js:583
-#: src/overview/index.js:587
+#: overview/index.js:583
+#: overview/index.js:587
 msgid "AI translation is unavailable, so Translate actions are disabled."
 msgstr ""
 
-#: src/overview/index.js:584
+#: overview/index.js:584
 msgid "Check the AI provider status."
 msgstr ""
 
 #. translators: %d: number of translations being processed.
-#: src/overview/index.js:597
+#: overview/index.js:597
 #, js-format
 msgid "%d translation(s) processing in the background…"
 msgstr ""
 
-#: src/overview/index.js:607
+#: overview/index.js:607
 msgid "Hide queue"
 msgstr ""
 
-#: src/overview/index.js:608
+#: overview/index.js:608
 msgid "Show queue"
 msgstr ""
 
-#: src/overview/index.js:613
+#: overview/index.js:613
 msgid "No queued jobs."
 msgstr ""
 
-#: src/overview/index.js:622
+#: overview/index.js:622
 msgid "detect language"
 msgstr ""
 
-#: src/overview/index.js:627
+#: overview/index.js:627
 msgid "(processing…)"
 msgstr ""
 
-#: src/overview/index.js:628
+#: overview/index.js:628
 msgid "(queued)"
 msgstr ""
 
 #. translators: %d: number of failed background jobs.
-#: src/overview/index.js:642
+#: overview/index.js:642
 #, js-format
 msgid "%d background job(s) failed."
 msgstr ""
 
-#: src/overview/index.js:652
+#: overview/index.js:652
 msgid "Hide details"
 msgstr ""
 
-#: src/overview/index.js:653
+#: overview/index.js:653
 msgid "Show details"
 msgstr ""
 
-#: src/overview/index.js:658
+#: overview/index.js:658
 msgid "No failed jobs found."
 msgstr ""
 
-#: src/overview/index.js:675
+#: overview/index.js:675
 msgid "Re-running…"
 msgstr ""
 
-#: src/overview/index.js:676
+#: overview/index.js:676
 msgid "Re-run"
 msgstr ""
 
 #. translators: %d: number of items missing translations.
-#: src/overview/index.js:704
+#: overview/index.js:704
 #, js-format
 msgid "Missing translations (%d)"
 msgstr ""
 
 #. translators: %d: number of items with no language assigned.
-#: src/overview/index.js:716
+#: overview/index.js:716
 #, js-format
 msgid "Unmarked (%d)"
 msgstr ""
 
-#: src/overview/index.js:742
+#: overview/index.js:742
 msgid "Search by title"
 msgstr ""
 
-#: src/overview/index.js:747
+#: overview/index.js:747
 msgid "Nothing to show here."
 msgstr ""
 
-#: src/post-links/index.js:43
+#: post-links/index.js:43
 msgid "Include the current language"
 msgstr ""
 
 #. Plugin Name of the plugin
 #: wp-ai-translate.php
-#: includes/class-admin-settings.php:234
-#: includes/class-admin-settings.php:235
-#: includes/class-admin-settings.php:245
-#: includes/class-admin-settings.php:439
+#: includes/class-admin-settings.php:312
+#: includes/class-admin-settings.php:313
+#: includes/class-admin-settings.php:323
+#: includes/class-admin-settings.php:589
 msgid "AI Translate"
 msgstr ""
 
@@ -497,428 +499,294 @@ msgstr ""
 msgid "This is a taxonomy term (a category or tag) used for navigation. Keep the translation short and label-like."
 msgstr ""
 
-#: includes/class-admin-settings.php:143
-msgid "English"
-msgstr ""
-
-#: includes/class-admin-settings.php:144
-msgid "Spanish"
-msgstr ""
-
-#: includes/class-admin-settings.php:145
-msgid "French"
-msgstr ""
-
-#: includes/class-admin-settings.php:146
-msgid "German"
-msgstr ""
-
-#: includes/class-admin-settings.php:147
-msgid "Portuguese"
-msgstr ""
-
-#: includes/class-admin-settings.php:148
-msgid "Italian"
-msgstr ""
-
-#: includes/class-admin-settings.php:149
-msgid "Dutch"
-msgstr ""
-
-#: includes/class-admin-settings.php:150
-msgid "Polish"
-msgstr ""
-
-#: includes/class-admin-settings.php:151
-msgid "Russian"
-msgstr ""
-
-#: includes/class-admin-settings.php:152
-msgid "Ukrainian"
-msgstr ""
-
-#: includes/class-admin-settings.php:153
-msgid "Swedish"
-msgstr ""
-
-#: includes/class-admin-settings.php:154
-msgid "Danish"
-msgstr ""
-
-#: includes/class-admin-settings.php:155
-msgid "Norwegian"
-msgstr ""
-
-#: includes/class-admin-settings.php:156
-msgid "Finnish"
-msgstr ""
-
-#: includes/class-admin-settings.php:157
-msgid "Czech"
-msgstr ""
-
-#: includes/class-admin-settings.php:158
-msgid "Greek"
-msgstr ""
-
-#: includes/class-admin-settings.php:159
-msgid "Turkish"
-msgstr ""
-
-#: includes/class-admin-settings.php:160
-msgid "Arabic"
-msgstr ""
-
-#: includes/class-admin-settings.php:161
-msgid "Hebrew"
-msgstr ""
-
-#: includes/class-admin-settings.php:162
-msgid "Hindi"
-msgstr ""
-
-#: includes/class-admin-settings.php:163
-msgid "Indonesian"
-msgstr ""
-
-#: includes/class-admin-settings.php:164
-msgid "Japanese"
-msgstr ""
-
-#: includes/class-admin-settings.php:165
-msgid "Korean"
-msgstr ""
-
-#: includes/class-admin-settings.php:166
-msgid "Thai"
-msgstr ""
-
-#: includes/class-admin-settings.php:167
-msgid "Vietnamese"
-msgstr ""
-
-#: includes/class-admin-settings.php:168
-msgid "Chinese"
-msgstr ""
-
-#: includes/class-admin-settings.php:246
+#: includes/class-admin-settings.php:324
 msgid "Settings"
 msgstr ""
 
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:326
+#: includes/class-admin-settings.php:463
 #, php-format
 msgid "These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them."
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:382
+#: includes/class-admin-settings.php:519
 #, php-format
 msgid "Added languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:384
+#: includes/class-admin-settings.php:521
 #, php-format
 msgid "Updated languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:386
+#: includes/class-admin-settings.php:523
 #, php-format
 msgid "Disabled languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated list of language names.
-#: includes/class-admin-settings.php:388
+#: includes/class-admin-settings.php:525
 #, php-format
 msgid "Removed languages: %s"
 msgstr ""
 
 #. translators: %s: comma-separated language codes.
-#: includes/class-admin-settings.php:407
+#: includes/class-admin-settings.php:544
 #, php-format
 msgid "These languages still have content and were kept (disabled) instead of being deleted: %s. Reassign or delete their content first to remove them."
 msgstr ""
 
-#: includes/class-admin-settings.php:449
+#: includes/class-admin-settings.php:599
 msgid "Available"
 msgstr ""
 
-#: includes/class-admin-settings.php:450
+#: includes/class-admin-settings.php:600
 msgid "An AI provider with a text-generation model is available. Translations can be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:453
+#: includes/class-admin-settings.php:603
 msgid "No usable model"
 msgstr ""
 
-#: includes/class-admin-settings.php:454
+#: includes/class-admin-settings.php:604
 msgid "An AI provider is present, but no text-generation model is available, so translations will fail. Configure a text-generation model for this site’s AI provider."
 msgstr ""
 
-#: includes/class-admin-settings.php:457
+#: includes/class-admin-settings.php:607
 msgid "Not configured"
 msgstr ""
 
-#: includes/class-admin-settings.php:458
+#: includes/class-admin-settings.php:608
 msgid "No AI provider is configured for this site, so translations cannot be generated."
 msgstr ""
 
-#: includes/class-admin-settings.php:462
+#: includes/class-admin-settings.php:612
 msgid "AI provider"
 msgstr ""
 
-#: includes/class-admin-settings.php:468
+#: includes/class-admin-settings.php:618
 msgid "Test connection"
 msgstr ""
 
-#: includes/class-admin-settings.php:472
+#: includes/class-admin-settings.php:622
 msgid "Choose the model below. AI providers themselves are configured for the site (WordPress 7.0 AI), not in this plugin."
 msgstr ""
 
-#: includes/class-admin-settings.php:480
+#: includes/class-admin-settings.php:630
 msgid "Languages"
 msgstr ""
 
-#: includes/class-admin-settings.php:482
-msgid "A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead."
+#: includes/class-admin-settings.php:632
+msgid "Add a language by choosing its locale. The plugin sets the code, display name, native name, and flag automatically. Languages with content cannot be deleted — disable them instead."
 msgstr ""
 
-#: includes/class-admin-settings.php:485
-msgid "Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: a two-letter country code (e.g. fr) shown as a flag icon beside the name — leave blank to show the name only."
-msgstr ""
-
-#: includes/class-admin-settings.php:486
-msgid "Tip: set the Code of a new language to auto-fill the other fields from a built-in catalog of common languages — you can still edit any value."
-msgstr ""
-
-#: includes/class-admin-settings.php:501
-msgid "Code"
-msgstr ""
-
-#: includes/class-admin-settings.php:502
-#: includes/class-admin-settings.php:848
+#: includes/class-admin-settings.php:638
+#: includes/class-admin-settings.php:698
+#: includes/class-admin-settings.php:1202
 msgid "Locale"
 msgstr ""
 
-#: includes/class-admin-settings.php:503
-msgid "Name"
-msgstr ""
-
-#: includes/class-admin-settings.php:504
-msgid "Native name"
-msgstr ""
-
-#: includes/class-admin-settings.php:505
-msgid "Flag"
-msgstr ""
-
-#: includes/class-admin-settings.php:506
+#: includes/class-admin-settings.php:639
+#: includes/class-admin-settings.php:671
+#: includes/class-admin-settings.php:869
 msgid "Enabled"
 msgstr ""
 
-#: includes/class-admin-settings.php:507
-#: includes/class-admin-settings.php:850
+#: includes/class-admin-settings.php:640
+#: includes/class-admin-settings.php:1204
 msgid "Actions"
 msgstr ""
 
-#: includes/class-admin-settings.php:524
-msgid "In use — code locked"
-msgstr ""
-
-#: includes/class-admin-settings.php:527
-#: includes/class-admin-settings.php:562
-msgid "WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region)."
-msgstr ""
-
-#: includes/class-admin-settings.php:533
-#: includes/class-admin-settings.php:568
-msgid "Two-letter country code (ISO 3166-1, e.g. fr) shown as a flag icon. Leave blank for no flag."
-msgstr ""
-
-#: includes/class-admin-settings.php:539
+#: includes/class-admin-settings.php:676
 msgid "This language has content and cannot be removed. Disable it instead, or reassign/delete its content first."
 msgstr ""
 
-#: includes/class-admin-settings.php:539
+#: includes/class-admin-settings.php:676
 msgid "In use"
 msgstr ""
 
-#. translators: %s: language code.
-#: includes/class-admin-settings.php:541
+#. translators: %s: language name.
+#: includes/class-admin-settings.php:678
 #, php-format
-msgid "Remove language %s"
+msgid "Remove %s"
 msgstr ""
 
-#. translators: %s: language code.
-#: includes/class-admin-settings.php:541
-#: includes/class-admin-settings.php:572
+#. translators: %s: language name.
+#: includes/class-admin-settings.php:678
+#: includes/class-admin-settings.php:870
 msgid "Remove"
 msgstr ""
 
-#: includes/class-admin-settings.php:547
-msgid "No languages configured yet. Use “Add language” to create one."
+#: includes/class-admin-settings.php:684
+msgid "No languages configured yet. Use “Add language” to choose a locale."
 msgstr ""
 
-#: includes/class-admin-settings.php:554
+#: includes/class-admin-settings.php:691
 msgid "Add language"
 msgstr ""
 
-#: includes/class-admin-settings.php:561
-msgid "e.g. fr"
+#: includes/class-admin-settings.php:695
+msgid "All bundled locales are already configured."
 msgstr ""
 
-#: includes/class-admin-settings.php:562
-msgid "e.g. fr_FR"
+#: includes/class-admin-settings.php:701
+#: includes/class-admin-settings.php:868
+msgid "Select a locale"
 msgstr ""
 
-#: includes/class-admin-settings.php:563
-msgid "e.g. French"
+#: includes/class-admin-settings.php:704
+msgid "Search locales"
 msgstr ""
 
-#: includes/class-admin-settings.php:564
-msgid "e.g. Français"
+#: includes/class-admin-settings.php:705
+msgid "Available locales"
 msgstr ""
 
-#: includes/class-admin-settings.php:572
-msgid "Remove this new language"
+#: includes/class-admin-settings.php:720
+msgid "No matching locales."
 msgstr ""
 
-#: includes/class-admin-settings.php:580
+#: includes/class-admin-settings.php:725
+msgid "Add selected locale"
+msgstr ""
+
+#: includes/class-admin-settings.php:735
 msgid "Default language"
 msgstr ""
 
-#: includes/class-admin-settings.php:581
+#: includes/class-admin-settings.php:736
 msgid "The site’s primary language — used as the source when no other is given."
 msgstr ""
 
-#: includes/class-admin-settings.php:583
+#: includes/class-admin-settings.php:738
 msgid "— Select —"
 msgstr ""
 
-#: includes/class-admin-settings.php:593
+#: includes/class-admin-settings.php:748
 msgid "AI model"
 msgstr ""
 
-#: includes/class-admin-settings.php:607
+#: includes/class-admin-settings.php:762
 msgid "Which model to use for translations. “Automatic” lets the provider choose — pick a specific model if the provider rejects the default (e.g. Anthropic’s “Claude Fable 5 is not available, use Opus 4.8”)."
 msgstr ""
 
-#: includes/class-admin-settings.php:610
+#: includes/class-admin-settings.php:765
 msgid "Automatic (provider default)"
 msgstr ""
 
 #. translators: %s: model id.
-#: includes/class-admin-settings.php:615
+#: includes/class-admin-settings.php:770
 #, php-format
 msgid "%s (currently set)"
 msgstr ""
 
-#: includes/class-admin-settings.php:630
+#: includes/class-admin-settings.php:785
 msgid "If your selected model is unavailable to the account, translation automatically retries once with another advertised model rather than failing — so a translation may be produced by a different model than the one chosen here."
 msgstr ""
 
-#: includes/class-admin-settings.php:633
+#: includes/class-admin-settings.php:788
 msgid "Could not list models from the provider; “Automatic” will be used."
 msgstr ""
 
-#: includes/class-admin-settings.php:635
+#: includes/class-admin-settings.php:790
 msgid "Connect an AI provider (see status above) to choose a model."
 msgstr ""
 
-#: includes/class-admin-settings.php:640
+#: includes/class-admin-settings.php:795
 msgid "Translation instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:642
+#: includes/class-admin-settings.php:797
 msgid "These instructions shape the AI translation. Markup-safety rules are always applied automatically and cannot be overridden. Available placeholders:"
 msgstr ""
 
-#: includes/class-admin-settings.php:647
+#: includes/class-admin-settings.php:802
 msgid "Global"
 msgstr ""
 
-#: includes/class-admin-settings.php:650
-#: includes/class-admin-settings.php:657
-#: includes/class-admin-settings.php:664
+#: includes/class-admin-settings.php:805
+#: includes/class-admin-settings.php:812
+#: includes/class-admin-settings.php:819
 msgid "Reset to default"
 msgstr ""
 
-#: includes/class-admin-settings.php:654
+#: includes/class-admin-settings.php:809
 msgid "Posts &amp; pages"
 msgstr ""
 
-#: includes/class-admin-settings.php:661
+#: includes/class-admin-settings.php:816
 msgid "Categories &amp; tags"
 msgstr ""
 
-#: includes/class-admin-settings.php:670
+#: includes/class-admin-settings.php:825
 msgid "Per-language instructions"
 msgstr ""
 
-#: includes/class-admin-settings.php:676
+#: includes/class-admin-settings.php:831
 msgid "Optional — adds to the global and content-type instructions for this language."
 msgstr ""
 
-#: includes/class-admin-settings.php:794
+#: includes/class-admin-settings.php:1148
 msgid "Testing…"
 msgstr ""
 
-#: includes/class-admin-settings.php:795
+#: includes/class-admin-settings.php:1149
 msgid "Test failed."
 msgstr ""
 
-#: includes/class-admin-settings.php:796
+#: includes/class-admin-settings.php:1150
 msgid "Could not run the test in this browser."
 msgstr ""
 
-#: includes/class-admin-settings.php:840
+#: includes/class-admin-settings.php:1194
 msgid "Language packs"
 msgstr ""
 
-#: includes/class-admin-settings.php:842
+#: includes/class-admin-settings.php:1196
 msgid "WordPress needs a core language pack installed for a language so that dates and theme/core interface strings (e.g. “Previous”, “Next”, “Leave a Reply”) render in that language when a visitor views content in it."
 msgstr ""
 
-#: includes/class-admin-settings.php:849
+#: includes/class-admin-settings.php:1203
 msgid "Status"
 msgstr ""
 
-#: includes/class-admin-settings.php:865
+#: includes/class-admin-settings.php:1219
 msgid "Built-in"
 msgstr ""
 
-#: includes/class-admin-settings.php:867
-#: includes/class-admin-settings.php:901
+#: includes/class-admin-settings.php:1221
+#: includes/class-admin-settings.php:1255
 msgid "Installed"
 msgstr ""
 
-#: includes/class-admin-settings.php:869
+#: includes/class-admin-settings.php:1223
 msgid "Not installed"
 msgstr ""
 
-#: includes/class-admin-settings.php:871
+#: includes/class-admin-settings.php:1225
 msgid "No locale set"
 msgstr ""
 
-#: includes/class-admin-settings.php:877
+#: includes/class-admin-settings.php:1231
 msgid "Install"
 msgstr ""
 
-#: includes/class-admin-settings.php:883
+#: includes/class-admin-settings.php:1237
 msgid "No languages configured yet."
 msgstr ""
 
-#: includes/class-admin-settings.php:900
+#: includes/class-admin-settings.php:1254
 msgid "Installing…"
 msgstr ""
 
-#: includes/class-admin-settings.php:902
+#: includes/class-admin-settings.php:1256
 msgid "Install failed"
 msgstr ""
 
-#: includes/class-admin-settings.php:903
+#: includes/class-admin-settings.php:1257
 msgid "Could not install in this browser."
 msgstr ""
 

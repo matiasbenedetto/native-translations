@@ -24,9 +24,9 @@ global / per-content-type / per-language translation instructions.
 
 ![Settings page](docs/screenshots/settings.png)
 
-- **Languages** — each row is a code (permanent once used), locale, name, native name, and an
-  optional flag emoji. *Add language* appends a row; *Remove* drops an unused one; languages
-  with content are locked ("In use").
+- **Languages** — add a language by choosing a locale such as *Spanish / Argentina (es_AR)*.
+  The plugin sets the code, display name, native name, and flag automatically. *Remove* drops
+  an unused language; languages with content are locked ("In use") and can be disabled instead.
 - **AI provider** — a green/amber/red status badge reflecting whether a usable
   text-generation model is actually available, plus a *Test connection* button that runs a real
   round trip.
@@ -54,11 +54,12 @@ and a saved revision), plus **View / Edit / Unlink / Delete** and success feedba
 ### Admin lists & Overview
 
 A **Language column** and **language / Untranslated filters** on the post, page, category, and
-tag list tables, plus an **Overview** page that lists missing translations (with per-tab counts
-and quick *Translate* actions) and content by language. Default WordPress content (Sample Page,
-Privacy Policy, Uncategorized) is excluded, and any item can be hidden.
+tag list tables. The column uses compact FlagCDN flags and language codes, with translated rows
+linking back to the original item. The **Overview** page lists missing translations (with
+per-tab counts and quick *Translate* actions) and content by language. Default WordPress content
+(Sample Page, Privacy Policy, Uncategorized) is excluded, and any item can be hidden.
 
-![Admin posts list — Language column](docs/screenshots/admin-posts-list.png)
+![Admin posts list — compact FlagCDN Language column](docs/screenshots/admin-posts-list.png)
 
 ![Overview — missing translations](docs/screenshots/overview.png)
 

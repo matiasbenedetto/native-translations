@@ -17,6 +17,74 @@ class Wpait_Admin_Settings {
 	const PAGE_SLUG = 'wp-ai-translate';
 
 	/**
+	 * Fallback flag region for language-only locales (#88). WordPress ships many
+	 * locales as a bare language subtag (e.g. 'el', 'ja') with no region, so the
+	 * bundled catalog leaves their flag blank. This map gives each such language
+	 * the flag of its conventional home country/region so the picker shows a flag
+	 * wherever one can be matched. Keyed by language subtag, value is a flagcdn
+	 * region code (two-letter, or a 'gb-xxx' subdivision). Languages with no single
+	 * home country (Arabic, Esperanto, Kurdish, Tibetan, ...) are intentionally
+	 * omitted and stay flagless. Region-bearing locales (de_DE, fr_FR) already carry
+	 * a flag in the catalog and never consult this map.
+	 *
+	 * @var array<string,string>
+	 */
+	const LANGUAGE_FLAG_FALLBACK = array(
+		'af'  => 'za', // Afrikaans → South Africa.
+		'sq'  => 'al', // Albanian → Albania.
+		'am'  => 'et', // Amharic → Ethiopia.
+		'arg' => 'es', // Aragonese → Spain.
+		'hy'  => 'am', // Armenian → Armenia.
+		'as'  => 'in', // Assamese → India.
+		'az'  => 'az', // Azerbaijani → Azerbaijan.
+		'eu'  => 'es', // Basque → Spain.
+		'bel' => 'by', // Belarusian → Belarus.
+		'ca'  => 'es', // Catalan → Spain.
+		'ceb' => 'ph', // Cebuano → Philippines.
+		'hr'  => 'hr', // Croatian → Croatia.
+		'dzo' => 'bt', // Dzongkha → Bhutan.
+		'et'  => 'ee', // Estonian → Estonia.
+		'fi'  => 'fi', // Finnish → Finland.
+		'fy'  => 'nl', // Frisian → Netherlands.
+		'fur' => 'it', // Friulian → Italy.
+		'el'  => 'gr', // Greek → Greece.
+		'gu'  => 'in', // Gujarati → India.
+		'haz' => 'af', // Hazaragi → Afghanistan.
+		'ja'  => 'jp', // Japanese → Japan.
+		'kab' => 'dz', // Kabyle → Algeria.
+		'kn'  => 'in', // Kannada → India.
+		'kk'  => 'kz', // Kazakh → Kazakhstan.
+		'km'  => 'kh', // Khmer → Cambodia.
+		'kir' => 'kg', // Kyrgyz → Kyrgyzstan.
+		'lo'  => 'la', // Lao → Laos.
+		'lv'  => 'lv', // Latvian → Latvia.
+		'dsb' => 'de', // Lower Sorbian → Germany.
+		'mr'  => 'in', // Marathi → India.
+		'mn'  => 'mn', // Mongolian → Mongolia.
+		'ary' => 'ma', // Moroccan Arabic → Morocco.
+		'oci' => 'fr', // Occitan → France.
+		'ps'  => 'af', // Pashto → Afghanistan.
+		'rhg' => 'mm', // Rohingya → Myanmar.
+		'sah' => 'ru', // Sakha → Russia.
+		'skr' => 'pk', // Saraiki → Pakistan.
+		'gd'  => 'gb-sct', // Scottish Gaelic → Scotland.
+		'szl' => 'pl', // Silesian → Poland.
+		'snd' => 'pk', // Sindhi → Pakistan.
+		'azb' => 'ir', // South Azerbaijani → Iran.
+		'sw'  => 'tz', // Swahili → Tanzania.
+		'tl'  => 'ph', // Tagalog → Philippines.
+		'tah' => 'pf', // Tahitian → French Polynesia.
+		'te'  => 'in', // Telugu → India.
+		'th'  => 'th', // Thai → Thailand.
+		'uk'  => 'ua', // Ukrainian → Ukraine.
+		'hsb' => 'de', // Upper Sorbian → Germany.
+		'ur'  => 'pk', // Urdu → Pakistan.
+		'vi'  => 'vn', // Vietnamese → Vietnam.
+		'cy'  => 'gb-wls', // Welsh → Wales.
+		'yor' => 'ng', // Yoruba → Nigeria.
+	);
+
+	/**
 	 * Hook suffix returned by add_submenu_page for the Settings page, used to
 	 * gate asset enqueuing without hardcoding the (fragile) hook string.
 	 *
@@ -128,65 +196,148 @@ class Wpait_Admin_Settings {
 	}
 
 	/**
-	 * Bundled catalog of language defaults keyed by language code. Picking a code
-	 * in the Languages table auto-fills the remaining fields (locale, name, native
-	 * name, flag) from this table; the user can still override any value (#74).
+	 * Normalizes one locale-catalog entry. Accepts loose input (used both for the
+	 * bundled data rows and for entries injected via the `wpait_locale_catalog`
+	 * filter) and guarantees the shape the UI relies on: a derived code, a non-empty
+	 * display name, a native label (falling back to the name), and a flag that is
+	 * either a flagcdn region code (two-letter, or a "gb-xxx" subdivision) or blank.
+	 * A blank flag is back-filled from LANGUAGE_FLAG_FALLBACK by language subtag.
 	 *
-	 * Each code maps to the language's primary WordPress locale. Additional
-	 * regional variants are offered for the Locale field via common_locales(),
-	 * which is derived from this catalog so the two stay in sync.
-	 *
-	 * @return array<string,array{locale:string,name:string,native:string,flag:string}>
+	 * @param string $locale WordPress locale.
+	 * @param string $name   Display name (e.g. "Spanish (Argentina)").
+	 * @param string $native Native label (e.g. "Español de Argentina").
+	 * @param string $flag   Region subtag for the flag icon, or '' for none.
+	 * @return array{locale:string,code:string,name:string,native:string,flag:string}
 	 */
-	public static function default_catalog(): array {
+	private static function locale_catalog_entry( string $locale, string $name, string $native, string $flag ): array {
+		$name = '' !== trim( $name ) ? $name : $locale;
+		$flag = strtolower( $flag );
+		if ( 1 !== preg_match( '/^[a-z]{2}(-[a-z]{3})?$/', $flag ) ) {
+			$flag = '';
+		}
+		if ( '' === $flag ) {
+			// Language-only locale with no region flag: fall back to the conventional
+			// home country/region for that language so the picker shows a flag (#88).
+			$language = strtolower( strtok( $locale, '_-' ) );
+			$flag     = self::LANGUAGE_FLAG_FALLBACK[ $language ] ?? '';
+		}
 		return array(
-			'en' => array( 'locale' => 'en_US', 'name' => __( 'English', 'wp-ai-translate' ),    'native' => 'English',          'flag' => 'us' ),
-			'es' => array( 'locale' => 'es_ES', 'name' => __( 'Spanish', 'wp-ai-translate' ),    'native' => 'Español',          'flag' => 'es' ),
-			'fr' => array( 'locale' => 'fr_FR', 'name' => __( 'French', 'wp-ai-translate' ),     'native' => 'Français',         'flag' => 'fr' ),
-			'de' => array( 'locale' => 'de_DE', 'name' => __( 'German', 'wp-ai-translate' ),     'native' => 'Deutsch',          'flag' => 'de' ),
-			'pt' => array( 'locale' => 'pt_BR', 'name' => __( 'Portuguese', 'wp-ai-translate' ), 'native' => 'Português',        'flag' => 'br' ),
-			'it' => array( 'locale' => 'it_IT', 'name' => __( 'Italian', 'wp-ai-translate' ),    'native' => 'Italiano',         'flag' => 'it' ),
-			'nl' => array( 'locale' => 'nl_NL', 'name' => __( 'Dutch', 'wp-ai-translate' ),      'native' => 'Nederlands',       'flag' => 'nl' ),
-			'pl' => array( 'locale' => 'pl_PL', 'name' => __( 'Polish', 'wp-ai-translate' ),     'native' => 'Polski',           'flag' => 'pl' ),
-			'ru' => array( 'locale' => 'ru_RU', 'name' => __( 'Russian', 'wp-ai-translate' ),    'native' => 'Русский',          'flag' => 'ru' ),
-			'uk' => array( 'locale' => 'uk',    'name' => __( 'Ukrainian', 'wp-ai-translate' ),  'native' => 'Українська',       'flag' => 'ua' ),
-			'sv' => array( 'locale' => 'sv_SE', 'name' => __( 'Swedish', 'wp-ai-translate' ),    'native' => 'Svenska',          'flag' => 'se' ),
-			'da' => array( 'locale' => 'da_DK', 'name' => __( 'Danish', 'wp-ai-translate' ),     'native' => 'Dansk',            'flag' => 'dk' ),
-			'nb' => array( 'locale' => 'nb_NO', 'name' => __( 'Norwegian', 'wp-ai-translate' ),  'native' => 'Norsk bokmål',     'flag' => 'no' ),
-			'fi' => array( 'locale' => 'fi',    'name' => __( 'Finnish', 'wp-ai-translate' ),    'native' => 'Suomi',            'flag' => 'fi' ),
-			'cs' => array( 'locale' => 'cs_CZ', 'name' => __( 'Czech', 'wp-ai-translate' ),      'native' => 'Čeština',          'flag' => 'cz' ),
-			'el' => array( 'locale' => 'el',    'name' => __( 'Greek', 'wp-ai-translate' ),      'native' => 'Ελληνικά',         'flag' => 'gr' ),
-			'tr' => array( 'locale' => 'tr_TR', 'name' => __( 'Turkish', 'wp-ai-translate' ),    'native' => 'Türkçe',           'flag' => 'tr' ),
-			'ar' => array( 'locale' => 'ar',    'name' => __( 'Arabic', 'wp-ai-translate' ),     'native' => 'العربية',          'flag' => 'sa' ),
-			'he' => array( 'locale' => 'he_IL', 'name' => __( 'Hebrew', 'wp-ai-translate' ),     'native' => 'עברית',            'flag' => 'il' ),
-			'hi' => array( 'locale' => 'hi_IN', 'name' => __( 'Hindi', 'wp-ai-translate' ),      'native' => 'हिन्दी',            'flag' => 'in' ),
-			'id' => array( 'locale' => 'id_ID', 'name' => __( 'Indonesian', 'wp-ai-translate' ), 'native' => 'Bahasa Indonesia', 'flag' => 'id' ),
-			'ja' => array( 'locale' => 'ja',    'name' => __( 'Japanese', 'wp-ai-translate' ),   'native' => '日本語',           'flag' => 'jp' ),
-			'ko' => array( 'locale' => 'ko_KR', 'name' => __( 'Korean', 'wp-ai-translate' ),     'native' => '한국어',           'flag' => 'kr' ),
-			'th' => array( 'locale' => 'th',    'name' => __( 'Thai', 'wp-ai-translate' ),       'native' => 'ไทย',              'flag' => 'th' ),
-			'vi' => array( 'locale' => 'vi',    'name' => __( 'Vietnamese', 'wp-ai-translate' ), 'native' => 'Tiếng Việt',       'flag' => 'vn' ),
-			'zh' => array( 'locale' => 'zh_CN', 'name' => __( 'Chinese', 'wp-ai-translate' ),    'native' => '中文',             'flag' => 'cn' ),
+			'locale' => $locale,
+			'code'   => self::code_for_locale( $locale ),
+			'name'   => $name,
+			'native' => '' !== trim( $native ) ? $native : $name,
+			'flag'   => $flag,
 		);
 	}
 
 	/**
-	 * A representative set of WordPress locales offered as datalist suggestions for
-	 * the Locale field. Suggestions only — any `xx_YY`-format value is still allowed.
+	 * Deterministic language code for newly added catalog locales.
 	 *
-	 * Derived from default_catalog() (one primary locale per language) plus a few
-	 * additional regional variants, so adding a language to the catalog also offers
-	 * its locale here without maintaining a second list.
+	 * @param string $locale WordPress locale.
+	 * @return string Language code.
+	 */
+	public static function code_for_locale( string $locale ): string {
+		return sanitize_key( strtolower( str_replace( '_', '-', $locale ) ) );
+	}
+
+	/**
+	 * Bundled catalog of supported locales. This is the source of truth for the
+	 * Languages settings UI: admins choose a locale and the plugin derives the code,
+	 * label, native name, and flag from this catalog.
+	 *
+	 * The data lives in includes/data/locales.php (the locales WordPress core is
+	 * translated into; not translated through this text domain), extended by the
+	 * `wpait_locale_catalog` filter.
+	 *
+	 * @return array<string,array{locale:string,code:string,name:string,native:string,flag:string}>
+	 */
+	public static function locale_catalog(): array {
+		$rows  = require __DIR__ . '/data/locales.php';
+		$built = array();
+		foreach ( $rows as $row ) {
+			// Row shape: [ locale, name, native, flag ].
+			$entry                     = self::locale_catalog_entry( $row[0], $row[1], $row[2], $row[3] );
+			$built[ $entry['locale'] ] = $entry;
+		}
+
+		/**
+		 * Filters the catalog of locales offered in the Languages picker.
+		 *
+		 * Extenders can add locales WordPress doesn't ship (or override a bundled
+		 * one) by returning extra entries keyed by WordPress locale. Each entry is
+		 * re-normalized afterwards, so a callback only needs to supply the labels:
+		 *
+		 *     add_filter( 'wpait_locale_catalog', function ( $catalog ) {
+		 *         $catalog['gl_ES'] = array(
+		 *             'name'   => 'Galician',
+		 *             'native' => 'Galego',
+		 *             'flag'   => 'es', // optional two-letter region code
+		 *         );
+		 *         return $catalog;
+		 *     } );
+		 *
+		 * @param array<string,array{locale:string,code:string,name:string,native:string,flag:string}> $built Locale entries keyed by locale.
+		 */
+		$filtered = apply_filters( 'wpait_locale_catalog', $built );
+		if ( ! is_array( $filtered ) ) {
+			$filtered = $built;
+		}
+
+		$catalog = array();
+		foreach ( $filtered as $key => $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+			$locale = isset( $entry['locale'] ) && '' !== (string) $entry['locale'] ? (string) $entry['locale'] : (string) $key;
+			if ( '' === $locale ) {
+				continue;
+			}
+			$catalog[ $locale ] = self::locale_catalog_entry(
+				$locale,
+				isset( $entry['name'] ) ? (string) $entry['name'] : '',
+				isset( $entry['native'] ) ? (string) $entry['native'] : '',
+				isset( $entry['flag'] ) ? (string) $entry['flag'] : ''
+			);
+		}
+		return $catalog;
+	}
+
+	/**
+	 * Looks up a locale catalog entry.
+	 *
+	 * @param string $locale WordPress locale.
+	 * @return array{locale:string,code:string,language:string,region:string,name:string,native:string,flag:string}|null
+	 */
+	public static function catalog_entry_for_locale( string $locale ): ?array {
+		$catalog = self::locale_catalog();
+		return $catalog[ $locale ] ?? null;
+	}
+
+	/**
+	 * Compatibility view of locale_catalog(), keyed by generated language code.
+	 *
+	 * @return array<string,array{locale:string,name:string,native:string,flag:string}>
+	 */
+	public static function default_catalog(): array {
+		$catalog = array();
+		foreach ( self::locale_catalog() as $entry ) {
+			$catalog[ $entry['code'] ] = array(
+				'locale' => $entry['locale'],
+				'name'   => $entry['name'],
+				'native' => $entry['native'],
+				'flag'   => $entry['flag'],
+			);
+		}
+		return $catalog;
+	}
+
+	/**
+	 * WordPress locales offered by the locale picker.
 	 *
 	 * @return string[]
 	 */
 	public static function common_locales(): array {
-		$locales = array();
-		foreach ( self::default_catalog() as $entry ) {
-			$locales[] = $entry['locale'];
-		}
-		// Extra regional variants beyond each language's primary catalog locale.
-		$variants = array( 'en_GB', 'es_AR', 'es_MX', 'pt_PT', 'fr_CA', 'zh_TW' );
-		return array_values( array_unique( array_merge( $locales, $variants ) ) );
+		return array_keys( self::locale_catalog() );
 	}
 
 	/**
@@ -197,7 +348,9 @@ class Wpait_Admin_Settings {
 	 * @return bool
 	 */
 	public static function is_valid_locale( string $locale ): bool {
-		return '' === $locale || 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2,3})?$/', $locale );
+		// Accepts WordPress locale forms: `xx`, `xx_YY`, and variant locales such as
+		// `de_DE_formal` / `pt_PT_ao90` (region required before any variant suffix).
+		return '' === $locale || 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2,3}(_[a-z0-9]+)?)?$/', $locale );
 	}
 
 	/**
@@ -268,6 +421,52 @@ class Wpait_Admin_Settings {
 	}
 
 	/**
+	 * Normalizes a stored language row without changing its code or labels. Used for
+	 * existing settings rows so saving the new UI does not rename or migrate terms.
+	 *
+	 * @param array<string,mixed> $row Raw or stored language row.
+	 * @return array{code:string,locale:string,name:string,native:string,flag:string,enabled:bool}
+	 */
+	private static function normalize_language_row( array $row ): array {
+		$code = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
+		$flag = isset( $row['flag'] ) ? sanitize_text_field( $row['flag'] ) : '';
+		if ( 1 === preg_match( '/^[A-Za-z]{2}$/', $flag ) ) {
+			$flag = strtolower( $flag );
+		}
+		if ( function_exists( 'mb_substr' ) ) {
+			$flag = mb_substr( $flag, 0, 12 );
+		}
+
+		return array(
+			'code'    => $code,
+			'locale'  => isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '',
+			'name'    => isset( $row['name'] ) && '' !== trim( (string) $row['name'] )
+				? sanitize_text_field( $row['name'] )
+				: $code,
+			'native'  => isset( $row['native'] ) ? sanitize_text_field( $row['native'] ) : '',
+			'flag'    => $flag,
+			'enabled' => ! empty( $row['enabled'] ),
+		);
+	}
+
+	/**
+	 * Converts a locale catalog entry into the stored settings row shape.
+	 *
+	 * @param array<string,string> $entry Locale catalog entry.
+	 * @return array{code:string,locale:string,name:string,native:string,flag:string,enabled:bool}
+	 */
+	private static function language_from_catalog_entry( array $entry ): array {
+		return array(
+			'code'    => $entry['code'],
+			'locale'  => $entry['locale'],
+			'name'    => $entry['name'],
+			'native'  => $entry['native'],
+			'flag'    => $entry['flag'],
+			'enabled' => true,
+		);
+	}
+
+	/**
 	 * Sanitizes the submitted settings and reconciles language terms (S4).
 	 *
 	 * @param mixed $input Raw submitted value.
@@ -278,40 +477,53 @@ class Wpait_Admin_Settings {
 		$settings = self::defaults();
 
 		// --- Languages ---
-		$languages        = array();
-		$invalid_locales  = array();
-		$rows             = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
-		foreach ( $rows as $row ) {
-			$code = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
-			if ( '' === $code ) {
+		$languages       = array();
+		$invalid_locales = array();
+		$old_by_code     = array();
+		$old_languages   = isset( $old['languages'] ) && is_array( $old['languages'] ) ? $old['languages'] : array();
+		foreach ( $old_languages as $old_row ) {
+			if ( ! is_array( $old_row ) ) {
 				continue;
 			}
+			$normalized = self::normalize_language_row( $old_row );
+			if ( '' !== $normalized['code'] ) {
+				$old_by_code[ $normalized['code'] ] = $normalized;
+			}
+		}
+		$seen_locales = array();
+		$rows         = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$code   = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
 			$locale = isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '';
-			if ( ! self::is_valid_locale( $locale ) ) {
-				$invalid_locales[] = $code;
+
+			if ( '' !== $code && isset( $old_by_code[ $code ] ) ) {
+				$language            = $old_by_code[ $code ];
+				$language['enabled'] = ! empty( $row['enabled'] );
+			} else {
+				$entry = '' !== $locale ? self::catalog_entry_for_locale( $locale ) : null;
+				if ( $entry ) {
+					$language = self::language_from_catalog_entry( $entry );
+				} elseif ( '' !== $code ) {
+					$language = self::normalize_language_row( $row );
+					if ( ! self::is_valid_locale( $language['locale'] ) ) {
+						$invalid_locales[] = $code;
+					}
+				} else {
+					continue;
+				}
 			}
-			// Flags are normally a two-letter ISO country code (rendered as a flag
-			// icon, #80); a legacy emoji string is still accepted for back-compat.
-			// Lowercase a bare two-letter code so it matches the flag renderer, and
-			// cap the length so a stray paste can't land here (emoji can be several
-			// code points, so the cap is generous).
-			$flag = isset( $row['flag'] ) ? sanitize_text_field( $row['flag'] ) : '';
-			if ( 1 === preg_match( '/^[A-Za-z]{2}$/', $flag ) ) {
-				$flag = strtolower( $flag );
+
+			if ( '' !== $language['locale'] ) {
+				if ( isset( $seen_locales[ $language['locale'] ] ) ) {
+					continue;
+				}
+				$seen_locales[ $language['locale'] ] = true;
 			}
-			if ( function_exists( 'mb_substr' ) ) {
-				$flag = mb_substr( $flag, 0, 12 );
-			}
-			$languages[ $code ] = array(
-				'code'    => $code,
-				'locale'  => $locale,
-				'name'    => isset( $row['name'] ) && '' !== trim( (string) $row['name'] )
-					? sanitize_text_field( $row['name'] )
-					: $code,
-				'native'  => isset( $row['native'] ) ? sanitize_text_field( $row['native'] ) : '',
-				'flag'    => $flag,
-				'enabled' => ! empty( $row['enabled'] ),
-			);
+
+			$languages[ $language['code'] ] = $language;
 		}
 		$languages = array_values( $languages );
 
@@ -426,14 +638,27 @@ class Wpait_Admin_Settings {
 			return;
 		}
 
-		$settings        = self::get_settings();
-		$languages       = $settings['languages'];
-		$instr_defaults  = self::instruction_defaults();
-		$option          = self::OPTION;
+			$settings        = self::get_settings();
+			$languages       = $settings['languages'];
+			$instr_defaults  = self::instruction_defaults();
+			$option          = self::OPTION;
+			$locale_catalog  = self::locale_catalog();
 
-		// Existing languages only; new rows are appended on demand via the
-		// "Add language" button (no always-present blank rows — see #17).
-		$rows = $languages;
+			// Existing languages only; new rows are appended on demand via the
+			// "Add language" button (no always-present blank rows — see #17).
+			$rows               = $languages;
+			$configured_locales = array();
+			foreach ( $languages as $lang ) {
+				if ( ! empty( $lang['locale'] ) ) {
+					$configured_locales[ (string) $lang['locale'] ] = true;
+				}
+			}
+			$available_locales = array_filter(
+				$locale_catalog,
+				static function ( $entry ) use ( $configured_locales ) {
+					return empty( $configured_locales[ $entry['locale'] ] );
+				}
+			);
 		?>
 		<div class="wrap wpait-settings">
 			<h1><?php esc_html_e( 'AI Translate', 'wp-ai-translate' ); ?></h1>
@@ -477,102 +702,107 @@ class Wpait_Admin_Settings {
 				<?php settings_fields( 'wpait_settings_group' ); ?>
 
 				<div class="wpait-card">
-				<h2><?php esc_html_e( 'Languages', 'wp-ai-translate' ); ?></h2>
-				<p class="description">
-					<?php esc_html_e( 'A language code is permanent once content uses it; you can rename a language but not change its code. Languages with content cannot be deleted — disable them instead.', 'wp-ai-translate' ); ?>
-				</p>
-				<p class="description">
-					<?php esc_html_e( 'Code: a short lowercase code (e.g. fr). Locale: the WordPress locale (e.g. fr_FR). Name: the display name (e.g. French). Native name: the language’s own name (e.g. Français). Flag: a two-letter country code (e.g. fr) shown as a flag icon beside the name — leave blank to show the name only.', 'wp-ai-translate' ); ?>
-						<?php esc_html_e( 'Tip: set the Code of a new language to auto-fill the other fields from a built-in catalog of common languages — you can still edit any value.', 'wp-ai-translate' ); ?>
-				</p>
-				<datalist id="wpait-locales">
-					<?php foreach ( self::common_locales() as $loc ) : ?>
-						<option value="<?php echo esc_attr( $loc ); ?>"></option>
-					<?php endforeach; ?>
-				</datalist>
-				<datalist id="wpait-flags">
-					<?php foreach ( self::default_catalog() as $catalog_entry ) : ?>
-						<option value="<?php echo esc_attr( $catalog_entry['flag'] ); ?>"><?php echo esc_html( $catalog_entry['name'] ); ?></option>
-					<?php endforeach; ?>
-				</datalist>
-				<table class="widefat striped wpait-languages-table">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Code', 'wp-ai-translate' ); ?></th>
-							<th><?php esc_html_e( 'Locale', 'wp-ai-translate' ); ?></th>
-							<th><?php esc_html_e( 'Name', 'wp-ai-translate' ); ?></th>
-							<th><?php esc_html_e( 'Native name', 'wp-ai-translate' ); ?></th>
-							<th><?php esc_html_e( 'Flag', 'wp-ai-translate' ); ?></th>
-							<th><?php esc_html_e( 'Enabled', 'wp-ai-translate' ); ?></th>
-							<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
-						</tr>
-					</thead>
-					<tbody id="wpait-languages-rows">
-						<?php foreach ( $rows as $index => $row ) : ?>
-							<?php
-							$existing = '' !== $row['code'];
-							$in_use   = $existing && $this->languages->language_has_content( $row['code'] );
-							$base     = $option . '[languages][' . (int) $index . ']';
-							?>
-							<tr class="wpait-language-row">
-								<td>
-									<input type="text" name="<?php echo esc_attr( $base . '[code]' ); ?>"
-										value="<?php echo esc_attr( $row['code'] ); ?>"
-										readonly
-										size="6" />
-									<?php if ( $in_use ) : ?>
-										<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'In use — code locked', 'wp-ai-translate' ); ?>"></span>
-									<?php endif; ?>
-								</td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[locale]' ); ?>" value="<?php echo esc_attr( $row['locale'] ); ?>" placeholder="es_ES" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[name]' ); ?>" value="<?php echo esc_attr( $row['name'] ); ?>" placeholder="Spanish" /></td>
-								<td><input type="text" name="<?php echo esc_attr( $base . '[native]' ); ?>" value="<?php echo esc_attr( $row['native'] ); ?>" placeholder="Español" /></td>
-								<td>
-									<span class="wpait-flag-cell">
-										<span class="wpait-flag-preview"><?php echo Wpait_Languages::flag_html( (string) $row['flag'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- flag_html() returns escaped HTML. ?></span>
-										<input type="text" class="wpait-flag-input" name="<?php echo esc_attr( $base . '[flag]' ); ?>" value="<?php echo esc_attr( $row['flag'] ); ?>" size="4" list="wpait-flags" placeholder="fr" title="<?php esc_attr_e( 'Two-letter country code (ISO 3166-1, e.g. fr) shown as a flag icon. Leave blank for no flag.', 'wp-ai-translate' ); ?>" />
-									</span>
-								</td>
-								<td><input type="checkbox" name="<?php echo esc_attr( $base . '[enabled]' ); ?>" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?> /></td>
-								<td>
-									<?php if ( $in_use ) : ?>
-										<span class="description" title="<?php esc_attr_e( 'This language has content and cannot be removed. Disable it instead, or reassign/delete its content first.', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'In use', 'wp-ai-translate' ); ?></span>
-									<?php else : ?>
-										<button type="button" class="button-link wpait-remove-language" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: language code. */ __( 'Remove language %s', 'wp-ai-translate' ), $row['code'] ) ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button>
-									<?php endif; ?>
-								</td>
+					<h2><?php esc_html_e( 'Languages', 'wp-ai-translate' ); ?></h2>
+					<p class="description">
+						<?php esc_html_e( 'Add a language by choosing its locale. The plugin sets the code, display name, native name, and flag automatically. Languages with content cannot be deleted — disable them instead.', 'wp-ai-translate' ); ?>
+					</p>
+					<table class="widefat striped wpait-languages-table">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Language', 'wp-ai-translate' ); ?></th>
+								<th><?php esc_html_e( 'Locale', 'wp-ai-translate' ); ?></th>
+								<th><?php esc_html_e( 'Enabled', 'wp-ai-translate' ); ?></th>
+								<th><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'wp-ai-translate' ); ?></span></th>
 							</tr>
-						<?php endforeach; ?>
-						<tr class="wpait-no-languages" <?php echo empty( $rows ) ? '' : 'style="display:none"'; ?>>
-							<td colspan="7"><?php esc_html_e( 'No languages configured yet. Use “Add language” to create one.', 'wp-ai-translate' ); ?></td>
-						</tr>
-					</tbody>
-				</table>
-				<p>
-					<button type="button" class="button" id="wpait-add-language">
-						<span class="dashicons dashicons-plus" style="vertical-align:text-bottom"></span>
-						<?php esc_html_e( 'Add language', 'wp-ai-translate' ); ?>
-					</button>
-				</p>
-
-				<?php // Template for a new, editable language row (cloned by JS on "Add language"). ?>
-				<template id="wpait-language-row-template">
-					<tr class="wpait-language-row wpait-new-language-row">
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][code]" value="" placeholder="<?php esc_attr_e( 'e.g. fr', 'wp-ai-translate' ); ?>" size="6" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][locale]" value="" placeholder="<?php esc_attr_e( 'e.g. fr_FR', 'wp-ai-translate' ); ?>" size="8" list="wpait-locales" pattern="[a-z]{2,3}(_[A-Z]{2,3})?" title="<?php esc_attr_e( 'WordPress locale, e.g. es_ES or pt_BR (lowercase language, underscore, uppercase region).', 'wp-ai-translate' ); ?>" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][name]" value="" placeholder="<?php esc_attr_e( 'e.g. French', 'wp-ai-translate' ); ?>" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][native]" value="" placeholder="<?php esc_attr_e( 'e.g. Français', 'wp-ai-translate' ); ?>" /></td>
-						<td>
-							<span class="wpait-flag-cell">
-								<span class="wpait-flag-preview"></span>
-								<input type="text" class="wpait-flag-input" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][flag]" value="" size="4" list="wpait-flags" placeholder="fr" title="<?php esc_attr_e( 'Two-letter country code (ISO 3166-1, e.g. fr) shown as a flag icon. Leave blank for no flag.', 'wp-ai-translate' ); ?>" />
-							</span>
-						</td>
-						<td><input type="checkbox" name="<?php echo esc_attr( $option ); ?>[languages][__INDEX__][enabled]" value="1" checked /></td>
-						<td><button type="button" class="button-link wpait-remove-language" aria-label="<?php esc_attr_e( 'Remove this new language', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button></td>
-					</tr>
-				</template>
-				</div>
+						</thead>
+						<tbody id="wpait-languages-rows">
+							<?php foreach ( $rows as $index => $row ) : ?>
+								<?php
+								$existing = '' !== $row['code'];
+								$in_use   = $existing && $this->languages->language_has_content( $row['code'] );
+								$base     = $option . '[languages][' . (int) $index . ']';
+								$name     = (string) ( $row['name'] ?? $row['code'] );
+								$native   = (string) ( $row['native'] ?? '' );
+								$locale   = (string) ( $row['locale'] ?? '' );
+								$flag     = (string) ( $row['flag'] ?? '' );
+								?>
+								<tr class="wpait-language-row" data-locale="<?php echo esc_attr( $locale ); ?>">
+									<td>
+										<input type="hidden" name="<?php echo esc_attr( $base . '[code]' ); ?>" value="<?php echo esc_attr( $row['code'] ); ?>" />
+										<span class="wpait-language-summary">
+											<span class="wpait-language-flag" aria-hidden="true"><?php echo Wpait_Languages::flag_html( $flag ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- flag_html() returns escaped HTML. ?></span>
+											<span class="wpait-language-text">
+												<strong><?php echo esc_html( $name ); ?></strong>
+												<?php if ( '' !== $native && $native !== $name ) : ?>
+													<span class="wpait-language-native"><?php echo esc_html( $native ); ?></span>
+												<?php endif; ?>
+											</span>
+										</span>
+									</td>
+									<td><code><?php echo '' !== $locale ? esc_html( $locale ) : '—'; ?></code></td>
+									<td>
+										<label class="wpait-enabled-toggle">
+											<input type="checkbox" name="<?php echo esc_attr( $base . '[enabled]' ); ?>" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?> />
+											<?php esc_html_e( 'Enabled', 'wp-ai-translate' ); ?>
+										</label>
+									</td>
+									<td>
+										<?php if ( $in_use ) : ?>
+											<span class="description" title="<?php esc_attr_e( 'This language has content and cannot be removed. Disable it instead, or reassign/delete its content first.', 'wp-ai-translate' ); ?>"><?php esc_html_e( 'In use', 'wp-ai-translate' ); ?></span>
+										<?php else : ?>
+											<button type="button" class="button-link wpait-remove-language" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: language name. */ __( 'Remove %s', 'wp-ai-translate' ), $name ) ); ?>"><?php esc_html_e( 'Remove', 'wp-ai-translate' ); ?></button>
+										<?php endif; ?>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+							<tr class="wpait-no-languages" <?php echo empty( $rows ) ? '' : 'style="display:none"'; ?>>
+								<td colspan="4"><?php esc_html_e( 'No languages configured yet. Use “Add language” to choose a locale.', 'wp-ai-translate' ); ?></td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						<button type="button" class="button" id="wpait-add-language" <?php disabled( empty( $available_locales ) ); ?>>
+							<span class="dashicons dashicons-plus" style="vertical-align:text-bottom"></span>
+							<?php esc_html_e( 'Add language', 'wp-ai-translate' ); ?>
+						</button>
+					</p>
+					<?php if ( empty( $available_locales ) ) : ?>
+						<p class="description"><?php esc_html_e( 'All bundled locales are already configured.', 'wp-ai-translate' ); ?></p>
+					<?php else : ?>
+						<div class="wpait-add-language-panel" id="wpait-add-language-panel" hidden>
+							<label class="wpait-add-language-label"><?php esc_html_e( 'Locale', 'wp-ai-translate' ); ?></label>
+							<div class="wpait-locale-picker" data-selected-locale="">
+								<button type="button" class="button wpait-locale-picker-toggle" id="wpait-locale-picker-toggle" aria-expanded="false" aria-haspopup="listbox">
+									<span class="wpait-locale-picker-selected"><?php esc_html_e( 'Select a locale', 'wp-ai-translate' ); ?></span>
+								</button>
+								<div class="wpait-locale-picker-menu" id="wpait-locale-picker-menu" hidden>
+									<input type="search" class="wpait-locale-search" placeholder="<?php esc_attr_e( 'Search locales', 'wp-ai-translate' ); ?>" aria-label="<?php esc_attr_e( 'Search locales', 'wp-ai-translate' ); ?>" />
+									<div class="wpait-locale-options" role="listbox" aria-label="<?php esc_attr_e( 'Available locales', 'wp-ai-translate' ); ?>">
+										<?php foreach ( $available_locales as $entry ) : ?>
+											<button type="button" class="wpait-locale-option" role="option"
+												data-locale="<?php echo esc_attr( $entry['locale'] ); ?>"
+												data-code="<?php echo esc_attr( $entry['code'] ); ?>"
+												data-name="<?php echo esc_attr( $entry['name'] ); ?>"
+												data-native="<?php echo esc_attr( $entry['native'] ); ?>"
+												data-flag="<?php echo esc_attr( $entry['flag'] ); ?>">
+												<span class="wpait-language-flag" aria-hidden="true"><?php echo Wpait_Languages::flag_html( $entry['flag'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- flag_html() returns escaped HTML. ?></span>
+												<span class="wpait-locale-option-text">
+													<strong><?php echo esc_html( $entry['name'] ); ?></strong>
+													<code><?php echo esc_html( $entry['locale'] ); ?></code>
+												</span>
+											</button>
+										<?php endforeach; ?>
+										<p class="wpait-no-locale-options" hidden><?php esc_html_e( 'No matching locales.', 'wp-ai-translate' ); ?></p>
+									</div>
+								</div>
+							</div>
+							<p class="wpait-add-language-actions">
+								<button type="button" class="button button-primary" id="wpait-confirm-add-language" disabled><?php esc_html_e( 'Add selected locale', 'wp-ai-translate' ); ?></button>
+								<button type="button" class="button-link" id="wpait-cancel-add-language"><?php esc_html_e( 'Cancel', 'wp-ai-translate' ); ?></button>
+							</p>
+						</div>
+					<?php endif; ?>
+					</div>
 
 				<?php $this->render_language_packs_card( $languages ); ?>
 
@@ -694,100 +924,299 @@ class Wpait_Admin_Settings {
 				} );
 			} );
 
-			// Add / remove language rows. New rows get fresh, monotonically increasing
-			// indices (never reused) so removing a row can't collide a later add. The
-			// server skips rows with a blank code, and reconcile() removes any existing
-			// language whose row is no longer submitted (unless it still has content).
-			var tbody    = document.getElementById( 'wpait-languages-rows' );
-			var template = document.getElementById( 'wpait-language-row-template' );
-			var addBtn   = document.getElementById( 'wpait-add-language' );
-			var nextIndex = <?php echo (int) count( $languages ); ?>;
+				// Add / remove language rows. New rows submit only a catalog locale; the
+				// server derives the code, labels, and flag from its own locale catalog.
+				var tbody      = document.getElementById( 'wpait-languages-rows' );
+				var addBtn     = document.getElementById( 'wpait-add-language' );
+				var panel      = document.getElementById( 'wpait-add-language-panel' );
+				var picker     = panel ? panel.querySelector( '.wpait-locale-picker' ) : null;
+				var toggle     = document.getElementById( 'wpait-locale-picker-toggle' );
+				var menu       = document.getElementById( 'wpait-locale-picker-menu' );
+				var selectedEl = panel ? panel.querySelector( '.wpait-locale-picker-selected' ) : null;
+				var search     = panel ? panel.querySelector( '.wpait-locale-search' ) : null;
+				var confirmBtn = document.getElementById( 'wpait-confirm-add-language' );
+				var cancelBtn  = document.getElementById( 'wpait-cancel-add-language' );
+				var nextIndex  = <?php echo (int) count( $languages ); ?>;
+				var optionName = <?php echo wp_json_encode( $option ); ?>;
+				var languageStrings = <?php echo wp_json_encode(
+					array(
+						'selectLocale' => __( 'Select a locale', 'wp-ai-translate' ),
+						'enabled'      => __( 'Enabled', 'wp-ai-translate' ),
+						'remove'       => __( 'Remove', 'wp-ai-translate' ),
+					)
+				); ?>;
+				var selectedLocale = null;
 
-			function refreshEmptyState() {
-				var empty = tbody.querySelector( '.wpait-no-languages' );
-				if ( ! empty ) { return; }
-				var hasRows = !! tbody.querySelector( '.wpait-language-row' );
-				empty.style.display = hasRows ? 'none' : '';
-			}
-
-			if ( addBtn && tbody && template && 'content' in template ) {
-				addBtn.addEventListener( 'click', function () {
-					var html = template.innerHTML.replace( /__INDEX__/g, String( nextIndex++ ) );
-					var tmp = document.createElement( 'tbody' );
-					tmp.innerHTML = html.trim();
-					var row = tmp.firstElementChild;
+				function refreshEmptyState() {
+					if ( ! tbody ) { return; }
 					var empty = tbody.querySelector( '.wpait-no-languages' );
-					if ( empty ) { tbody.insertBefore( row, empty ); } else { tbody.appendChild( row ); }
-					var code = row.querySelector( 'input[type="text"]' );
-					if ( code ) { code.focus(); }
-					refreshEmptyState();
-				} );
-			}
-
-			if ( tbody ) {
-				tbody.addEventListener( 'click', function ( e ) {
-					var btn = e.target.closest( '.wpait-remove-language' );
-					if ( ! btn ) { return; }
-					e.preventDefault();
-					var row = btn.closest( '.wpait-language-row' );
-					if ( row ) { row.parentNode.removeChild( row ); }
-					refreshEmptyState();
-				} );
-			}
-
-			// Live flag preview next to a Flag input: a 2-letter country code shows the
-			// flagcdn icon; a legacy emoji/text shows as-is; blank shows nothing (#80).
-			function updateFlagPreview( input ) {
-				var cell = input.closest( '.wpait-flag-cell' );
-				if ( ! cell ) { return; }
-				var preview = cell.querySelector( '.wpait-flag-preview' );
-				if ( ! preview ) { return; }
-				var val = input.value.trim();
-				if ( /^[A-Za-z]{2}$/.test( val ) ) {
-					var img = document.createElement( 'img' );
-					img.className = 'wpait-flag-img';
-					img.src = 'https://flagcdn.com/' + val.toLowerCase() + '.svg';
-					img.alt = '';
-					preview.replaceChildren( img );
-				} else if ( '' !== val ) {
-					var span = document.createElement( 'span' );
-					span.className = 'wpait-flag-emoji';
-					span.textContent = val;
-					preview.replaceChildren( span );
-				} else {
-					preview.replaceChildren();
+					if ( ! empty ) { return; }
+					var hasRows = !! tbody.querySelector( '.wpait-language-row' );
+					empty.style.display = hasRows ? 'none' : '';
 				}
-			}
 
-			// Auto-fill a new language row from the bundled catalog (#74). When the
-			// user sets a row's Code, fill any *empty* sibling fields (Locale, Name,
-			// Native, Flag) from the catalog; values the user already typed are kept.
-			var wpaitCatalog = <?php echo wp_json_encode( self::default_catalog() ); ?>;
-			if ( tbody ) {
-				tbody.addEventListener( 'change', function ( e ) {
-					var input = e.target;
-					if ( ! input.matches || ! input.matches( '.wpait-new-language-row input[name$="[code]"]' ) ) { return; }
-					var entry = wpaitCatalog[ input.value.trim().toLowerCase() ];
-					if ( ! entry ) { return; }
-					var row = input.closest( '.wpait-language-row' );
-					[ 'locale', 'name', 'native', 'flag' ].forEach( function ( field ) {
-						var el = row.querySelector( 'input[name$="[' + field + ']"]' );
-						if ( el && '' === el.value.trim() ) { el.value = entry[ field ]; }
+				function flagNode( flag ) {
+					var wrap = document.createElement( 'span' );
+					wrap.className = 'wpait-language-flag';
+					wrap.setAttribute( 'aria-hidden', 'true' );
+					if ( /^[a-z]{2}$/.test( flag ) ) {
+						var img = document.createElement( 'img' );
+						img.className = 'wpait-flag-img';
+						img.src = 'https://flagcdn.com/' + flag + '.svg';
+						img.alt = '';
+						img.loading = 'lazy';
+						img.decoding = 'async';
+						wrap.appendChild( img );
+					} else if ( flag ) {
+						var span = document.createElement( 'span' );
+						span.className = 'wpait-flag-emoji';
+						span.textContent = flag;
+						wrap.appendChild( span );
+					}
+					return wrap;
+				}
+
+				function hiddenInput( name, value ) {
+					var input = document.createElement( 'input' );
+					input.type = 'hidden';
+					input.name = name;
+					input.value = value;
+					return input;
+				}
+
+				function optionData( option ) {
+					return {
+						locale: option.getAttribute( 'data-locale' ) || '',
+						code: option.getAttribute( 'data-code' ) || '',
+						name: option.getAttribute( 'data-name' ) || '',
+						native: option.getAttribute( 'data-native' ) || '',
+						flag: option.getAttribute( 'data-flag' ) || ''
+					};
+				}
+
+				function setSelectedLocale( data ) {
+					selectedLocale = data;
+					if ( picker ) {
+						picker.setAttribute( 'data-selected-locale', data.locale );
+					}
+					if ( selectedEl ) {
+						var label = document.createElement( 'span' );
+						label.className = 'wpait-locale-selected-text';
+						label.textContent = data.name + ' (' + data.locale + ')';
+						selectedEl.replaceChildren( flagNode( data.flag ), label );
+					}
+					if ( confirmBtn ) {
+						confirmBtn.disabled = ! data.locale;
+					}
+				}
+
+				function resetPicker() {
+					selectedLocale = null;
+					if ( picker ) {
+						picker.setAttribute( 'data-selected-locale', '' );
+					}
+					if ( selectedEl ) {
+						selectedEl.textContent = languageStrings.selectLocale;
+					}
+					if ( confirmBtn ) {
+						confirmBtn.disabled = true;
+					}
+					if ( search ) {
+						search.value = '';
+						filterOptions();
+					}
+				}
+
+				function openMenu() {
+					if ( ! menu || ! toggle ) { return; }
+					menu.hidden = false;
+					toggle.setAttribute( 'aria-expanded', 'true' );
+					if ( search ) {
+						search.focus();
+					}
+				}
+
+				function closeMenu() {
+					if ( ! menu || ! toggle ) { return; }
+					menu.hidden = true;
+					toggle.setAttribute( 'aria-expanded', 'false' );
+				}
+
+				function filterOptions() {
+					if ( ! panel ) { return; }
+					var q = search ? search.value.trim().toLowerCase() : '';
+					var shown = 0;
+					panel.querySelectorAll( '.wpait-locale-option' ).forEach( function ( option ) {
+						var haystack = (
+							option.textContent + ' ' +
+							( option.getAttribute( 'data-native' ) || '' ) + ' ' +
+							( option.getAttribute( 'data-code' ) || '' ) + ' ' +
+							( option.getAttribute( 'data-locale' ) || '' )
+						).toLowerCase();
+						var match = ! q || haystack.indexOf( q ) !== -1;
+						option.hidden = option.disabled || ! match;
+						if ( ! option.hidden ) {
+							shown++;
+						}
 					} );
-					var flagEl = row.querySelector( 'input[name$="[flag]"]' );
-					if ( flagEl ) { updateFlagPreview( flagEl ); }
-				} );
+					var empty = panel.querySelector( '.wpait-no-locale-options' );
+					if ( empty ) {
+						empty.hidden = shown > 0;
+					}
+				}
 
-				// Keep each Flag preview in sync as the user edits the code.
-				tbody.addEventListener( 'input', function ( e ) {
-					if ( e.target.matches && e.target.matches( '.wpait-flag-input' ) ) {
-						updateFlagPreview( e.target );
+				// Disable "Add language" once every catalog option has been consumed,
+				// and re-enable it when a pending row frees one up again.
+				function updateAddButton() {
+					if ( ! addBtn || ! panel ) { return; }
+					var available = panel.querySelector( '.wpait-locale-option:not([disabled])' );
+					addBtn.disabled = ! available;
+				}
+
+				// Collapse the whole add-language panel (menu + selection), used by
+				// Cancel, Escape, and outside-click so they can't leave it half-open.
+				function closePanel() {
+					if ( panel ) { panel.hidden = true; }
+					closeMenu();
+					resetPicker();
+				}
+
+				function addLanguageRow( data ) {
+					var index = String( nextIndex++ );
+					var base = optionName + '[languages][' + index + ']';
+					var row = document.createElement( 'tr' );
+					row.className = 'wpait-language-row wpait-new-language-row';
+					row.setAttribute( 'data-locale', data.locale );
+					row.setAttribute( 'data-pending', '1' );
+
+					var languageCell = document.createElement( 'td' );
+					var summary = document.createElement( 'span' );
+					summary.className = 'wpait-language-summary';
+					var text = document.createElement( 'span' );
+					text.className = 'wpait-language-text';
+					var name = document.createElement( 'strong' );
+					name.textContent = data.name;
+					var native = document.createElement( 'span' );
+					native.className = 'wpait-language-native';
+					native.textContent = data.native;
+					text.append( name, native );
+					summary.append( flagNode( data.flag ), text );
+					languageCell.append(
+						hiddenInput( base + '[locale]', data.locale ),
+						hiddenInput( base + '[enabled]', '1' ),
+						summary
+					);
+
+					var localeCell = document.createElement( 'td' );
+					var localeCode = document.createElement( 'code' );
+					localeCode.textContent = data.locale;
+					localeCell.appendChild( localeCode );
+
+					var enabledCell = document.createElement( 'td' );
+					enabledCell.textContent = languageStrings.enabled;
+
+					var actionCell = document.createElement( 'td' );
+					var remove = document.createElement( 'button' );
+					remove.type = 'button';
+					remove.className = 'button-link wpait-remove-language';
+					remove.textContent = languageStrings.remove;
+					remove.setAttribute( 'aria-label', languageStrings.remove + ' ' + data.name );
+					actionCell.appendChild( remove );
+
+					row.append( languageCell, localeCell, enabledCell, actionCell );
+					var empty = tbody.querySelector( '.wpait-no-languages' );
+					if ( empty ) {
+						tbody.insertBefore( row, empty );
+					} else {
+						tbody.appendChild( row );
+					}
+					refreshEmptyState();
+				}
+
+				if ( addBtn && panel ) {
+					addBtn.addEventListener( 'click', function () {
+						panel.hidden = false;
+						openMenu();
+					} );
+				}
+
+				if ( cancelBtn && panel ) {
+					cancelBtn.addEventListener( 'click', closePanel );
+				}
+
+				if ( toggle ) {
+					toggle.addEventListener( 'click', function () {
+						if ( menu && menu.hidden ) {
+							openMenu();
+						} else {
+							closeMenu();
+						}
+					} );
+				}
+
+				if ( search ) {
+					search.addEventListener( 'input', filterOptions );
+				}
+
+				if ( panel ) {
+					panel.addEventListener( 'click', function ( e ) {
+						var option = e.target.closest( '.wpait-locale-option' );
+						if ( ! option || option.disabled ) { return; }
+						setSelectedLocale( optionData( option ) );
+						closeMenu();
+					} );
+				}
+
+				if ( confirmBtn ) {
+					confirmBtn.addEventListener( 'click', function () {
+						if ( ! selectedLocale || ! selectedLocale.locale ) { return; }
+						addLanguageRow( selectedLocale );
+						var option = panel.querySelector( '.wpait-locale-option[data-locale="' + selectedLocale.locale + '"]' );
+						if ( option ) {
+							option.disabled = true;
+							option.hidden = true;
+						}
+						closePanel();
+						updateAddButton();
+					} );
+				}
+
+				if ( tbody ) {
+					tbody.addEventListener( 'click', function ( e ) {
+						var btn = e.target.closest( '.wpait-remove-language' );
+						if ( ! btn ) { return; }
+						e.preventDefault();
+						var row = btn.closest( '.wpait-language-row' );
+						if ( ! row ) { return; }
+						var locale = row.getAttribute( 'data-locale' );
+						var pending = '1' === row.getAttribute( 'data-pending' );
+						row.parentNode.removeChild( row );
+						if ( pending && panel && locale ) {
+							var option = panel.querySelector( '.wpait-locale-option[data-locale="' + locale + '"]' );
+							if ( option ) {
+								option.disabled = false;
+							}
+						}
+						filterOptions();
+						updateAddButton();
+						refreshEmptyState();
+					} );
+				}
+
+				document.addEventListener( 'click', function ( e ) {
+					if ( panel && ! panel.hidden && ! panel.contains( e.target ) && e.target !== addBtn ) {
+						closePanel();
 					}
 				} );
-			}
 
-			// "Test connection": live AI round trip via the REST probe.
-			var testBtn = document.getElementById( 'wpait-test-connection' );
+				document.addEventListener( 'keydown', function ( e ) {
+					if ( 'Escape' === e.key && panel && ! panel.hidden ) {
+						closePanel();
+					}
+				} );
+
+				// "Test connection": live AI round trip via the REST probe.
+				var testBtn = document.getElementById( 'wpait-test-connection' );
 			var testOut = document.getElementById( 'wpait-test-result' );
 			var strings = <?php echo wp_json_encode(
 				array(
@@ -856,8 +1285,8 @@ class Wpait_Admin_Settings {
 						$locale = (string) ( $lang['locale'] ?? '' );
 						$status = Wpait_Languages::locale_pack_status( $locale );
 						?>
-						<tr class="wpait-language-pack-row" data-locale="<?php echo esc_attr( $locale ); ?>">
-							<td><?php echo esc_html( (string) ( $lang['name'] ?? $lang['code'] ) ); ?></td>
+							<tr class="wpait-language-pack-row" data-locale="<?php echo esc_attr( $locale ); ?>">
+								<td><?php echo $this->languages->label_html( (string) ( $lang['code'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- label_html() returns escaped HTML. ?></td>
 							<td><code><?php echo '' !== $locale ? esc_html( $locale ) : '—'; ?></code></td>
 							<td class="wpait-pack-status">
 								<?php

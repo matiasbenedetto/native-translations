@@ -60,19 +60,166 @@
 	padding-right: 0;
 }
 
-/* Languages table: let the editable name/native inputs fill their cell. */
+/* Languages table + locale picker. */
 .wpait-settings .wpait-languages-table {
 	margin-bottom: 12px;
-}
-
-.wpait-settings .wpait-languages-table td input[type="text"]:not([size]) {
-	width: 100%;
-	max-width: none;
 }
 
 .wpait-settings .wpait-languages-table th,
 .wpait-settings .wpait-languages-table td {
 	vertical-align: middle;
+}
+
+.wpait-language-summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.wpait-language-flag {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	flex: 0 0 26px;
+}
+
+.wpait-language-text {
+	display: grid;
+	gap: 2px;
+}
+
+.wpait-language-native {
+	display: block;
+	color: #646970;
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.wpait-enabled-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.wpait-add-language-panel {
+	max-width: 520px;
+	margin: 4px 0 16px;
+	padding: 12px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #f6f7f7;
+}
+
+.wpait-add-language-label {
+	display: block;
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+
+.wpait-locale-picker {
+	position: relative;
+	max-width: 460px;
+}
+
+.wpait-locale-picker-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	width: 100%;
+	min-height: 36px;
+}
+
+.wpait-locale-picker-selected {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wpait-locale-picker-menu {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	padding: 8px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.wpait-locale-search {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: none;
+	margin: 0 0 8px;
+}
+
+.wpait-locale-options {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.wpait-locale-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #1d2327;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.wpait-locale-option:hover,
+.wpait-locale-option:focus {
+	background: #f0f6fc;
+	outline: 1px solid #72aee6;
+}
+
+.wpait-locale-option[hidden] {
+	display: none;
+}
+
+.wpait-locale-option-text {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+}
+
+.wpait-locale-option-text strong,
+.wpait-locale-selected-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wpait-locale-option-text code {
+	flex: 0 0 auto;
+}
+
+.wpait-no-locale-options {
+	margin: 8px;
+	color: #646970;
+}
+
+.wpait-add-language-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 12px 0 0;
 }
 
 /* AI provider status badge. */
