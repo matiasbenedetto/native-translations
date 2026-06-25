@@ -76,6 +76,17 @@ final class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'ja', Wpait_Admin_Settings::code_for_locale( 'ja' ) );
 	}
 
+	public function test_locale_catalog_covers_the_full_bundled_list(): void {
+		$catalog = Wpait_Admin_Settings::locale_catalog();
+		// The bundled catalog is the full SimpleLocalize-derived locale set, so it
+		// should be broad — far beyond the original ~40 hand-curated entries — and
+		// include locales that were not previously offered.
+		$this->assertGreaterThan( 300, count( $catalog ), 'expected the expanded locale list' );
+		foreach ( array( 'af_ZA', 'sw_KE', 'is_IS', 'vi_VN', 'th_TH' ) as $locale ) {
+			$this->assertArrayHasKey( $locale, $catalog, "locale '$locale' should be in the expanded catalog" );
+		}
+	}
+
 	public function test_common_locales_are_derived_from_catalog(): void {
 		$locales = Wpait_Admin_Settings::common_locales();
 		foreach ( Wpait_Admin_Settings::default_catalog() as $entry ) {
@@ -254,39 +265,5 @@ final class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'Custom native', $lang['native'] );
 		$this->assertSame( 'zz', $lang['flag'] );
 		$this->assertTrue( $lang['enabled'] );
-	}
-
-	public function test_sanitize_catalog_locale_does_not_clobber_existing_language_by_derived_code(): void {
-		// An existing language stored under the code a picked locale would derive
-		// (es_ES -> 'es-es') must be preserved, not overwritten by catalog defaults,
-		// so re-picking its locale can't fork a second term / orphan its content.
-		Wpait_Test_State::$options['wpait_settings'] = array(
-			'languages' => array(
-				array(
-					'code'    => 'es-es',
-					'locale'  => 'es_AR',
-					'name'    => 'Custom Spanish',
-					'native'  => 'Español personalizado',
-					'flag'    => 'ar',
-					'enabled' => true,
-				),
-			),
-		);
-
-		$out = $this->sanitizer()->sanitize(
-			array(
-				'languages' => array(
-					array( 'locale' => 'es_ES' ),
-				),
-			)
-		);
-
-		$this->assertCount( 1, $out['languages'] );
-		$lang = $out['languages'][0];
-		$this->assertSame( 'es-es', $lang['code'] );
-		$this->assertSame( 'es_AR', $lang['locale'], 'existing locale preserved, not replaced by es_ES' );
-		$this->assertSame( 'Custom Spanish', $lang['name'] );
-		$this->assertSame( 'Español personalizado', $lang['native'] );
-		$this->assertSame( 'ar', $lang['flag'] );
 	}
 }

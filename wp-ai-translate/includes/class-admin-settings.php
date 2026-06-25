@@ -171,56 +171,23 @@ class Wpait_Admin_Settings {
 	 * Languages settings UI: admins choose a locale and the plugin derives the code,
 	 * label, native name, and flag from this catalog.
 	 *
+	 * The data lives in includes/data/locales.php (reference data derived from the
+	 * SimpleLocalize public locale list, not translated through this text domain).
+	 * The built catalog is memoized for the request since it holds 300+ entries.
+	 *
 	 * @return array<string,array{locale:string,code:string,language:string,region:string,name:string,native:string,flag:string}>
 	 */
 	public static function locale_catalog(): array {
-		$entries = array(
-			self::locale_catalog_entry( 'en_US', __( 'English', 'wp-ai-translate' ), 'English (United States)', __( 'United States', 'wp-ai-translate' ), 'us' ),
-			self::locale_catalog_entry( 'en_GB', __( 'English', 'wp-ai-translate' ), 'English (United Kingdom)', __( 'United Kingdom', 'wp-ai-translate' ), 'gb' ),
-			self::locale_catalog_entry( 'en_CA', __( 'English', 'wp-ai-translate' ), 'English (Canada)', __( 'Canada', 'wp-ai-translate' ), 'ca' ),
-			self::locale_catalog_entry( 'en_AU', __( 'English', 'wp-ai-translate' ), 'English (Australia)', __( 'Australia', 'wp-ai-translate' ), 'au' ),
-			self::locale_catalog_entry( 'es_ES', __( 'Spanish', 'wp-ai-translate' ), 'Español (España)', __( 'Spain', 'wp-ai-translate' ), 'es' ),
-			self::locale_catalog_entry( 'es_AR', __( 'Spanish', 'wp-ai-translate' ), 'Español (Argentina)', __( 'Argentina', 'wp-ai-translate' ), 'ar' ),
-			self::locale_catalog_entry( 'es_MX', __( 'Spanish', 'wp-ai-translate' ), 'Español (México)', __( 'Mexico', 'wp-ai-translate' ), 'mx' ),
-			self::locale_catalog_entry( 'es_CO', __( 'Spanish', 'wp-ai-translate' ), 'Español (Colombia)', __( 'Colombia', 'wp-ai-translate' ), 'co' ),
-			self::locale_catalog_entry( 'es_CL', __( 'Spanish', 'wp-ai-translate' ), 'Español (Chile)', __( 'Chile', 'wp-ai-translate' ), 'cl' ),
-			self::locale_catalog_entry( 'es_US', __( 'Spanish', 'wp-ai-translate' ), 'Español (Estados Unidos)', __( 'United States', 'wp-ai-translate' ), 'us' ),
-			self::locale_catalog_entry( 'fr_FR', __( 'French', 'wp-ai-translate' ), 'Français (France)', __( 'France', 'wp-ai-translate' ), 'fr' ),
-			self::locale_catalog_entry( 'fr_CA', __( 'French', 'wp-ai-translate' ), 'Français (Canada)', __( 'Canada', 'wp-ai-translate' ), 'ca' ),
-			self::locale_catalog_entry( 'fr_BE', __( 'French', 'wp-ai-translate' ), 'Français (Belgique)', __( 'Belgium', 'wp-ai-translate' ), 'be' ),
-			self::locale_catalog_entry( 'fr_CH', __( 'French', 'wp-ai-translate' ), 'Français (Suisse)', __( 'Switzerland', 'wp-ai-translate' ), 'ch' ),
-			self::locale_catalog_entry( 'de_DE', __( 'German', 'wp-ai-translate' ), 'Deutsch (Deutschland)', __( 'Germany', 'wp-ai-translate' ), 'de' ),
-			self::locale_catalog_entry( 'de_AT', __( 'German', 'wp-ai-translate' ), 'Deutsch (Österreich)', __( 'Austria', 'wp-ai-translate' ), 'at' ),
-			self::locale_catalog_entry( 'de_CH', __( 'German', 'wp-ai-translate' ), 'Deutsch (Schweiz)', __( 'Switzerland', 'wp-ai-translate' ), 'ch' ),
-			self::locale_catalog_entry( 'pt_BR', __( 'Portuguese', 'wp-ai-translate' ), 'Português (Brasil)', __( 'Brazil', 'wp-ai-translate' ), 'br' ),
-			self::locale_catalog_entry( 'pt_PT', __( 'Portuguese', 'wp-ai-translate' ), 'Português (Portugal)', __( 'Portugal', 'wp-ai-translate' ), 'pt' ),
-			self::locale_catalog_entry( 'it_IT', __( 'Italian', 'wp-ai-translate' ), 'Italiano (Italia)', __( 'Italy', 'wp-ai-translate' ), 'it' ),
-			self::locale_catalog_entry( 'nl_NL', __( 'Dutch', 'wp-ai-translate' ), 'Nederlands (Nederland)', __( 'Netherlands', 'wp-ai-translate' ), 'nl' ),
-			self::locale_catalog_entry( 'pl_PL', __( 'Polish', 'wp-ai-translate' ), 'Polski (Polska)', __( 'Poland', 'wp-ai-translate' ), 'pl' ),
-			self::locale_catalog_entry( 'ru_RU', __( 'Russian', 'wp-ai-translate' ), 'Русский (Россия)', __( 'Russia', 'wp-ai-translate' ), 'ru' ),
-			self::locale_catalog_entry( 'uk', __( 'Ukrainian', 'wp-ai-translate' ), 'Українська (Україна)', __( 'Ukraine', 'wp-ai-translate' ), 'ua' ),
-			self::locale_catalog_entry( 'sv_SE', __( 'Swedish', 'wp-ai-translate' ), 'Svenska (Sverige)', __( 'Sweden', 'wp-ai-translate' ), 'se' ),
-			self::locale_catalog_entry( 'da_DK', __( 'Danish', 'wp-ai-translate' ), 'Dansk (Danmark)', __( 'Denmark', 'wp-ai-translate' ), 'dk' ),
-			self::locale_catalog_entry( 'nb_NO', __( 'Norwegian', 'wp-ai-translate' ), 'Norsk bokmål (Norge)', __( 'Norway', 'wp-ai-translate' ), 'no' ),
-			self::locale_catalog_entry( 'fi', __( 'Finnish', 'wp-ai-translate' ), 'Suomi (Suomi)', __( 'Finland', 'wp-ai-translate' ), 'fi' ),
-			self::locale_catalog_entry( 'cs_CZ', __( 'Czech', 'wp-ai-translate' ), 'Čeština (Česko)', __( 'Czechia', 'wp-ai-translate' ), 'cz' ),
-			self::locale_catalog_entry( 'el', __( 'Greek', 'wp-ai-translate' ), 'Ελληνικά (Ελλάδα)', __( 'Greece', 'wp-ai-translate' ), 'gr' ),
-			self::locale_catalog_entry( 'tr_TR', __( 'Turkish', 'wp-ai-translate' ), 'Türkçe (Türkiye)', __( 'Turkey', 'wp-ai-translate' ), 'tr' ),
-			self::locale_catalog_entry( 'ar', __( 'Arabic', 'wp-ai-translate' ), 'العربية (السعودية)', __( 'Saudi Arabia', 'wp-ai-translate' ), 'sa' ),
-			self::locale_catalog_entry( 'he_IL', __( 'Hebrew', 'wp-ai-translate' ), 'עברית (ישראל)', __( 'Israel', 'wp-ai-translate' ), 'il' ),
-			self::locale_catalog_entry( 'hi_IN', __( 'Hindi', 'wp-ai-translate' ), 'हिन्दी (भारत)', __( 'India', 'wp-ai-translate' ), 'in' ),
-			self::locale_catalog_entry( 'id_ID', __( 'Indonesian', 'wp-ai-translate' ), 'Bahasa Indonesia (Indonesia)', __( 'Indonesia', 'wp-ai-translate' ), 'id' ),
-			self::locale_catalog_entry( 'ja', __( 'Japanese', 'wp-ai-translate' ), '日本語 (日本)', __( 'Japan', 'wp-ai-translate' ), 'jp' ),
-			self::locale_catalog_entry( 'ko_KR', __( 'Korean', 'wp-ai-translate' ), '한국어 (대한민국)', __( 'South Korea', 'wp-ai-translate' ), 'kr' ),
-			self::locale_catalog_entry( 'th', __( 'Thai', 'wp-ai-translate' ), 'ไทย (ประเทศไทย)', __( 'Thailand', 'wp-ai-translate' ), 'th' ),
-			self::locale_catalog_entry( 'vi', __( 'Vietnamese', 'wp-ai-translate' ), 'Tiếng Việt (Việt Nam)', __( 'Vietnam', 'wp-ai-translate' ), 'vn' ),
-			self::locale_catalog_entry( 'zh_CN', __( 'Chinese', 'wp-ai-translate' ), '中文（中国大陆）', __( 'China', 'wp-ai-translate' ), 'cn' ),
-			self::locale_catalog_entry( 'zh_TW', __( 'Chinese', 'wp-ai-translate' ), '中文（台灣）', __( 'Taiwan', 'wp-ai-translate' ), 'tw' ),
-			self::locale_catalog_entry( 'zh_HK', __( 'Chinese', 'wp-ai-translate' ), '中文（香港）', __( 'Hong Kong', 'wp-ai-translate' ), 'hk' ),
-		);
+		static $catalog = null;
+		if ( null !== $catalog ) {
+			return $catalog;
+		}
 
+		$rows    = require __DIR__ . '/data/locales.php';
 		$catalog = array();
-		foreach ( $entries as $entry ) {
+		foreach ( $rows as $row ) {
+			// Row shape: [ locale, language, native, region, flag ].
+			$entry                       = self::locale_catalog_entry( $row[0], $row[1], $row[2], $row[3], $row[4] );
 			$catalog[ $entry['locale'] ] = $entry;
 		}
 		return $catalog;
@@ -427,17 +394,7 @@ class Wpait_Admin_Settings {
 			} else {
 				$entry = '' !== $locale ? self::catalog_entry_for_locale( $locale ) : null;
 				if ( $entry ) {
-					// A picked locale derives its code from the locale (e.g. es_ES ->
-					// es-es). If that code already belongs to a configured language,
-					// reuse the stored row (only toggling enabled) rather than letting
-					// the catalog defaults clobber it — this keeps the existing term
-					// and its content intact instead of creating a parallel language.
-					if ( isset( $old_by_code[ $entry['code'] ] ) ) {
-						$language            = $old_by_code[ $entry['code'] ];
-						$language['enabled'] = ! empty( $row['enabled'] );
-					} else {
-						$language = self::language_from_catalog_entry( $entry );
-					}
+					$language = self::language_from_catalog_entry( $entry );
 				} elseif ( '' !== $code ) {
 					$language = self::normalize_language_row( $row );
 					if ( ! self::is_valid_locale( $language['locale'] ) ) {
