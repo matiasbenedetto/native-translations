@@ -49,13 +49,15 @@ final class AdminSettingsTest extends TestCase {
 		$catalog = Wpait_Admin_Settings::default_catalog();
 		$this->assertNotEmpty( $catalog );
 		foreach ( $catalog as $code => $entry ) {
-			$this->assertMatchesRegularExpression( '/^[a-z]{2,3}(-[a-z]{2,3})?$/', $code, "code '$code' should be a lowercase code" );
-			foreach ( array( 'locale', 'name', 'native', 'flag' ) as $field ) {
+			// Codes are derived from the locale: `es-ar`, and variant locales like
+			// `de_DE_formal` -> `de-de-formal`.
+			$this->assertMatchesRegularExpression( '/^[a-z]{2,3}(-[a-z0-9]+)*$/', $code, "code '$code' should be a lowercase code" );
+			foreach ( array( 'locale', 'name', 'native' ) as $field ) {
 				$this->assertArrayHasKey( $field, $entry, "code '$code' missing '$field'" );
 				$this->assertNotSame( '', $entry[ $field ], "code '$code' has empty '$field'" );
 			}
-			// Flags are ISO 3166-1 alpha-2 region codes (rendered as flag icons, #80).
-			$this->assertMatchesRegularExpression( '/^[a-z]{2}$/', $entry['flag'], "code '$code' flag should be a region code" );
+			// Flags are a two-letter region code, or blank for language-only locales.
+			$this->assertMatchesRegularExpression( '/^([a-z]{2})?$/', $entry['flag'], "code '$code' flag should be a region code or blank" );
 			$this->assertTrue(
 				Wpait_Admin_Settings::is_valid_locale( $entry['locale'] ),
 				"catalog locale '{$entry['locale']}' (code '$code') should be valid"
@@ -67,24 +69,49 @@ final class AdminSettingsTest extends TestCase {
 		$entry = Wpait_Admin_Settings::catalog_entry_for_locale( 'es_AR' );
 		$this->assertNotNull( $entry );
 		$this->assertSame( 'es-ar', $entry['code'] );
-		$this->assertSame( 'Spanish / Argentina', $entry['name'] );
-		$this->assertSame( 'Español (Argentina)', $entry['native'] );
+		$this->assertSame( 'Spanish (Argentina)', $entry['name'] );
+		$this->assertSame( 'Español de Argentina', $entry['native'] );
 		$this->assertSame( 'ar', $entry['flag'] );
+
+		// Language-only locales have no region, so no flag.
+		$ja = Wpait_Admin_Settings::catalog_entry_for_locale( 'ja' );
+		$this->assertNotNull( $ja );
+		$this->assertSame( 'ja', $ja['code'] );
+		$this->assertSame( '', $ja['flag'] );
 
 		$this->assertContains( 'zh_HK', Wpait_Admin_Settings::common_locales() );
 		$this->assertSame( 'pt-br', Wpait_Admin_Settings::code_for_locale( 'pt_BR' ) );
-		$this->assertSame( 'ja', Wpait_Admin_Settings::code_for_locale( 'ja' ) );
+		$this->assertSame( 'de-de-formal', Wpait_Admin_Settings::code_for_locale( 'de_DE_formal' ) );
 	}
 
-	public function test_locale_catalog_covers_the_full_bundled_list(): void {
+	public function test_locale_catalog_is_the_wordpress_locale_set(): void {
 		$catalog = Wpait_Admin_Settings::locale_catalog();
-		// The bundled catalog is the full SimpleLocalize-derived locale set, so it
-		// should be broad — far beyond the original ~40 hand-curated entries — and
-		// include locales that were not previously offered.
-		$this->assertGreaterThan( 300, count( $catalog ), 'expected the expanded locale list' );
-		foreach ( array( 'af_ZA', 'sw_KE', 'is_IS', 'vi_VN', 'th_TH' ) as $locale ) {
-			$this->assertArrayHasKey( $locale, $catalog, "locale '$locale' should be in the expanded catalog" );
+		// The catalog is the set of locales WordPress core is translated into.
+		$this->assertGreaterThan( 100, count( $catalog ), 'expected the full WordPress locale list' );
+		// Locales WordPress ships that the previous (country-primary) list lacked.
+		foreach ( array( 'ca', 'eu', 'ja', 'pt_BR', 'zh_HK', 'de_DE_formal' ) as $locale ) {
+			$this->assertArrayHasKey( $locale, $catalog, "locale '$locale' should be in the catalog" );
 		}
+	}
+
+	public function test_locale_catalog_filter_lets_extenders_add_locales(): void {
+		// An extender returns a locale WordPress doesn't ship, supplying only labels;
+		// the catalog normalizes it (derives the code, lower-cases the flag).
+		Wpait_Test_State::$filters['wpait_locale_catalog'] = array(
+			'gl_ES' => array(
+				'name'   => 'Galician',
+				'native' => 'Galego',
+				'flag'   => 'ES', // upper-case on purpose: normalized to 'es'.
+			),
+		);
+
+		$entry = Wpait_Admin_Settings::catalog_entry_for_locale( 'gl_ES' );
+		$this->assertNotNull( $entry, 'filter-added locale should be in the catalog' );
+		$this->assertSame( 'gl_ES', $entry['locale'] );
+		$this->assertSame( 'gl-es', $entry['code'] );
+		$this->assertSame( 'Galician', $entry['name'] );
+		$this->assertSame( 'Galego', $entry['native'] );
+		$this->assertSame( 'es', $entry['flag'] );
 	}
 
 	public function test_common_locales_are_derived_from_catalog(): void {
@@ -186,8 +213,8 @@ final class AdminSettingsTest extends TestCase {
 		$lang = $out['languages'][0];
 		$this->assertSame( 'es-ar', $lang['code'] );
 		$this->assertSame( 'es_AR', $lang['locale'] );
-		$this->assertSame( 'Spanish / Argentina', $lang['name'] );
-		$this->assertSame( 'Español (Argentina)', $lang['native'] );
+		$this->assertSame( 'Spanish (Argentina)', $lang['name'] );
+		$this->assertSame( 'Español de Argentina', $lang['native'] );
 		$this->assertSame( 'ar', $lang['flag'] );
 		$this->assertTrue( $lang['enabled'] );
 	}

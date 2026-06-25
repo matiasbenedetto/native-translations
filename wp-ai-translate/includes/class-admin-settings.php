@@ -128,31 +128,30 @@ class Wpait_Admin_Settings {
 	}
 
 	/**
-	 * Builds a locale-catalog entry. The generated `name` is intentionally regional
-	 * so admin screens remain clear when a site enables more than one locale for the
-	 * same language.
+	 * Normalizes one locale-catalog entry. Accepts loose input (used both for the
+	 * bundled data rows and for entries injected via the `wpait_locale_catalog`
+	 * filter) and guarantees the shape the UI relies on: a derived code, a non-empty
+	 * display name, a native label (falling back to the name), and a flag that is
+	 * either a two-letter region code or blank.
 	 *
-	 * @param string $locale   WordPress locale.
-	 * @param string $language Translated language name.
-	 * @param string $native   Native language/region label.
-	 * @param string $region   Translated region name.
-	 * @param string $flag     ISO 3166-1 alpha-2 region code for flag rendering.
-	 * @return array{locale:string,code:string,language:string,region:string,name:string,native:string,flag:string}
+	 * @param string $locale WordPress locale.
+	 * @param string $name   Display name (e.g. "Spanish (Argentina)").
+	 * @param string $native Native label (e.g. "Español de Argentina").
+	 * @param string $flag   Region subtag for the flag icon, or '' for none.
+	 * @return array{locale:string,code:string,name:string,native:string,flag:string}
 	 */
-	private static function locale_catalog_entry( string $locale, string $language, string $native, string $region, string $flag ): array {
+	private static function locale_catalog_entry( string $locale, string $name, string $native, string $flag ): array {
+		$name = '' !== trim( $name ) ? $name : $locale;
+		$flag = strtolower( $flag );
+		if ( 1 !== preg_match( '/^[a-z]{2}$/', $flag ) ) {
+			$flag = '';
+		}
 		return array(
-			'locale'   => $locale,
-			'code'     => self::code_for_locale( $locale ),
-			'language' => $language,
-			'region'   => $region,
-			'name'     => sprintf(
-				/* translators: 1: language name, 2: region name. */
-				__( '%1$s / %2$s', 'wp-ai-translate' ),
-				$language,
-				$region
-			),
-			'native'   => $native,
-			'flag'     => $flag,
+			'locale' => $locale,
+			'code'   => self::code_for_locale( $locale ),
+			'name'   => $name,
+			'native' => '' !== trim( $native ) ? $native : $name,
+			'flag'   => $flag,
 		);
 	}
 
@@ -171,24 +170,59 @@ class Wpait_Admin_Settings {
 	 * Languages settings UI: admins choose a locale and the plugin derives the code,
 	 * label, native name, and flag from this catalog.
 	 *
-	 * The data lives in includes/data/locales.php (reference data derived from the
-	 * SimpleLocalize public locale list, not translated through this text domain).
-	 * The built catalog is memoized for the request since it holds 300+ entries.
+	 * The data lives in includes/data/locales.php (the locales WordPress core is
+	 * translated into; not translated through this text domain), extended by the
+	 * `wpait_locale_catalog` filter.
 	 *
-	 * @return array<string,array{locale:string,code:string,language:string,region:string,name:string,native:string,flag:string}>
+	 * @return array<string,array{locale:string,code:string,name:string,native:string,flag:string}>
 	 */
 	public static function locale_catalog(): array {
-		static $catalog = null;
-		if ( null !== $catalog ) {
-			return $catalog;
+		$rows  = require __DIR__ . '/data/locales.php';
+		$built = array();
+		foreach ( $rows as $row ) {
+			// Row shape: [ locale, name, native, flag ].
+			$entry                     = self::locale_catalog_entry( $row[0], $row[1], $row[2], $row[3] );
+			$built[ $entry['locale'] ] = $entry;
 		}
 
-		$rows    = require __DIR__ . '/data/locales.php';
+		/**
+		 * Filters the catalog of locales offered in the Languages picker.
+		 *
+		 * Extenders can add locales WordPress doesn't ship (or override a bundled
+		 * one) by returning extra entries keyed by WordPress locale. Each entry is
+		 * re-normalized afterwards, so a callback only needs to supply the labels:
+		 *
+		 *     add_filter( 'wpait_locale_catalog', function ( $catalog ) {
+		 *         $catalog['gl_ES'] = array(
+		 *             'name'   => 'Galician',
+		 *             'native' => 'Galego',
+		 *             'flag'   => 'es', // optional two-letter region code
+		 *         );
+		 *         return $catalog;
+		 *     } );
+		 *
+		 * @param array<string,array{locale:string,code:string,name:string,native:string,flag:string}> $built Locale entries keyed by locale.
+		 */
+		$filtered = apply_filters( 'wpait_locale_catalog', $built );
+		if ( ! is_array( $filtered ) ) {
+			$filtered = $built;
+		}
+
 		$catalog = array();
-		foreach ( $rows as $row ) {
-			// Row shape: [ locale, language, native, region, flag ].
-			$entry                       = self::locale_catalog_entry( $row[0], $row[1], $row[2], $row[3], $row[4] );
-			$catalog[ $entry['locale'] ] = $entry;
+		foreach ( $filtered as $key => $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+			$locale = isset( $entry['locale'] ) && '' !== (string) $entry['locale'] ? (string) $entry['locale'] : (string) $key;
+			if ( '' === $locale ) {
+				continue;
+			}
+			$catalog[ $locale ] = self::locale_catalog_entry(
+				$locale,
+				isset( $entry['name'] ) ? (string) $entry['name'] : '',
+				isset( $entry['native'] ) ? (string) $entry['native'] : '',
+				isset( $entry['flag'] ) ? (string) $entry['flag'] : ''
+			);
 		}
 		return $catalog;
 	}
@@ -239,7 +273,9 @@ class Wpait_Admin_Settings {
 	 * @return bool
 	 */
 	public static function is_valid_locale( string $locale ): bool {
-		return '' === $locale || 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2,3})?$/', $locale );
+		// Accepts WordPress locale forms: `xx`, `xx_YY`, and variant locales such as
+		// `de_DE_formal` / `pt_PT_ao90` (region required before any variant suffix).
+		return '' === $locale || 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2,3}(_[a-z0-9]+)?)?$/', $locale );
 	}
 
 	/**
