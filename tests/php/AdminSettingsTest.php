@@ -56,8 +56,10 @@ final class AdminSettingsTest extends TestCase {
 				$this->assertArrayHasKey( $field, $entry, "code '$code' missing '$field'" );
 				$this->assertNotSame( '', $entry[ $field ], "code '$code' has empty '$field'" );
 			}
-			// Flags are a two-letter region code, or blank for language-only locales.
-			$this->assertMatchesRegularExpression( '/^([a-z]{2})?$/', $entry['flag'], "code '$code' flag should be a region code or blank" );
+			// Flags are a two-letter region code, an optional "gb-xxx" subdivision
+			// (e.g. gb-sct for Scottish Gaelic), or blank for the few languages with
+			// no conventional home region (#88).
+			$this->assertMatchesRegularExpression( '/^([a-z]{2}(-[a-z]{3})?)?$/', $entry['flag'], "code '$code' flag should be a region code or blank" );
 			$this->assertTrue(
 				Wpait_Admin_Settings::is_valid_locale( $entry['locale'] ),
 				"catalog locale '{$entry['locale']}' (code '$code') should be valid"
@@ -73,11 +75,20 @@ final class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'Español de Argentina', $entry['native'] );
 		$this->assertSame( 'ar', $entry['flag'] );
 
-		// Language-only locales have no region, so no flag.
+		// Language-only locales carry no region, but most are back-filled with the
+		// flag of their conventional home country so the picker still shows one
+		// (#88): Japanese -> Japan.
 		$ja = Wpait_Admin_Settings::catalog_entry_for_locale( 'ja' );
 		$this->assertNotNull( $ja );
 		$this->assertSame( 'ja', $ja['code'] );
-		$this->assertSame( '', $ja['flag'] );
+		$this->assertSame( 'jp', $ja['flag'] );
+
+		// Languages with no single home region (Arabic, Esperanto, ...) are
+		// intentionally left flagless.
+		$ar = Wpait_Admin_Settings::catalog_entry_for_locale( 'ar' );
+		$this->assertNotNull( $ar );
+		$this->assertSame( 'ar', $ar['code'] );
+		$this->assertSame( '', $ar['flag'] );
 
 		$this->assertContains( 'zh_HK', Wpait_Admin_Settings::common_locales() );
 		$this->assertSame( 'pt-br', Wpait_Admin_Settings::code_for_locale( 'pt_BR' ) );
