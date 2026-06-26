@@ -849,6 +849,8 @@ class Wpait_Admin_List {
 		$is_lang     = in_array( $view, $codes, true );
 		$is_unmarked = 'unmarked' === $view;
 
+		$is_originals = ! $is_lang && ! $is_unmarked;
+
 		$this->scan_truncated = false;
 
 		// Build the full row set for the requested view, then sort/search/paginate
@@ -862,6 +864,11 @@ class Wpait_Admin_List {
 			// explicitly marked as original.
 			$rows = $this->originals_overview_rows( $codes, $languages, $show_hidden );
 		}
+
+		// The active view's full (pre-search) row set is exactly the source the
+		// matching tab count needs, so capture its size now and reuse it below
+		// instead of rescanning the same items a second time.
+		$active_view_total = count( $rows );
 
 		// Search filter (title match, case-insensitive).
 		if ( '' !== $search ) {
@@ -913,8 +920,8 @@ class Wpait_Admin_List {
 			'ai_ok'         => Wpait_Translator::can_generate_text(),
 			'scan_truncated' => $this->scan_truncated,
 			'counts'        => array(
-				'originals'   => count( $this->originals_overview_rows( $codes, $languages, $show_hidden ) ),
-				'unmarked'    => count( $this->unmarked_overview_rows() ),
+				'originals'   => $is_originals ? $active_view_total : count( $this->originals_overview_rows( $codes, $languages, $show_hidden ) ),
+				'unmarked'    => $is_unmarked ? $active_view_total : count( $this->unmarked_overview_rows() ),
 				'by_language' => $by_language,
 			),
 		);

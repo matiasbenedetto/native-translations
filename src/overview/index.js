@@ -589,9 +589,13 @@ function Overview() {
 		} );
 
 		// Mark / unmark as original (#92). Marking is only offered for items that
-		// already have a language set; the server rejects it otherwise.
-		const setOriginal = ( items, isOriginal, onActionPerformed ) =>
-			Promise.allSettled(
+		// already have a language set; the server still rejects ineligible items
+		// (the wpait_no_language 409 backstop, or a 403 from a permission/race),
+		// so surface those failures the way the other write actions do.
+		const setOriginal = ( items, isOriginal, onActionPerformed ) => {
+			setNotice( '' );
+			setError( '' );
+			return Promise.allSettled(
 				items.map( ( it ) =>
 					apiFetch( {
 						path: `/${ cfg.namespace }/overview-original`,
@@ -599,12 +603,29 @@ function Overview() {
 						data: { object_id: it.id, type: it.type, is_original: isOriginal },
 					} )
 				)
-			).then( () => {
+			).then( ( results ) => {
+				const failed = results.filter( ( r ) => 'rejected' === r.status );
+				const succeeded = results.length - failed.length;
+				if ( failed.length ) {
+					setError(
+						failed[ 0 ].reason?.message ||
+							( isOriginal
+								? __( 'Could not mark as original.', 'wp-ai-translate' )
+								: __( 'Could not unmark as original.', 'wp-ai-translate' ) )
+					);
+				} else if ( succeeded ) {
+					setNotice(
+						isOriginal
+							? __( 'Marked as original.', 'wp-ai-translate' )
+							: __( 'Unmarked as original.', 'wp-ai-translate' )
+					);
+				}
 				fetchData();
 				if ( onActionPerformed ) {
 					onActionPerformed( items );
 				}
 			} );
+		};
 
 		list.push( {
 			id: 'mark-original',

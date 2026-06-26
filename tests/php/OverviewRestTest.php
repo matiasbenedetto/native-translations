@@ -241,6 +241,30 @@ final class OverviewRestTest extends TestCase {
 		$this->assertSame( 1, $data['counts']['unmarked'] );
 	}
 
+	public function test_tab_counts_correct_from_a_non_originals_view(): void {
+		// Guards the count reuse: the active view's pre-search rows back its own
+		// tab count, while the other tabs' counts still come from their own scan.
+		// Viewing "unmarked" must still report the right Originals count, and vice
+		// versa, regardless of which view's rows happen to be built this request.
+		$this->seed_post( 10, 'en', '', 'post', 'Marked original' );
+		$this->mark_original( 10 );
+		$this->seed_post( 11, 'es', '', 'post', 'Another original' );
+		$this->mark_original( 11 );
+		$this->seed_post( 20, '', '', 'post', 'Unmarked one' );
+		$this->seed_post( 21, '', '', 'post', 'Unmarked two' );
+		$this->seed_post( 22, '', '', 'post', 'Unmarked three' );
+
+		$from_unmarked = $this->payload( array( 'view' => 'unmarked' ) );
+		$this->assertSame( 3, $from_unmarked['total'], 'unmarked view rows' );
+		$this->assertSame( 3, $from_unmarked['counts']['unmarked'], 'active view count from built rows' );
+		$this->assertSame( 2, $from_unmarked['counts']['originals'], 'originals count still scanned' );
+
+		$from_originals = $this->payload( array( 'view' => 'originals' ) );
+		$this->assertSame( 2, $from_originals['total'], 'originals view rows' );
+		$this->assertSame( 2, $from_originals['counts']['originals'], 'active view count from built rows' );
+		$this->assertSame( 3, $from_originals['counts']['unmarked'], 'unmarked count still scanned' );
+	}
+
 	public function test_ai_ok_reflects_connector_availability(): void {
 		Wpait_Test_State::$supports_ai = true;
 		$this->assertTrue( $this->payload()['ai_ok'] );
