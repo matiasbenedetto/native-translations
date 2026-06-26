@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# up.sh — one command to a ready-to-test wp-ai-translate site.
+# up.sh — one command to a ready-to-test native-translations site.
 #
 #   ./harness/up.sh              bootstrap + serve + activate + seed, then print the URL
 #   ./harness/up.sh --no-seed    skip seeding (plugin active on a clean WP 7.0)
@@ -27,7 +27,7 @@ done
 
 # Activate the plugin on the default bundled theme (twentytwentyfive on WP 7.0).
 "$PG" wp -- theme activate twentytwentyfive >/dev/null 2>&1 || true
-"$PG" wp -- plugin activate wp-ai-translate
+"$PG" wp -- plugin activate native-translations
 
 if [ "$SEED" = 1 ]; then
   "$PG" seed
@@ -44,8 +44,8 @@ fi
 echo
 echo "✅ Ready. Test site is live at: $("$PG" url)"
 echo "   Admin:     $("$PG" url "/wp-admin/")"
-echo "   Settings:  $("$PG" url "/wp-admin/options-general.php?page=wp-ai-translate")"
-echo "   Overview:  $("$PG" url "/wp-admin/options-general.php?page=wp-ai-translate-overview")"
+echo "   Settings:  $("$PG" url "/wp-admin/options-general.php?page=native-translations")"
+echo "   Overview:  $("$PG" url "/wp-admin/options-general.php?page=native-translations-overview")"
 echo
 echo "   Screenshots:  $PG shot -- \"/\" /tmp/home.png"
 echo "   Screencast:   $PG cast -- \"/\" /tmp/home.webm"

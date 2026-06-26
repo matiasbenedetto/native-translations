@@ -1,0 +1,24 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "native-translations/language-switcher",
+	"version": "0.1.0",
+	"title": "Language Switcher",
+	"category": "widgets",
+	"icon": "translation",
+	"description": "Site-wide language switcher: links to the current page's translation when one exists, otherwise the site home.",
+	"keywords": [ "translation", "language", "multilingual", "switcher" ],
+	"textdomain": "native-translations",
+	"usesContext": [ "postId" ],
+	"supports": {
+		"html": false,
+		"align": [ "left", "center", "right", "wide" ],
+		"spacing": { "margin": true, "padding": true },
+		"typography": { "fontSize": true }
+	},
+	"attributes": {
+		"displayStyle": { "type": "string", "default": "both" },
+		"showCurrent": { "type": "boolean", "default": true }
+	},
+	"editorScript": "wpnt-language-switcher-editor"
+}

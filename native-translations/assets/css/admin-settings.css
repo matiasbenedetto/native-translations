@@ -1,0 +1,307 @@
+/**
+ * WP Native Translations — settings page layout (#61).
+ *
+ * Constrains the page to a readable column, groups each section into a card with
+ * consistent spacing, and gives form controls a sensible width instead of letting
+ * them stretch the full width of the screen.
+ */
+
+.wpnt-settings {
+	max-width: 860px;
+}
+
+/* Section cards: white box, subtle border, even padding + spacing. */
+.wpnt-settings .wpnt-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 4px 24px 20px;
+	margin: 0 0 20px;
+	box-shadow: 0 1px 1px rgba( 0, 0, 0, 0.04 );
+}
+
+.wpnt-settings .wpnt-card > h2 {
+	font-size: 14px;
+	padding: 16px 0 4px;
+	margin: 0 0 4px;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.wpnt-settings .wpnt-card > h3 {
+	margin-top: 20px;
+}
+
+/* Keep explanatory text to a comfortable measure. */
+.wpnt-settings .description {
+	max-width: 68ch;
+}
+
+/* Form controls get a logical width rather than filling the screen.
+   Inputs that set an explicit `size` (code/locale/flag) keep their small width. */
+.wpnt-settings select,
+.wpnt-settings input[type="text"]:not([size]) {
+	max-width: 360px;
+	width: 100%;
+}
+
+.wpnt-settings textarea.large-text {
+	max-width: 100%;
+	width: 100%;
+}
+
+/* The form-table label column is narrower here so the instruction textareas read
+   on one comfortable column. */
+.wpnt-settings .form-table th {
+	width: 180px;
+	padding-left: 0;
+}
+
+.wpnt-settings .form-table td {
+	padding-right: 0;
+}
+
+/* Languages table + locale picker. */
+.wpnt-settings .wpnt-languages-table {
+	margin-bottom: 12px;
+}
+
+.wpnt-settings .wpnt-languages-table th,
+.wpnt-settings .wpnt-languages-table td {
+	vertical-align: middle;
+}
+
+.wpnt-language-summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.wpnt-language-flag {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	flex: 0 0 26px;
+}
+
+.wpnt-language-text {
+	display: grid;
+	gap: 2px;
+}
+
+.wpnt-language-native {
+	display: block;
+	color: #646970;
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.wpnt-enabled-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.wpnt-add-language-panel {
+	max-width: 520px;
+	margin: 4px 0 16px;
+	padding: 12px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #f6f7f7;
+}
+
+.wpnt-add-language-label {
+	display: block;
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+
+.wpnt-locale-picker {
+	position: relative;
+	max-width: 460px;
+}
+
+.wpnt-locale-picker-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	width: 100%;
+	min-height: 36px;
+}
+
+.wpnt-locale-picker-selected {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wpnt-locale-picker-menu {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	padding: 8px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.wpnt-locale-search {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: none;
+	margin: 0 0 8px;
+}
+
+.wpnt-locale-options {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.wpnt-locale-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #1d2327;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.wpnt-locale-option:hover,
+.wpnt-locale-option:focus {
+	background: #f0f6fc;
+	outline: 1px solid #72aee6;
+}
+
+.wpnt-locale-option[hidden] {
+	display: none;
+}
+
+.wpnt-locale-option-text {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+}
+
+.wpnt-locale-option-text strong,
+.wpnt-locale-selected-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wpnt-locale-option-text code {
+	flex: 0 0 auto;
+}
+
+.wpnt-no-locale-options {
+	margin: 8px;
+	color: #646970;
+}
+
+.wpnt-add-language-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 12px 0 0;
+}
+
+/* AI provider status badge. */
+.wpnt-ai-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 10px;
+	font-weight: 600;
+	color: #fff;
+}
+
+.wpnt-ai-ok {
+	background: #198754;
+}
+
+.wpnt-ai-warn {
+	background: #b88600;
+}
+
+.wpnt-ai-bad {
+	background: #b32d2e;
+}
+
+#wpnt-test-result.is-ok {
+	color: #198754;
+}
+
+#wpnt-test-result.is-bad {
+	color: #b32d2e;
+}
+
+/* Language-pack install status badges (#62). */
+.wpnt-pack-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 10px;
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.wpnt-pack-badge.is-installed,
+.wpnt-pack-badge.is-builtin {
+	background: #198754;
+	color: #fff;
+}
+
+.wpnt-pack-badge.is-missing {
+	background: #b88600;
+	color: #fff;
+}
+
+.wpnt-pack-badge.is-none {
+	background: #dcdcde;
+	color: #50575e;
+}
+
+/* Inline install-error notice next to the Install button (#71). */
+.wpnt-pack-error {
+	margin: 6px 0 0;
+	max-width: 28em;
+	color: #b32d2e;
+	font-size: 12px;
+}
+
+/* Flag field: live preview + input (#80). */
+.wpnt-flag-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.wpnt-flag-preview {
+	display: inline-flex;
+	align-items: center;
+	min-width: 22px;
+	min-height: 15px;
+}
+
+.wpnt-flag-img {
+	height: 14px;
+	width: auto;
+	border-radius: 2px;
+	box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.1 );
+	vertical-align: middle;
+}

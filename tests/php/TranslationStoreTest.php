@@ -1,15 +1,15 @@
 <?php
 /**
- * Unit tests for the REAL Wpait_Translation_Store — the single writer for language
+ * Unit tests for the REAL Wpnt_Translation_Store — the single writer for language
  * + group relationships and the one-member-per-language invariant (C2).
  *
  * The store is driven against the bootstrap's in-memory WP object model
- * (Wpait_Test_State::$posts/$terms/$post_meta/$term_meta/$object_terms/$cache), so
+ * (Wpnt_Test_State::$posts/$terms/$post_meta/$term_meta/$object_terms/$cache), so
  * groups and languages are modelled declaratively without a database. These tests
  * exercise the store's real logic — the invariants, the re-assignment guard, group
  * linking + sibling lookup, ensure_group idempotency, and cache busting.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -18,11 +18,11 @@ use PHPUnit\Framework\TestCase;
 
 final class TranslationStoreTest extends TestCase {
 
-	private Wpait_Translation_Store $store;
+	private Wpnt_Translation_Store $store;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		$this->store = new Wpait_Translation_Store();
+		Wpnt_Test_State::reset();
+		$this->store = new Wpnt_Translation_Store();
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -31,23 +31,23 @@ final class TranslationStoreTest extends TestCase {
 
 	/** Seeds a post with a language (object term) and optional group meta. */
 	private function seed_post( int $id, string $code, string $group = '', string $status = 'publish' ): void {
-		Wpait_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => $status );
+		Wpnt_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => $status );
 		if ( '' !== $code ) {
-			Wpait_Test_State::$object_terms[ $id ][ Wpait_Languages::TAXONOMY ] = array( $code );
+			Wpnt_Test_State::$object_terms[ $id ][ Wpnt_Languages::TAXONOMY ] = array( $code );
 		}
 		if ( '' !== $group ) {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
 	/** Seeds a term with a language (term meta) and optional group meta. */
 	private function seed_term( int $id, string $code, string $group = '' ): void {
-		Wpait_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id" );
+		Wpnt_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id" );
 		if ( '' !== $code ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_LANGUAGE ] = $code;
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_LANGUAGE ] = $code;
 		}
 		if ( '' !== $group ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
@@ -72,7 +72,7 @@ final class TranslationStoreTest extends TestCase {
 		$this->seed_post( 10, '' );
 		$result = $this->store->set_language( 'post', 10, '' );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_invalid_language', $result->get_error_code() );
+		$this->assertSame( 'wpnt_invalid_language', $result->get_error_code() );
 	}
 
 	public function test_set_language_assigns_post_and_term(): void {
@@ -110,15 +110,15 @@ final class TranslationStoreTest extends TestCase {
 		$this->assertTrue( $this->store->is_original( 'post', 10 ) );
 		$this->assertTrue( $this->store->is_original( 'term', 20 ) );
 		// Persisted as the '1' marker meta.
-		$this->assertSame( '1', Wpait_Test_State::$post_meta[10][ Wpait_Translation_Store::META_IS_ORIGINAL ] );
-		$this->assertSame( '1', Wpait_Test_State::$term_meta[20][ Wpait_Translation_Store::META_IS_ORIGINAL ] );
+		$this->assertSame( '1', Wpnt_Test_State::$post_meta[10][ Wpnt_Translation_Store::META_IS_ORIGINAL ] );
+		$this->assertSame( '1', Wpnt_Test_State::$term_meta[20][ Wpnt_Translation_Store::META_IS_ORIGINAL ] );
 
 		$this->assertTrue( $this->store->set_original( 'post', 10, false ) );
 		$this->assertTrue( $this->store->set_original( 'term', 20, false ) );
 		$this->assertFalse( $this->store->is_original( 'post', 10 ) );
 		$this->assertFalse( $this->store->is_original( 'term', 20 ) );
-		$this->assertArrayNotHasKey( Wpait_Translation_Store::META_IS_ORIGINAL, Wpait_Test_State::$post_meta[10] ?? array() );
-		$this->assertArrayNotHasKey( Wpait_Translation_Store::META_IS_ORIGINAL, Wpait_Test_State::$term_meta[20] ?? array() );
+		$this->assertArrayNotHasKey( Wpnt_Translation_Store::META_IS_ORIGINAL, Wpnt_Test_State::$post_meta[10] ?? array() );
+		$this->assertArrayNotHasKey( Wpnt_Translation_Store::META_IS_ORIGINAL, Wpnt_Test_State::$term_meta[20] ?? array() );
 	}
 
 	public function test_set_original_rejects_marking_an_item_with_no_language(): void {
@@ -126,7 +126,7 @@ final class TranslationStoreTest extends TestCase {
 		$this->seed_post( 10, '' );
 		$result = $this->store->set_original( 'post', 10, true );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_no_language', $result->get_error_code() );
+		$this->assertSame( 'wpnt_no_language', $result->get_error_code() );
 		$this->assertFalse( $this->store->is_original( 'post', 10 ) );
 	}
 
@@ -188,7 +188,7 @@ final class TranslationStoreTest extends TestCase {
 
 		$result = $this->store->set_language( 'post', 11, 'en' );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_language_exists', $result->get_error_code() );
+		$this->assertSame( 'wpnt_language_exists', $result->get_error_code() );
 		$this->assertSame( 409, $result->get_error_data()['status'] );
 		// The Spanish assignment is untouched.
 		$this->assertSame( 'es', $this->store->get_language( 'post', 11 ) );
@@ -208,7 +208,7 @@ final class TranslationStoreTest extends TestCase {
 
 		$result = $this->store->link_translation( 'post', 10, 12 );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_language_exists', $result->get_error_code() );
+		$this->assertSame( 'wpnt_language_exists', $result->get_error_code() );
 		// Candidate was NOT pulled into the group.
 		$this->assertSame( '', $this->store->get_group( 'post', 12 ) );
 	}
@@ -218,7 +218,7 @@ final class TranslationStoreTest extends TestCase {
 		$this->seed_post( 12, '' ); // no language assigned.
 		$result = $this->store->link_translation( 'post', 10, 12 );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_no_language', $result->get_error_code() );
+		$this->assertSame( 'wpnt_no_language', $result->get_error_code() );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -231,7 +231,7 @@ final class TranslationStoreTest extends TestCase {
 
 		$result = $this->store->set_language( 'post', 10, 'de' );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_language_reassign', $result->get_error_code() );
+		$this->assertSame( 'wpnt_language_reassign', $result->get_error_code() );
 		$this->assertSame( 409, $result->get_error_data()['status'] );
 		$this->assertSame( 'en', $this->store->get_language( 'post', 10 ) );
 	}
@@ -305,7 +305,7 @@ final class TranslationStoreTest extends TestCase {
 	public function test_get_translations_viewable_filters_non_public_siblings(): void {
 		$this->seed_post( 10, 'en', 'g1', 'publish' );
 		$this->seed_post( 11, 'es', 'g1', 'draft' );
-		Wpait_Test_State::$not_viewable[11] = true; // draft sibling not publicly viewable.
+		Wpnt_Test_State::$not_viewable[11] = true; // draft sibling not publicly viewable.
 
 		$this->assertArrayHasKey( 'es', $this->store->get_translations( 'post', 10 ) );
 		$this->assertArrayNotHasKey(
@@ -325,8 +325,8 @@ final class TranslationStoreTest extends TestCase {
 	public function test_get_translations_skips_a_missing_post_member(): void {
 		// Group meta references a post id that no longer exists (get_post → null).
 		$this->seed_post( 10, 'en', 'g1' );
-		Wpait_Test_State::$post_meta[99][ Wpait_Translation_Store::META_GROUP ] = 'g1';
-		Wpait_Test_State::$object_terms[99][ Wpait_Languages::TAXONOMY ]        = array( 'es' );
+		Wpnt_Test_State::$post_meta[99][ Wpnt_Translation_Store::META_GROUP ] = 'g1';
+		Wpnt_Test_State::$object_terms[99][ Wpnt_Languages::TAXONOMY ]        = array( 'es' );
 		// Post 99 is intentionally absent from $posts.
 
 		$siblings = $this->store->get_translations( 'post', 10 );
@@ -392,7 +392,7 @@ final class TranslationStoreTest extends TestCase {
 	public function test_bust_group_cache_noop_for_empty_group(): void {
 		// Must not throw or touch cache when there is no group.
 		$this->store->bust_group_cache( 'post', '' );
-		$this->assertSame( array(), Wpait_Test_State::$cache );
+		$this->assertSame( array(), Wpnt_Test_State::$cache );
 	}
 
 	/* ------------------------------------------------------------------ *

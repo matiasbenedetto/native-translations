@@ -8,8 +8,8 @@ import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 const traverse = _traverse.default || _traverse;
-const DOMAIN = 'wp-ai-translate';
-const OUT = process.argv[2] || '/tmp/wpait-js.pot';
+const DOMAIN = 'native-translations';
+const OUT = process.argv[2] || '/tmp/wpnt-js.pot';
 
 // Auto-discover every JS source under src/ (excluding test files) so a new entry
 // app (e.g. src/overview/) is picked up without editing this list. Refs are the
@@ -118,8 +118,8 @@ console.log(`extracted ${entries.size} JS strings -> ${OUT}`);
 // Fail loud on a zero/regressed extraction. A broken parser (e.g. the transitive
 // @babel/parser dep getting deduped away) silently emits 0 strings, which is how
 // the .pot previously rotted. Exit non-zero so `npm run make-pot`/CI catches it.
-// WPAIT_I18N_MIN_STRINGS sets a stricter floor than the default of 1.
-const MIN = Number.parseInt(process.env.WPAIT_I18N_MIN_STRINGS || '1', 10);
+// WPNT_I18N_MIN_STRINGS sets a stricter floor than the default of 1.
+const MIN = Number.parseInt(process.env.WPNT_I18N_MIN_STRINGS || '1', 10);
 if (entries.size < MIN) {
   console.error(
     `ERROR: extracted ${entries.size} JS i18n strings, expected at least ${MIN}. ` +

@@ -1,8 +1,8 @@
 /**
- * AI Translate — Overview page, rebuilt on @wordpress/dataviews (#54).
+ * WP Native Translations — Overview page, rebuilt on @wordpress/dataviews (#54).
  *
  * A controlled DataViews table backed by the REST endpoint
- * `GET wp-ai-translate/v1/overview`. A top-level view switch (Originals, Unmarked,
+ * `GET native-translations/v1/overview`. A top-level view switch (Originals, Unmarked,
  * or each enabled language) drives the `view` query param; pagination, sorting and
  * search are server-side. Per-row + bulk actions (Translate to <lang>, Hide/Unhide,
  * Mark/Unmark as original, Edit, View) are the foundation for the bulk-translate
@@ -21,8 +21,8 @@ import { Notice, Button, Flex, FlexItem, __experimentalText as Text } from '@wor
 // build:overview-css npm step and enqueued from PHP (wp-scripts' CSS extraction
 // drops a bundled-package .css import, so we copy the prebuilt sheet instead).
 
-const cfg = window.wpaitOverview || {
-	namespace: 'wp-ai-translate/v1',
+const cfg = window.wpntOverview || {
+	namespace: 'native-translations/v1',
 	languages: [],
 	aiOk: false,
 	perPage: 20,
@@ -70,7 +70,7 @@ function Thumbnail( { item } ) {
 				src={ item.thumbnail }
 				alt={ sprintf(
 					/* translators: %s: entity title. */
-					__( 'Featured image for %s', 'wp-ai-translate' ),
+					__( 'Featured image for %s', 'native-translations' ),
 					item.title
 				) }
 				width={ THUMB_SIZE }
@@ -106,7 +106,7 @@ function Snippet( { item } ) {
 	}
 	return (
 		<span
-			className="wpait-ov-snippet"
+			className="wpnt-ov-snippet"
 			style={ {
 				display: '-webkit-box',
 				WebkitLineClamp: 2,
@@ -138,11 +138,11 @@ function MissingChips( { item } ) {
 		return <span aria-hidden="true">—</span>;
 	}
 	return (
-		<span className="wpait-ov-chips" style={ { display: 'flex', flexWrap: 'wrap', gap: '4px' } }>
+		<span className="wpnt-ov-chips" style={ { display: 'flex', flexWrap: 'wrap', gap: '4px' } }>
 			{ missing.map( ( m ) => (
 				<span
 					key={ m.code }
-					className="wpait-ov-chip"
+					className="wpnt-ov-chip"
 					style={ {
 						display: 'inline-block',
 						padding: '1px 8px',
@@ -225,7 +225,7 @@ function Overview() {
 					}
 				}
 			} )
-			.catch( ( e ) => setError( e.message || __( 'Could not load the overview.', 'wp-ai-translate' ) ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not load the overview.', 'native-translations' ) ) )
 			.finally( () => setIsLoading( false ) );
 	}, [ activeView, view.page, view.perPage, view.sort?.field, view.sort?.direction, view.search ] );
 
@@ -307,12 +307,12 @@ function Overview() {
 				data: { action_id: actionId },
 			} )
 				.then( () => {
-					setNotice( __( 'Job re-queued.', 'wp-ai-translate' ) );
+					setNotice( __( 'Job re-queued.', 'native-translations' ) );
 					return Promise.all( [ loadFailed(), pollOnce() ] );
 				} )
 				.then( () => startPolling() )
 				.catch( ( e ) =>
-					setError( e.message || __( 'Could not re-run the job.', 'wp-ai-translate' ) )
+					setError( e.message || __( 'Could not re-run the job.', 'native-translations' ) )
 				)
 				.finally( () => setRetryingId( 0 ) );
 		},
@@ -387,7 +387,7 @@ function Overview() {
 		const base = [
 			{
 				id: 'thumbnail',
-				label: __( 'Image', 'wp-ai-translate' ),
+				label: __( 'Image', 'native-translations' ),
 				enableSorting: false,
 				enableHiding: false,
 				enableGlobalSearch: false,
@@ -396,14 +396,14 @@ function Overview() {
 			},
 			{
 				id: 'title',
-				label: __( 'Title', 'wp-ai-translate' ),
+				label: __( 'Title', 'native-translations' ),
 				type: 'text',
 				enableSorting: true,
 				enableGlobalSearch: true,
 				getValue: ( { item } ) => item.title,
 				render: ( { item } ) => (
 					<span
-						className="wpait-ov-title-block"
+						className="wpnt-ov-title-block"
 						style={ { display: 'block' } }
 					>
 						<span style={ { display: 'block' } }>
@@ -421,14 +421,14 @@ function Overview() {
 			},
 			{
 				id: 'type_label',
-				label: __( 'Type', 'wp-ai-translate' ),
+				label: __( 'Type', 'native-translations' ),
 				type: 'text',
 				enableSorting: true,
 				elements: [
-					{ value: __( 'Post', 'wp-ai-translate' ), label: __( 'Post', 'wp-ai-translate' ) },
-					{ value: __( 'Page', 'wp-ai-translate' ), label: __( 'Page', 'wp-ai-translate' ) },
-					{ value: __( 'Category', 'wp-ai-translate' ), label: __( 'Category', 'wp-ai-translate' ) },
-					{ value: __( 'Tag', 'wp-ai-translate' ), label: __( 'Tag', 'wp-ai-translate' ) },
+					{ value: __( 'Post', 'native-translations' ), label: __( 'Post', 'native-translations' ) },
+					{ value: __( 'Page', 'native-translations' ), label: __( 'Page', 'native-translations' ) },
+					{ value: __( 'Category', 'native-translations' ), label: __( 'Category', 'native-translations' ) },
+					{ value: __( 'Tag', 'native-translations' ), label: __( 'Tag', 'native-translations' ) },
 				],
 				filterBy: { operators: [ 'isAny' ] },
 				getValue: ( { item } ) => item.type_label,
@@ -438,7 +438,7 @@ function Overview() {
 		if ( isOriginals || isLang || isUnmarked ) {
 			base.push( {
 				id: 'language',
-				label: __( 'Language', 'wp-ai-translate' ),
+				label: __( 'Language', 'native-translations' ),
 				type: 'text',
 				enableSorting: false,
 				getValue: ( { item } ) => ( item.language ? item.language.name : '' ),
@@ -449,7 +449,7 @@ function Overview() {
 		if ( isOriginals ) {
 			base.push( {
 				id: 'missing',
-				label: __( 'Missing', 'wp-ai-translate' ),
+				label: __( 'Missing', 'native-translations' ),
 				type: 'text',
 				enableSorting: false,
 				getValue: ( { item } ) => ( item.missing || [] ).map( ( m ) => m.name ).join( ', ' ),
@@ -482,7 +482,7 @@ function Overview() {
 						setNotice(
 							sprintf(
 								/* translators: 1: count, 2: language name. */
-								__( '%1$d translation(s) to %2$s queued.', 'wp-ai-translate' ),
+								__( '%1$d translation(s) to %2$s queued.', 'native-translations' ),
 								queued,
 								name
 							)
@@ -493,14 +493,14 @@ function Overview() {
 						setNotice(
 							sprintf(
 								/* translators: %s: language name. */
-								__( 'Nothing new to queue for %s.', 'wp-ai-translate' ),
+								__( 'Nothing new to queue for %s.', 'native-translations' ),
 								name
 							)
 						);
 					}
 				} )
 				.catch( ( e ) =>
-					setError( e.message || __( 'Could not queue the translations.', 'wp-ai-translate' ) )
+					setError( e.message || __( 'Could not queue the translations.', 'native-translations' ) )
 				);
 		},
 		[ pollOnce, startPolling ]
@@ -528,7 +528,7 @@ function Overview() {
 					setNotice(
 						sprintf(
 							/* translators: 1: count, 2: language name. */
-							__( '%1$d item(s) set to %2$s.', 'wp-ai-translate' ),
+							__( '%1$d item(s) set to %2$s.', 'native-translations' ),
 							n,
 							name
 						)
@@ -536,7 +536,7 @@ function Overview() {
 					fetchData();
 				} )
 				.catch( ( e ) =>
-					setError( e.message || __( 'Could not set the language.', 'wp-ai-translate' ) )
+					setError( e.message || __( 'Could not set the language.', 'native-translations' ) )
 				);
 		},
 		[ fetchData ]
@@ -544,7 +544,7 @@ function Overview() {
 
 	// Change an already-assigned language (#103). Reuses /set-languages so the
 	// store's group invariants apply; a grouped member with siblings is refused
-	// (wpait_language_reassign) and surfaced per item rather than failing silently.
+	// (wpnt_language_reassign) and surfaced per item rather than failing silently.
 	const runChangeLanguage = useCallback(
 		( items, code, name ) => {
 			const eligible = items.filter( ( it ) => it.language && it.language.code !== code );
@@ -567,14 +567,14 @@ function Overview() {
 					if ( errs.length ) {
 						setError(
 							errs[ 0 ].message ||
-								__( 'Some items could not be changed — unlink them from their translation group first.', 'wp-ai-translate' )
+								__( 'Some items could not be changed — unlink them from their translation group first.', 'native-translations' )
 						);
 					}
 					if ( n ) {
 						setNotice(
 							sprintf(
 								/* translators: 1: count, 2: language name. */
-								__( '%1$d item(s) changed to %2$s.', 'wp-ai-translate' ),
+								__( '%1$d item(s) changed to %2$s.', 'native-translations' ),
 								n,
 								name
 							)
@@ -583,7 +583,7 @@ function Overview() {
 					fetchData();
 				} )
 				.catch( ( e ) =>
-					setError( e.message || __( 'Could not change the language.', 'wp-ai-translate' ) )
+					setError( e.message || __( 'Could not change the language.', 'native-translations' ) )
 				);
 		},
 		[ fetchData ]
@@ -613,14 +613,14 @@ function Overview() {
 				if ( failed.length ) {
 					setError(
 						failed[ 0 ].reason?.message ||
-							__( 'Could not unset the language.', 'wp-ai-translate' )
+							__( 'Could not unset the language.', 'native-translations' )
 					);
 				}
 				if ( succeeded ) {
 					setNotice(
 						sprintf(
 							/* translators: %d: count. */
-							__( '%d item(s) returned to Unmarked.', 'wp-ai-translate' ),
+							__( '%d item(s) returned to Unmarked.', 'native-translations' ),
 							succeeded
 						)
 					);
@@ -651,17 +651,17 @@ function Overview() {
 						setNotice(
 							sprintf(
 								/* translators: %d: count. */
-								__( '%d detection job(s) queued.', 'wp-ai-translate' ),
+								__( '%d detection job(s) queued.', 'native-translations' ),
 								queued
 							)
 						);
 						pollOnce().then( () => startPolling() );
 					} else {
-						setNotice( __( 'Nothing new to detect.', 'wp-ai-translate' ) );
+						setNotice( __( 'Nothing new to detect.', 'native-translations' ) );
 					}
 				} )
 				.catch( ( e ) =>
-					setError( e.message || __( 'Could not queue detection.', 'wp-ai-translate' ) )
+					setError( e.message || __( 'Could not queue detection.', 'native-translations' ) )
 				);
 		},
 		[ pollOnce, startPolling ]
@@ -677,7 +677,7 @@ function Overview() {
 				id: `set-language-${ lang.code }`,
 				label: sprintf(
 					/* translators: %s: language name. */
-					__( 'Set language: %s', 'wp-ai-translate' ),
+					__( 'Set language: %s', 'native-translations' ),
 					lang.name
 				),
 				supportsBulk: true,
@@ -699,7 +699,7 @@ function Overview() {
 				id: `change-language-${ lang.code }`,
 				label: sprintf(
 					/* translators: %s: language name. */
-					__( 'Change language to %s', 'wp-ai-translate' ),
+					__( 'Change language to %s', 'native-translations' ),
 					lang.name
 				),
 				supportsBulk: true,
@@ -716,7 +716,7 @@ function Overview() {
 		// "Unset language" — returns an item to Unmarked (#103).
 		list.push( {
 			id: 'clear-language',
-			label: __( 'Unset language', 'wp-ai-translate' ),
+			label: __( 'Unset language', 'native-translations' ),
 			supportsBulk: true,
 			isEligible: ( item ) => !! item.language,
 			callback: ( items, { onActionPerformed } ) =>
@@ -730,7 +730,7 @@ function Overview() {
 		// AI "Detect language (AI)" for unmarked items (#56).
 		list.push( {
 			id: 'detect-language',
-			label: __( 'Detect language (AI)', 'wp-ai-translate' ),
+			label: __( 'Detect language (AI)', 'native-translations' ),
 			supportsBulk: true,
 			disabled: ! aiOk,
 			isEligible: ( item ) => ! item.language && aiOk,
@@ -748,7 +748,7 @@ function Overview() {
 				id: `translate-${ lang.code }`,
 				label: sprintf(
 					/* translators: %s: language name. */
-					__( 'Translate to %s', 'wp-ai-translate' ),
+					__( 'Translate to %s', 'native-translations' ),
 					lang.name
 				),
 				supportsBulk: true,
@@ -765,7 +765,7 @@ function Overview() {
 
 		list.push( {
 			id: 'edit',
-			label: __( 'Edit', 'wp-ai-translate' ),
+			label: __( 'Edit', 'native-translations' ),
 			isEligible: ( item ) => !! item.edit_url,
 			callback: ( items ) => {
 				if ( items[ 0 ]?.edit_url ) {
@@ -776,7 +776,7 @@ function Overview() {
 
 		list.push( {
 			id: 'view',
-			label: __( 'View', 'wp-ai-translate' ),
+			label: __( 'View', 'native-translations' ),
 			isEligible: ( item ) => !! item.view_url,
 			callback: ( items ) => {
 				if ( items[ 0 ]?.view_url ) {
@@ -803,7 +803,7 @@ function Overview() {
 
 		list.push( {
 			id: 'hide',
-			label: __( 'Hide from list', 'wp-ai-translate' ),
+			label: __( 'Hide from list', 'native-translations' ),
 			supportsBulk: true,
 			isEligible: ( item ) => ! isLang && ! item.hidden,
 			callback: ( items, { onActionPerformed } ) => setHidden( items, true, onActionPerformed ),
@@ -811,7 +811,7 @@ function Overview() {
 
 		list.push( {
 			id: 'unhide',
-			label: __( 'Unhide', 'wp-ai-translate' ),
+			label: __( 'Unhide', 'native-translations' ),
 			supportsBulk: true,
 			isEligible: ( item ) => ! isLang && item.hidden,
 			callback: ( items, { onActionPerformed } ) => setHidden( items, false, onActionPerformed ),
@@ -819,7 +819,7 @@ function Overview() {
 
 		// Mark / unmark as original (#92). Marking is only offered for items that
 		// already have a language set; the server still rejects ineligible items
-		// (the wpait_no_language 409 backstop, or a 403 from a permission/race),
+		// (the wpnt_no_language 409 backstop, or a 403 from a permission/race),
 		// so surface those failures the way the other write actions do.
 		const setOriginal = ( items, isOriginal, onActionPerformed ) => {
 			setNotice( '' );
@@ -839,14 +839,14 @@ function Overview() {
 					setError(
 						failed[ 0 ].reason?.message ||
 							( isOriginal
-								? __( 'Could not mark as original.', 'wp-ai-translate' )
-								: __( 'Could not unmark as original.', 'wp-ai-translate' ) )
+								? __( 'Could not mark as original.', 'native-translations' )
+								: __( 'Could not unmark as original.', 'native-translations' ) )
 					);
 				} else if ( succeeded ) {
 					setNotice(
 						isOriginal
-							? __( 'Marked as original.', 'wp-ai-translate' )
-							: __( 'Unmarked as original.', 'wp-ai-translate' )
+							? __( 'Marked as original.', 'native-translations' )
+							: __( 'Unmarked as original.', 'native-translations' )
 					);
 				}
 				fetchData();
@@ -858,7 +858,7 @@ function Overview() {
 
 		list.push( {
 			id: 'mark-original',
-			label: __( 'Mark as original', 'wp-ai-translate' ),
+			label: __( 'Mark as original', 'native-translations' ),
 			supportsBulk: true,
 			isEligible: ( item ) => !! item.language && ! item.is_original,
 			callback: ( items, { onActionPerformed } ) => setOriginal( items, true, onActionPerformed ),
@@ -866,7 +866,7 @@ function Overview() {
 
 		list.push( {
 			id: 'unmark-original',
-			label: __( 'Unmark as original', 'wp-ai-translate' ),
+			label: __( 'Unmark as original', 'native-translations' ),
 			supportsBulk: true,
 			isEligible: ( item ) => !! item.is_original,
 			callback: ( items, { onActionPerformed } ) => setOriginal( items, false, onActionPerformed ),
@@ -884,34 +884,34 @@ function Overview() {
 		if ( isOriginals ) {
 			return __(
 				"Source entities you've marked as original. Translations are created from these.",
-				'wp-ai-translate'
+				'native-translations'
 			);
 		}
 		if ( isUnmarked ) {
 			return __(
 				"Entities that don't have a language assigned yet. Mark or detect a language to start translating them.",
-				'wp-ai-translate'
+				'native-translations'
 			);
 		}
 		const lang = languages.find( ( l ) => l.code === activeView );
 		return sprintf(
 			/* translators: %s: language name (e.g. "Spanish"). */
-			__( 'Entities assigned to %s.', 'wp-ai-translate' ),
+			__( 'Entities assigned to %s.', 'native-translations' ),
 			lang ? lang.name : activeView
 		);
 	}, [ isOriginals, isUnmarked, activeView, languages ] );
 
 	return (
-		<div className="wpait-overview">
+		<div className="wpnt-overview">
 			{ ! aiOk && (
 				<Notice status="warning" isDismissible={ false }>
 					{ cfg.settingsUrl ? (
 						<>
-							{ __( 'AI translation is unavailable, so Translate actions are disabled.', 'wp-ai-translate' ) }{ ' ' }
-							<a href={ cfg.settingsUrl }>{ __( 'Check the AI provider status.', 'wp-ai-translate' ) }</a>
+							{ __( 'AI translation is unavailable, so Translate actions are disabled.', 'native-translations' ) }{ ' ' }
+							<a href={ cfg.settingsUrl }>{ __( 'Check the AI provider status.', 'native-translations' ) }</a>
 						</>
 					) : (
-						__( 'AI translation is unavailable, so Translate actions are disabled.', 'wp-ai-translate' )
+						__( 'AI translation is unavailable, so Translate actions are disabled.', 'native-translations' )
 					) }
 				</Notice>
 			) }
@@ -921,7 +921,7 @@ function Overview() {
 					<span>
 						{ sprintf(
 							/* translators: %d: number of translations being processed. */
-							__( '%d translation(s) processing in the background…', 'wp-ai-translate' ),
+							__( '%d translation(s) processing in the background…', 'native-translations' ),
 							queue.pending + queue.running
 						) }
 					</span>{ ' ' }
@@ -931,21 +931,21 @@ function Overview() {
 						onClick={ toggleQueue }
 					>
 						{ showQueue
-							? __( 'Hide queue', 'wp-ai-translate' )
-							: __( 'Show queue', 'wp-ai-translate' ) }
+							? __( 'Hide queue', 'native-translations' )
+							: __( 'Show queue', 'native-translations' ) }
 					</button>
 					{ cfg.queueUrl && (
 						<>
 							{ ' ' }
 							<a href={ cfg.queueUrl }>
-								{ __( 'Manage the Translation Queue', 'wp-ai-translate' ) }
+								{ __( 'Manage the Translation Queue', 'native-translations' ) }
 							</a>
 						</>
 					) }
 					{ showQueue && (
-						<ul className="wpait-queue-list" style={ { margin: '8px 0 0' } }>
+						<ul className="wpnt-queue-list" style={ { margin: '8px 0 0' } }>
 							{ queueJobs.length === 0 && (
-								<li>{ __( 'No queued jobs.', 'wp-ai-translate' ) }</li>
+								<li>{ __( 'No queued jobs.', 'native-translations' ) }</li>
 							) }
 							{ queueJobs.map( ( job ) => (
 								<li key={ job.action_id }>
@@ -954,13 +954,13 @@ function Overview() {
 										? ` → ${ job.target }`
 										: '' }
 									{ 'detect' === job.kind
-										? ` — ${ __( 'detect language', 'wp-ai-translate' ) }`
+										? ` — ${ __( 'detect language', 'native-translations' ) }`
 										: '' }
 									{ ' ' }
-									<span className="wpait-queue-state">
+									<span className="wpnt-queue-state">
 										{ 'running' === job.state
-											? __( '(processing…)', 'wp-ai-translate' )
-											: __( '(queued)', 'wp-ai-translate' ) }
+											? __( '(processing…)', 'native-translations' )
+											: __( '(queued)', 'native-translations' ) }
 									</span>
 								</li>
 							) ) }
@@ -974,7 +974,7 @@ function Overview() {
 					<span>
 						{ sprintf(
 							/* translators: %d: number of failed background jobs. */
-							__( '%d background job(s) failed.', 'wp-ai-translate' ),
+							__( '%d background job(s) failed.', 'native-translations' ),
 							queue.failed
 						) }
 					</span>{ ' ' }
@@ -984,21 +984,21 @@ function Overview() {
 						onClick={ toggleFailed }
 					>
 						{ showFailed
-							? __( 'Hide details', 'wp-ai-translate' )
-							: __( 'Show details', 'wp-ai-translate' ) }
+							? __( 'Hide details', 'native-translations' )
+							: __( 'Show details', 'native-translations' ) }
 					</button>
 					{ cfg.queueUrl && (
 						<>
 							{ ' ' }
 							<a href={ cfg.queueUrl }>
-								{ __( 'Manage the Translation Queue', 'wp-ai-translate' ) }
+								{ __( 'Manage the Translation Queue', 'native-translations' ) }
 							</a>
 						</>
 					) }
 					{ showFailed && (
-						<ul className="wpait-failed-list" style={ { margin: '8px 0 0' } }>
+						<ul className="wpnt-failed-list" style={ { margin: '8px 0 0' } }>
 							{ failedJobs.length === 0 && (
-								<li>{ __( 'No failed jobs found.', 'wp-ai-translate' ) }</li>
+								<li>{ __( 'No failed jobs found.', 'native-translations' ) }</li>
 							) }
 							{ failedJobs.map( ( job ) => (
 								<li key={ job.action_id } style={ { marginBottom: '8px' } }>
@@ -1007,7 +1007,7 @@ function Overview() {
 										? ` → ${ job.target }`
 										: '' }
 									{ ' — ' }
-									<span className="wpait-failed-msg">{ job.message }</span>{ ' ' }
+									<span className="wpnt-failed-msg">{ job.message }</span>{ ' ' }
 									<button
 										type="button"
 										className="button button-small"
@@ -1015,8 +1015,8 @@ function Overview() {
 										onClick={ () => retryJob( job.action_id ) }
 									>
 										{ retryingId === job.action_id
-											? __( 'Re-running…', 'wp-ai-translate' )
-											: __( 'Re-run', 'wp-ai-translate' ) }
+											? __( 'Re-running…', 'native-translations' )
+											: __( 'Re-run', 'native-translations' ) }
 									</button>
 								</li>
 							) ) }
@@ -1036,7 +1036,7 @@ function Overview() {
 				</Notice>
 			) }
 
-			<Flex justify="flex-start" gap={ 2 } wrap style={ { margin: '12px 0' } } className="wpait-ov-tabs">
+			<Flex justify="flex-start" gap={ 2 } wrap style={ { margin: '12px 0' } } className="wpnt-ov-tabs">
 				<FlexItem>
 					<Button
 						variant={ activeView === 'originals' ? 'primary' : 'secondary' }
@@ -1044,7 +1044,7 @@ function Overview() {
 					>
 						{ sprintf(
 							/* translators: %d: number of items marked as originals. */
-							__( 'Originals (%d)', 'wp-ai-translate' ),
+							__( 'Originals (%d)', 'native-translations' ),
 							originalsCount
 						) }
 					</Button>
@@ -1056,7 +1056,7 @@ function Overview() {
 					>
 						{ sprintf(
 							/* translators: %d: number of items with no language assigned. */
-							__( 'Unmarked (%d)', 'wp-ai-translate' ),
+							__( 'Unmarked (%d)', 'native-translations' ),
 							unmarkedCount
 						) }
 					</Button>
@@ -1074,7 +1074,7 @@ function Overview() {
 			</Flex>
 
 			<Text
-				className="wpait-ov-selection-desc"
+				className="wpnt-ov-selection-desc"
 				as="p"
 				variant="muted"
 				size="12"
@@ -1092,18 +1092,18 @@ function Overview() {
 				actions={ actions }
 				isLoading={ isLoading }
 				search
-				searchLabel={ __( 'Search by title', 'wp-ai-translate' ) }
+				searchLabel={ __( 'Search by title', 'native-translations' ) }
 				defaultLayouts={ { table: {} } }
 				getItemId={ ( item ) => item.key }
 				selection={ selection }
 				onChangeSelection={ setSelection }
-				empty={ <Text>{ __( 'Nothing to show here.', 'wp-ai-translate' ) }</Text> }
+				empty={ <Text>{ __( 'Nothing to show here.', 'native-translations' ) }</Text> }
 			/>
 		</div>
 	);
 }
 
-const mount = document.getElementById( 'wpait-overview-app' );
+const mount = document.getElementById( 'wpnt-overview-app' );
 if ( mount ) {
 	createRoot( mount ).render( <Overview /> );
 }

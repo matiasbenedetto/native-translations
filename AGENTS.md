@@ -41,7 +41,7 @@ To publish screenshots for a PR (or issue), push them to `pr-assets` from a thro
 clone so your working tree / current branch is untouched, then embed the raw URLs:
 
 ```bash
-REPO=matiasbenedetto/wp-ai-translate
+REPO=matiasbenedetto/native-translations
 PR=123                                   # the PR number (or use issue-<N> for an issue)
 TMP=$(mktemp -d)
 git clone -q "https://github.com/$REPO.git" "$TMP/a" && cd "$TMP/a"
@@ -59,15 +59,15 @@ Then in the PR body/comment, embed with raw URLs (these render inline):
 
 ```markdown
 **Before**
-![before](https://raw.githubusercontent.com/matiasbenedetto/wp-ai-translate/pr-assets/pr-123/before.png)
+![before](https://raw.githubusercontent.com/matiasbenedetto/native-translations/pr-assets/pr-123/before.png)
 **After**
-![after](https://raw.githubusercontent.com/matiasbenedetto/wp-ai-translate/pr-assets/pr-123/after.png)
+![after](https://raw.githubusercontent.com/matiasbenedetto/native-translations/pr-assets/pr-123/after.png)
 ```
 
 Verify each image is live before relying on it (expect `HTTP 200` + `image/png`):
 
 ```bash
-curl -sI "https://raw.githubusercontent.com/matiasbenedetto/wp-ai-translate/pr-assets/pr-123/after.png" | head -1
+curl -sI "https://raw.githubusercontent.com/matiasbenedetto/native-translations/pr-assets/pr-123/after.png" | head -1
 ```
 
 Rules:

@@ -1,0 +1,17 @@
+/**
+ * Admin list-table language column styles.
+ */
+
+.wpnt-language-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+}
+
+.wpnt-language-cell .wpnt-flag-img {
+	height: 1em;
+	width: auto;
+	border-radius: 2px;
+	vertical-align: -0.1em;
+	box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.1 );
+}

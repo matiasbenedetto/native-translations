@@ -1,9 +1,9 @@
 <?php
 /**
- * Unit tests for Wpait_Admin_Settings — settings shape, locale validation (#19),
+ * Unit tests for Wpnt_Admin_Settings — settings shape, locale validation (#19),
  * and the sanitize() pipeline's language + model handling.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 final class AdminSettingsTest extends TestCase {
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
+		Wpnt_Test_State::reset();
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -22,21 +22,21 @@ final class AdminSettingsTest extends TestCase {
 
 	public function test_accepts_valid_locales(): void {
 		foreach ( array( '', 'en', 'en_US', 'es_AR', 'pt_BR', 'fil' ) as $locale ) {
-			$this->assertTrue( Wpait_Admin_Settings::is_valid_locale( $locale ), "$locale should be valid" );
+			$this->assertTrue( Wpnt_Admin_Settings::is_valid_locale( $locale ), "$locale should be valid" );
 		}
 	}
 
 	public function test_rejects_malformed_locales(): void {
 		foreach ( array( 'not-a-locale', 'es-AR', 'EN', 'english', 'e', 'es_ar' ) as $locale ) {
-			$this->assertFalse( Wpait_Admin_Settings::is_valid_locale( $locale ), "$locale should be invalid" );
+			$this->assertFalse( Wpnt_Admin_Settings::is_valid_locale( $locale ), "$locale should be invalid" );
 		}
 	}
 
 	public function test_common_locales_are_well_formed_suggestions(): void {
-		$locales = Wpait_Admin_Settings::common_locales();
+		$locales = Wpnt_Admin_Settings::common_locales();
 		$this->assertNotEmpty( $locales );
 		foreach ( $locales as $loc ) {
-			$this->assertTrue( Wpait_Admin_Settings::is_valid_locale( $loc ), "$loc should be a valid locale" );
+			$this->assertTrue( Wpnt_Admin_Settings::is_valid_locale( $loc ), "$loc should be a valid locale" );
 		}
 		$this->assertContains( 'es_AR', $locales );
 	}
@@ -46,7 +46,7 @@ final class AdminSettingsTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_default_catalog_entries_are_well_formed(): void {
-		$catalog = Wpait_Admin_Settings::default_catalog();
+		$catalog = Wpnt_Admin_Settings::default_catalog();
 		$this->assertNotEmpty( $catalog );
 		foreach ( $catalog as $code => $entry ) {
 			// Codes are derived from the locale: `es-ar`, and variant locales like
@@ -61,14 +61,14 @@ final class AdminSettingsTest extends TestCase {
 			// no conventional home region (#88).
 			$this->assertMatchesRegularExpression( '/^([a-z]{2}(-[a-z]{3})?)?$/', $entry['flag'], "code '$code' flag should be a region code or blank" );
 			$this->assertTrue(
-				Wpait_Admin_Settings::is_valid_locale( $entry['locale'] ),
+				Wpnt_Admin_Settings::is_valid_locale( $entry['locale'] ),
 				"catalog locale '{$entry['locale']}' (code '$code') should be valid"
 			);
 		}
 	}
 
 	public function test_locale_catalog_contains_regional_variants_with_derived_codes(): void {
-		$entry = Wpait_Admin_Settings::catalog_entry_for_locale( 'es_AR' );
+		$entry = Wpnt_Admin_Settings::catalog_entry_for_locale( 'es_AR' );
 		$this->assertNotNull( $entry );
 		$this->assertSame( 'es-ar', $entry['code'] );
 		$this->assertSame( 'Spanish (Argentina)', $entry['name'] );
@@ -78,25 +78,25 @@ final class AdminSettingsTest extends TestCase {
 		// Language-only locales carry no region, but most are back-filled with the
 		// flag of their conventional home country so the picker still shows one
 		// (#88): Japanese -> Japan.
-		$ja = Wpait_Admin_Settings::catalog_entry_for_locale( 'ja' );
+		$ja = Wpnt_Admin_Settings::catalog_entry_for_locale( 'ja' );
 		$this->assertNotNull( $ja );
 		$this->assertSame( 'ja', $ja['code'] );
 		$this->assertSame( 'jp', $ja['flag'] );
 
 		// Languages with no single home region (Arabic, Esperanto, ...) are
 		// intentionally left flagless.
-		$ar = Wpait_Admin_Settings::catalog_entry_for_locale( 'ar' );
+		$ar = Wpnt_Admin_Settings::catalog_entry_for_locale( 'ar' );
 		$this->assertNotNull( $ar );
 		$this->assertSame( 'ar', $ar['code'] );
 		$this->assertSame( '', $ar['flag'] );
 
-		$this->assertContains( 'zh_HK', Wpait_Admin_Settings::common_locales() );
-		$this->assertSame( 'pt-br', Wpait_Admin_Settings::code_for_locale( 'pt_BR' ) );
-		$this->assertSame( 'de-de-formal', Wpait_Admin_Settings::code_for_locale( 'de_DE_formal' ) );
+		$this->assertContains( 'zh_HK', Wpnt_Admin_Settings::common_locales() );
+		$this->assertSame( 'pt-br', Wpnt_Admin_Settings::code_for_locale( 'pt_BR' ) );
+		$this->assertSame( 'de-de-formal', Wpnt_Admin_Settings::code_for_locale( 'de_DE_formal' ) );
 	}
 
 	public function test_locale_catalog_is_the_wordpress_locale_set(): void {
-		$catalog = Wpait_Admin_Settings::locale_catalog();
+		$catalog = Wpnt_Admin_Settings::locale_catalog();
 		// The catalog is the set of locales WordPress core is translated into.
 		$this->assertGreaterThan( 100, count( $catalog ), 'expected the full WordPress locale list' );
 		// Locales WordPress ships that the previous (country-primary) list lacked.
@@ -108,7 +108,7 @@ final class AdminSettingsTest extends TestCase {
 	public function test_locale_catalog_filter_lets_extenders_add_locales(): void {
 		// An extender returns a locale WordPress doesn't ship, supplying only labels;
 		// the catalog normalizes it (derives the code, lower-cases the flag).
-		Wpait_Test_State::$filters['wpait_locale_catalog'] = array(
+		Wpnt_Test_State::$filters['wpnt_locale_catalog'] = array(
 			'gl_ES' => array(
 				'name'   => 'Galician',
 				'native' => 'Galego',
@@ -116,7 +116,7 @@ final class AdminSettingsTest extends TestCase {
 			),
 		);
 
-		$entry = Wpait_Admin_Settings::catalog_entry_for_locale( 'gl_ES' );
+		$entry = Wpnt_Admin_Settings::catalog_entry_for_locale( 'gl_ES' );
 		$this->assertNotNull( $entry, 'filter-added locale should be in the catalog' );
 		$this->assertSame( 'gl_ES', $entry['locale'] );
 		$this->assertSame( 'gl-es', $entry['code'] );
@@ -126,8 +126,8 @@ final class AdminSettingsTest extends TestCase {
 	}
 
 	public function test_common_locales_are_derived_from_catalog(): void {
-		$locales = Wpait_Admin_Settings::common_locales();
-		foreach ( Wpait_Admin_Settings::default_catalog() as $entry ) {
+		$locales = Wpnt_Admin_Settings::common_locales();
+		foreach ( Wpnt_Admin_Settings::default_catalog() as $entry ) {
 			$this->assertContains(
 				$entry['locale'],
 				$locales,
@@ -141,7 +141,7 @@ final class AdminSettingsTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_get_settings_returns_defaults_when_unset(): void {
-		$settings = Wpait_Admin_Settings::get_settings();
+		$settings = Wpnt_Admin_Settings::get_settings();
 		$this->assertSame( array(), $settings['languages'] );
 		$this->assertSame( '', $settings['default_language'] );
 		$this->assertSame( '', $settings['model'] );
@@ -149,8 +149,8 @@ final class AdminSettingsTest extends TestCase {
 	}
 
 	public function test_get_settings_merges_stored_over_defaults(): void {
-		Wpait_Test_State::$options['wpait_settings'] = array( 'model' => 'z-ai/glm-5.2' );
-		$settings = Wpait_Admin_Settings::get_settings();
+		Wpnt_Test_State::$options['wpnt_settings'] = array( 'model' => 'z-ai/glm-5.2' );
+		$settings = Wpnt_Admin_Settings::get_settings();
 		$this->assertSame( 'z-ai/glm-5.2', $settings['model'] );
 		// Instruction defaults still present even though only model was stored.
 		$this->assertArrayHasKey( 'global', $settings['instructions'] );
@@ -160,9 +160,9 @@ final class AdminSettingsTest extends TestCase {
 	 * sanitize() — language + model handling
 	 * ------------------------------------------------------------------ */
 
-	private function sanitizer(): Wpait_Admin_Settings {
-		Wpait_Languages::flush_index();
-		return new Wpait_Admin_Settings( new Wpait_Languages() );
+	private function sanitizer(): Wpnt_Admin_Settings {
+		Wpnt_Languages::flush_index();
+		return new Wpnt_Admin_Settings( new Wpnt_Languages() );
 	}
 
 	public function test_sanitize_drops_blank_code_rows_and_defaults_name_to_code(): void {
@@ -231,7 +231,7 @@ final class AdminSettingsTest extends TestCase {
 	}
 
 	public function test_sanitize_preserves_existing_language_metadata_by_code(): void {
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array(
 					'code'    => 'es',

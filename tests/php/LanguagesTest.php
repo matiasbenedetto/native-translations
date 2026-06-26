@@ -1,9 +1,9 @@
 <?php
 /**
- * Unit tests for Wpait_Languages — the configured-language index used everywhere
+ * Unit tests for Wpnt_Languages — the configured-language index used everywhere
  * (enabled list, labels, flags, prompt names). Driven from the settings option.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -12,19 +12,19 @@ use PHPUnit\Framework\TestCase;
 
 final class LanguagesTest extends TestCase {
 
-	private Wpait_Languages $languages;
+	private Wpnt_Languages $languages;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::reset();
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array( 'code' => 'en', 'name' => 'English', 'native' => 'English', 'flag' => '🇺🇸', 'enabled' => true ),
 				array( 'code' => 'es', 'name' => 'Spanish', 'native' => 'Español', 'flag' => '🇦🇷', 'enabled' => true ),
 				array( 'code' => 'fr', 'name' => 'French', 'native' => 'Français', 'flag' => '', 'enabled' => false ),
 			),
 		);
-		$this->languages = new Wpait_Languages();
+		$this->languages = new Wpnt_Languages();
 	}
 
 	public function test_enabled_excludes_disabled_languages(): void {
@@ -65,41 +65,41 @@ final class LanguagesTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_is_region_code(): void {
-		$this->assertTrue( Wpait_Languages::is_region_code( 'es' ) );
-		$this->assertTrue( Wpait_Languages::is_region_code( 'fr' ) );
-		$this->assertFalse( Wpait_Languages::is_region_code( 'ES' ) );    // uppercase
-		$this->assertFalse( Wpait_Languages::is_region_code( 'esp' ) );   // too long
-		$this->assertFalse( Wpait_Languages::is_region_code( '🇪🇸' ) );    // emoji
-		$this->assertFalse( Wpait_Languages::is_region_code( '' ) );
+		$this->assertTrue( Wpnt_Languages::is_region_code( 'es' ) );
+		$this->assertTrue( Wpnt_Languages::is_region_code( 'fr' ) );
+		$this->assertFalse( Wpnt_Languages::is_region_code( 'ES' ) );    // uppercase
+		$this->assertFalse( Wpnt_Languages::is_region_code( 'esp' ) );   // too long
+		$this->assertFalse( Wpnt_Languages::is_region_code( '🇪🇸' ) );    // emoji
+		$this->assertFalse( Wpnt_Languages::is_region_code( '' ) );
 	}
 
 	public function test_flag_html_region_code_renders_flagcdn_svg(): void {
-		$html = Wpait_Languages::flag_html( 'es' );
+		$html = Wpnt_Languages::flag_html( 'es' );
 		$this->assertStringContainsString( '<img', $html );
 		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
-		$this->assertStringContainsString( 'wpait-flag-img', $html );
+		$this->assertStringContainsString( 'wpnt-flag-img', $html );
 		$this->assertStringContainsString( 'loading="lazy"', $html );
 	}
 
 	public function test_flag_html_legacy_emoji_renders_text_span(): void {
-		$html = Wpait_Languages::flag_html( '🇦🇷' );
+		$html = Wpnt_Languages::flag_html( '🇦🇷' );
 		$this->assertStringNotContainsString( 'flagcdn.com', $html );
-		$this->assertStringContainsString( 'wpait-flag-emoji', $html );
+		$this->assertStringContainsString( 'wpnt-flag-emoji', $html );
 		$this->assertStringContainsString( '🇦🇷', $html );
 	}
 
 	public function test_flag_html_empty_is_blank(): void {
-		$this->assertSame( '', Wpait_Languages::flag_html( '' ) );
+		$this->assertSame( '', Wpnt_Languages::flag_html( '' ) );
 	}
 
 	public function test_label_and_label_html_with_region_code_flag(): void {
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array( 'code' => 'es', 'name' => 'Spanish', 'native' => 'Español', 'flag' => 'es', 'enabled' => true ),
 			),
 		);
-		$langs = new Wpait_Languages();
+		$langs = new Wpnt_Languages();
 		// Plain-text label omits the region code (it isn't a readable text prefix).
 		$this->assertSame( 'Spanish', $langs->label( 'es' ) );
 		// HTML label renders the flag image before the name.
@@ -116,8 +116,8 @@ final class LanguagesTest extends TestCase {
 	}
 
 	public function test_name_falls_back_to_code_when_name_blank(): void {
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array( array( 'code' => 'pt', 'name' => '', 'enabled' => true ) ),
 		);
 		$this->assertSame( 'pt', $this->languages->name( 'pt' ) );
@@ -152,15 +152,15 @@ final class LanguagesTest extends TestCase {
 
 	public function test_reconcile_updates_a_renamed_existing_language(): void {
 		// Pre-seed an existing 'es' term named "Spanish".
-		Wpait_Test_State::$terms[500] = array(
-			'term_id' => 500, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
+		Wpnt_Test_State::$terms[500] = array(
+			'term_id' => 500, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
 		);
 
 		$result = $this->languages->reconcile( array( $this->lang( 'es', 'Castellano' ) ), array() );
 
 		$this->assertContains( 'es', $result['report']['updated'] );
 		$this->assertNotContains( 'es', $result['report']['added'] );
-		$this->assertSame( 'Castellano', Wpait_Test_State::$terms[500]['name'] );
+		$this->assertSame( 'Castellano', Wpnt_Test_State::$terms[500]['name'] );
 	}
 
 	public function test_reconcile_reports_disabled_languages(): void {
@@ -170,8 +170,8 @@ final class LanguagesTest extends TestCase {
 
 	public function test_reconcile_removes_a_language_with_no_content(): void {
 		// 'de' existed before, has a term, but no content → deletable.
-		Wpait_Test_State::$terms[600] = array(
-			'term_id' => 600, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'German', 'slug' => 'de', 'count' => 0,
+		Wpnt_Test_State::$terms[600] = array(
+			'term_id' => 600, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'German', 'slug' => 'de', 'count' => 0,
 		);
 
 		$result = $this->languages->reconcile(
@@ -187,8 +187,8 @@ final class LanguagesTest extends TestCase {
 
 	public function test_reconcile_blocks_deletion_of_a_language_with_content(): void {
 		// 'de' has content (term count > 0) → cannot be removed; forced back disabled.
-		Wpait_Test_State::$terms[700] = array(
-			'term_id' => 700, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'German', 'slug' => 'de', 'count' => 3,
+		Wpnt_Test_State::$terms[700] = array(
+			'term_id' => 700, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'German', 'slug' => 'de', 'count' => 3,
 		);
 
 		$result = $this->languages->reconcile(
@@ -212,27 +212,27 @@ final class LanguagesTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_language_has_content_true_when_term_count_positive(): void {
-		Wpait_Test_State::$terms[800] = array(
-			'term_id' => 800, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 5,
+		Wpnt_Test_State::$terms[800] = array(
+			'term_id' => 800, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 5,
 		);
 		$this->assertTrue( $this->languages->language_has_content( 'es' ) );
 	}
 
 	public function test_language_has_content_true_when_a_tagged_term_uses_it(): void {
 		// The language term itself has no posts (count 0)...
-		Wpait_Test_State::$terms[810] = array(
-			'term_id' => 810, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
+		Wpnt_Test_State::$terms[810] = array(
+			'term_id' => 810, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
 		);
 		// ...but a category carries that language via term meta.
-		Wpait_Test_State::$terms[811] = array( 'term_id' => 811, 'taxonomy' => 'category', 'name' => 'News' );
-		Wpait_Test_State::$term_meta[811][ Wpait_Translation_Store::META_LANGUAGE ] = 'es';
+		Wpnt_Test_State::$terms[811] = array( 'term_id' => 811, 'taxonomy' => 'category', 'name' => 'News' );
+		Wpnt_Test_State::$term_meta[811][ Wpnt_Translation_Store::META_LANGUAGE ] = 'es';
 
 		$this->assertTrue( $this->languages->language_has_content( 'es' ) );
 	}
 
 	public function test_language_has_content_false_when_unused(): void {
-		Wpait_Test_State::$terms[820] = array(
-			'term_id' => 820, 'taxonomy' => Wpait_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
+		Wpnt_Test_State::$terms[820] = array(
+			'term_id' => 820, 'taxonomy' => Wpnt_Languages::TAXONOMY, 'name' => 'Spanish', 'slug' => 'es', 'count' => 0,
 		);
 		$this->assertFalse( $this->languages->language_has_content( 'es' ) );
 	}

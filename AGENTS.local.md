@@ -1,4 +1,4 @@
-# AGENTS.local.md — wp-ai-translate local dev & deploy workflow
+# AGENTS.local.md — native-translations local dev & deploy workflow
 
 > Local, machine-specific notes for **matias**'s setup. **Not committed.**
 > Adapted from the `contact-sheet` theme's workflow for this **plugin** project.
@@ -10,20 +10,20 @@
 | Thing | Value |
 |-------|-------|
 | Plugin repo (this folder) | `/home/matias/dev/native` |
-| Plugin code subfolder | `wp-ai-translate/` (per plan §9) |
+| Plugin code subfolder | `native-translations/` (per plan §9) |
 | Default git branch | `trunk` (PRs target `trunk`, not `main`) |
 | Local dev site | `http://localhost/wp3/` (Apache) |
 | Local WP path | `/var/www/html/wp3` |
-| Local plugin install | symlink → this repo's `wp-ai-translate/`, so **edits are live instantly** |
+| Local plugin install | symlink → this repo's `native-translations/`, so **edits are live instantly** |
 | Local sudo | **NOT** passwordless — avoid `sudo` locally |
 | Prod | **Not deploying the plugin to prod yet** (§5) |
 
 Set up the symlink once (so saving a file updates the live dev site, no copy/build step):
 
 ```bash
-ln -s /home/matias/dev/native/wp-ai-translate \
-      /var/www/html/wp3/wp-content/plugins/wp-ai-translate
-wp plugin activate wp-ai-translate --path=/var/www/html/wp3
+ln -s /home/matias/dev/native/native-translations \
+      /var/www/html/wp3/wp-content/plugins/native-translations
+wp plugin activate native-translations --path=/var/www/html/wp3
 ```
 
 > Note: the source theme's site uses HTTPS with a self-signed cert; this project's
@@ -35,11 +35,11 @@ wp plugin activate wp-ai-translate --path=/var/www/html/wp3
 
 ## 1. Make the change
 
-Edit the plugin files in `wp-ai-translate/`. The block JS source builds with
+Edit the plugin files in `native-translations/`. The block JS source builds with
 `@wordpress/scripts`:
 
-- PHP: `wp-ai-translate/includes/*.php`
-- Block sources: `wp-ai-translate/src/*/` → built into `wp-ai-translate/build/` by `npm run build`
+- PHP: `native-translations/includes/*.php`
+- Block sources: `native-translations/src/*/` → built into `native-translations/build/` by `npm run build`
 
 After changing PHP that registers blocks/taxonomies, or anything cached, **flush WP
 caches**:
@@ -55,10 +55,10 @@ Sanity checks before testing:
 
 ```bash
 # PHP lints clean
-find wp-ai-translate -name '*.php' -print0 | xargs -0 -n1 php -l
+find native-translations -name '*.php' -print0 | xargs -0 -n1 php -l
 
 # block.json files are valid JSON
-python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('wp-ai-translate/**/block.json', recursive=True)]; print('OK')"
+python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('native-translations/**/block.json', recursive=True)]; print('OK')"
 ```
 
 ---
@@ -97,13 +97,13 @@ await page.goto(url, { waitUntil: 'networkidle' });
 
 // Measure to verify intent objectively (e.g. the language switcher block rendered):
 const info = await page.evaluate(() => {
-  const links = [...document.querySelectorAll('.wp-block-wp-ai-translate-language-switcher a')]
+  const links = [...document.querySelectorAll('.wp-block-native-translations-language-switcher a')]
     .map(a => ({ text: a.textContent.trim(), href: a.getAttribute('href') }));
   return { switcherLinks: links };
 });
 console.log(JSON.stringify(info, null, 2));
 
-const el = await page.$('.wp-block-wp-ai-translate-language-switcher');
+const el = await page.$('.wp-block-native-translations-language-switcher');
 if (el) { await el.scrollIntoViewIfNeeded(); await page.screenshot({ path: out }); }
 await browser.close();
 ```
@@ -118,7 +118,7 @@ Then view `/tmp/shot.png` (Read it). Prefer confirming with **measurements**
 
 For admin-side features (settings page, editor sidebar, list filters), log in and
 screenshot the relevant `wp-admin` URL the same way, e.g.
-`http://localhost/wp3/wp-admin/options-general.php?page=wp-ai-translate`.
+`http://localhost/wp3/wp-admin/options-general.php?page=native-translations`.
 
 ---
 

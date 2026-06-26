@@ -1,14 +1,14 @@
 <?php
 /**
- * Unit tests for the GET /wp-ai-translate/v1/overview REST endpoint (#54).
+ * Unit tests for the GET /native-translations/v1/overview REST endpoint (#54).
  *
  * Covers the admin-only permission gate and the response-shape contract the
  * DataViews app depends on (rows/total/total_pages/languages/ai_ok/counts), plus
  * the missing-vs-by-language switch and server-side search/pagination over the
- * bounded cross post+term scan (N6). Drives the real Wpait_Admin_List against the
+ * bounded cross post+term scan (N6). Drives the real Wpnt_Admin_List against the
  * in-memory WP model, so the actual missing-translation computation runs.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -17,43 +17,43 @@ use PHPUnit\Framework\TestCase;
 
 final class OverviewRestTest extends TestCase {
 
-	private Wpait_Admin_List $list;
+	private Wpnt_Admin_List $list;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::reset();
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
 				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
 			),
 		);
-		$this->list = new Wpait_Admin_List( new Wpait_Translation_Store(), new Wpait_Languages() );
+		$this->list = new Wpnt_Admin_List( new Wpnt_Translation_Store(), new Wpnt_Languages() );
 		// Translate availability is metadata-only here; the fake connector reports
 		// supported by default, so can_generate_text() is true.
 	}
 
 	private function seed_post( int $id, string $code, string $group = '', string $type = 'post', string $title = '' ): void {
-		Wpait_Test_State::$posts[ $id ] = array(
+		Wpnt_Test_State::$posts[ $id ] = array(
 			'ID'          => $id,
 			'post_type'   => $type,
 			'post_status' => 'publish',
 			'post_title'  => '' !== $title ? $title : "Post $id",
 		);
 		if ( '' !== $code ) {
-			Wpait_Test_State::$object_terms[ $id ][ Wpait_Languages::TAXONOMY ] = array( $code );
+			Wpnt_Test_State::$object_terms[ $id ][ Wpnt_Languages::TAXONOMY ] = array( $code );
 		}
 		if ( '' !== $group ) {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
 	/** Marks a seeded post/term as a translation original (#92). */
 	private function mark_original( int $id, string $type = 'post' ): void {
 		if ( 'term' === $type ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_IS_ORIGINAL ] = '1';
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_IS_ORIGINAL ] = '1';
 		} else {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_IS_ORIGINAL ] = '1';
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_IS_ORIGINAL ] = '1';
 		}
 	}
 
@@ -82,9 +82,9 @@ final class OverviewRestTest extends TestCase {
 	public function test_overview_route_permission_requires_manage_options(): void {
 		// The route registers a manage_options closure as permission_callback; mirror
 		// that gate here (current_user_can is the only decision point).
-		Wpait_Test_State::$caps['manage_options'] = false;
+		Wpnt_Test_State::$caps['manage_options'] = false;
 		$this->assertFalse( current_user_can( 'manage_options' ) );
-		Wpait_Test_State::$caps['manage_options'] = true;
+		Wpnt_Test_State::$caps['manage_options'] = true;
 		$this->assertTrue( current_user_can( 'manage_options' ) );
 	}
 
@@ -154,8 +154,8 @@ final class OverviewRestTest extends TestCase {
 
 	public function test_originals_view_includes_terms_marked_original(): void {
 		// Term path: a category with a language set and marked original is listed.
-		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'Noticias' );
-		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'es';
+		Wpnt_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'Noticias' );
+		Wpnt_Test_State::$term_meta[50][ Wpnt_Translation_Store::META_LANGUAGE ] = 'es';
 		$this->mark_original( 50, 'term' );
 
 		$data = $this->payload();
@@ -171,13 +171,13 @@ final class OverviewRestTest extends TestCase {
 		// post 20: marked original WITH a featured image → thumbnail is a URL.
 		$this->seed_post( 20, 'en', '', 'post', 'With image' );
 		$this->mark_original( 20 );
-		Wpait_Test_State::$post_meta[20]['_thumbnail_id'] = '777';
+		Wpnt_Test_State::$post_meta[20]['_thumbnail_id'] = '777';
 		// post 21: marked original with NO featured image → thumbnail is null.
 		$this->seed_post( 21, 'en', '', 'post', 'No image' );
 		$this->mark_original( 21 );
 		// term 50: terms never have a featured image → thumbnail is null.
-		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News' );
-		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		Wpnt_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News' );
+		Wpnt_Test_State::$term_meta[50][ Wpnt_Translation_Store::META_LANGUAGE ] = 'en';
 		$this->mark_original( 50, 'term' );
 
 		$data    = $this->payload();
@@ -195,13 +195,13 @@ final class OverviewRestTest extends TestCase {
 	public function test_rows_include_snippet_from_excerpt_content_or_term_description(): void {
 		// post 20: explicit excerpt → snippet is the excerpt, content ignored.
 		$this->seed_post( 20, 'en', '', 'post', 'Has excerpt' );
-		Wpait_Test_State::$posts[20]['post_excerpt'] = 'A hand-written excerpt.';
-		Wpait_Test_State::$posts[20]['post_content'] = 'Body content that should be ignored.';
+		Wpnt_Test_State::$posts[20]['post_excerpt'] = 'A hand-written excerpt.';
+		Wpnt_Test_State::$posts[20]['post_content'] = 'Body content that should be ignored.';
 		$this->mark_original( 20 );
 
 		// post 21: no excerpt → snippet falls back to stripped/trimmed content.
 		$this->seed_post( 21, 'en', '', 'post', 'No excerpt' );
-		Wpait_Test_State::$posts[21]['post_content'] = '<p>Hello [shortcode] <strong>world</strong> of content.</p>';
+		Wpnt_Test_State::$posts[21]['post_content'] = '<p>Hello [shortcode] <strong>world</strong> of content.</p>';
 		$this->mark_original( 21 );
 
 		// post 22: no excerpt and no content → empty snippet.
@@ -209,13 +209,13 @@ final class OverviewRestTest extends TestCase {
 		$this->mark_original( 22 );
 
 		// term 50: snippet is the description with HTML stripped.
-		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News', 'description' => '<em>Latest</em> news here.' );
-		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		Wpnt_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News', 'description' => '<em>Latest</em> news here.' );
+		Wpnt_Test_State::$term_meta[50][ Wpnt_Translation_Store::META_LANGUAGE ] = 'en';
 		$this->mark_original( 50, 'term' );
 
 		// term 51: no description → empty snippet.
-		Wpait_Test_State::$terms[51] = array( 'term_id' => 51, 'taxonomy' => 'post_tag', 'name' => 'Untagged' );
-		Wpait_Test_State::$term_meta[51][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		Wpnt_Test_State::$terms[51] = array( 'term_id' => 51, 'taxonomy' => 'post_tag', 'name' => 'Untagged' );
+		Wpnt_Test_State::$term_meta[51][ Wpnt_Translation_Store::META_LANGUAGE ] = 'en';
 		$this->mark_original( 51, 'term' );
 
 		$data   = $this->payload();
@@ -236,7 +236,7 @@ final class OverviewRestTest extends TestCase {
 	public function test_snippet_content_fallback_truncated_to_word_limit(): void {
 		// A long, excerpt-less body is truncated to SNIPPET_WORDS with an ellipsis.
 		$this->seed_post( 30, 'en', '', 'post', 'Long body' );
-		Wpait_Test_State::$posts[30]['post_content'] = implode( ' ', array_fill( 0, 60, 'word' ) );
+		Wpnt_Test_State::$posts[30]['post_content'] = implode( ' ', array_fill( 0, 60, 'word' ) );
 		$this->mark_original( 30 );
 
 		$row     = $this->payload()['rows'][0];
@@ -244,7 +244,7 @@ final class OverviewRestTest extends TestCase {
 
 		$this->assertStringEndsWith( '…', $snippet, 'truncated content gets an ellipsis tail' );
 		$words = preg_split( '/\s+/', rtrim( $snippet, '…' ), -1, PREG_SPLIT_NO_EMPTY );
-		$this->assertSame( Wpait_Admin_List::SNIPPET_WORDS, count( $words ), 'kept exactly SNIPPET_WORDS words' );
+		$this->assertSame( Wpnt_Admin_List::SNIPPET_WORDS, count( $words ), 'kept exactly SNIPPET_WORDS words' );
 	}
 
 	public function test_originals_count_zero_when_nothing_marked(): void {
@@ -346,10 +346,10 @@ final class OverviewRestTest extends TestCase {
 	}
 
 	public function test_ai_ok_reflects_connector_availability(): void {
-		Wpait_Test_State::$supports_ai = true;
+		Wpnt_Test_State::$supports_ai = true;
 		$this->assertTrue( $this->payload()['ai_ok'] );
 
-		Wpait_Test_State::$supports_ai = false;
+		Wpnt_Test_State::$supports_ai = false;
 		$this->assertFalse( $this->payload()['ai_ok'] );
 	}
 }

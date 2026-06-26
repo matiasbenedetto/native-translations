@@ -1,13 +1,13 @@
-# wp-ai-translate — Development Plan
+# native-translations — Development Plan
 
 > A deliberately small WordPress plugin that manages multilingual content and
 > generates translations on demand using the WordPress 7.0 core AI connectors.
 
-- **Slug / folder:** `wp-ai-translate`
-- **Main file:** `wp-ai-translate.php`
-- **Text domain:** `wp-ai-translate`
-- **Display name:** AI Translate
-- **Code prefix:** `wpait_` (functions), `Wpait_` (classes), `_wpait_` (meta keys)
+- **Slug / folder:** `native-translations`
+- **Main file:** `native-translations.php`
+- **Text domain:** `native-translations`
+- **Display name:** WP Native Translations
+- **Code prefix:** `wpnt_` (functions), `Wpnt_` (classes), `_wpnt_` (meta keys)
 - **Requires:** WordPress 7.0+ (for core AI connectors), PHP 8.1+
 
 ---
@@ -16,7 +16,7 @@
 
 | Area | Decision |
 |------|----------|
-| **Data model** | Custom taxonomy `wpait_language` + shared group id in post meta `_wpait_group`. No custom tables. |
+| **Data model** | Custom taxonomy `wpnt_language` + shared group id in post meta `_wpnt_group`. No custom tables. |
 | **Front-end URLs** | No URL/rewrite changes. Each translation is a normal post with its own permalink, linked only via the translation group. |
 | **Translation trigger** | Manual / on-demand only. A "Translate" action creates a draft; "Recreate" regenerates an existing one. No auto-translate on publish. |
 | **Translatable content** | Posts, Pages, and the `category` + `post_tag` taxonomies. |
@@ -32,31 +32,31 @@
 
 ## 2. Data model
 
-### 2.1 Language taxonomy: `wpait_language`
+### 2.1 Language taxonomy: `wpnt_language`
 - Non-hierarchical, **not public** (used for admin/query only, not pretty URLs).
 - Registered against `post`, `page`, `category`, `post_tag` object types.
 - Each term represents a configured site language. Term meta:
-  - `_wpait_locale` — e.g. `en_US`, `es_ES`
-  - `_wpait_code` — short code `en`, `es`
-  - `_wpait_native_name` — e.g. `English`, `Español`
-  - `_wpait_flag` (optional) — emoji or dashicon hint for the switcher
+  - `_wpnt_locale` — e.g. `en_US`, `es_ES`
+  - `_wpnt_code` — short code `en`, `es`
+  - `_wpnt_native_name` — e.g. `English`, `Español`
+  - `_wpnt_flag` (optional) — emoji or dashicon hint for the switcher
 - Term **slug** = language code (`en`, `es`).
 
 ### 2.2 Translation group
-- Every translatable object stores `_wpait_group` = a stable group id (a `wp_generate_uuid4()` value).
-- All translations of the same source share one `_wpait_group`.
-- For taxonomy terms the same pattern uses **term meta** `_wpait_group`.
+- Every translatable object stores `_wpnt_group` = a stable group id (a `wp_generate_uuid4()` value).
+- All translations of the same source share one `_wpnt_group`.
+- For taxonomy terms the same pattern uses **term meta** `_wpnt_group`.
 - An original post is simply the first member of its group; there is no special
   "original" flag — any member can be the source for a new translation.
 
-> **Querying:** "all Spanish posts" = tax_query on `wpait_language=es`.
-> "siblings of post X" = posts where `_wpait_group = (X's group)` AND `ID != X`.
+> **Querying:** "all Spanish posts" = tax_query on `wpnt_language=es`.
+> "siblings of post X" = posts where `_wpnt_group = (X's group)` AND `ID != X`.
 
 #### Group invariants (enforced by the store — see §13)
 - **At most one member per language per group.** `link_translation()` rejects (or
   replaces) a link whose language already exists in the group.
 - The group is duplicated meta, but the **store is the single writer**; nothing else
-  touches `_wpait_group` directly. Partial writes are prevented by the atomic
+  touches `_wpnt_group` directly. Partial writes are prevented by the atomic
   creation flow (§4) and lifecycle hooks (§13).
 - Sibling reads always exclude the queried object and (on the front end) are filtered
   by viewability (§13 / §8).
@@ -64,7 +64,7 @@
 #### Caching (C1)
 - The group→members map is the hottest read (every front-end render with a block).
   It is resolved once per group and cached in the object cache under
-  `wpait_group_{group_id}` (and a transient fallback), invalidated on
+  `wpnt_group_{group_id}` (and a transient fallback), invalidated on
   `save_post`, `set_object_terms`, `wp_trash_post`, `untrash_post`, and
   `before_delete_post`.
 - Reads use `WP_Query`/`get_terms` with `meta_key` + `meta_value` (uses the
@@ -88,9 +88,9 @@ post and term IDs overlap across tables (S5):
 
 ## 3. Settings (wp-admin)
 
-**Location:** Settings → AI Translate (`options-general.php?page=wp-ai-translate`).
+**Location:** Settings → WP Native Translations (`options-general.php?page=native-translations`).
 
-Stored as one option `wpait_settings`:
+Stored as one option `wpnt_settings`:
 ```php
 [
   'languages' => [
@@ -109,7 +109,7 @@ Stored as one option `wpait_settings`:
   ],
 ]
 ```
-- Add/remove languages (writes/cleans `wpait_language` terms accordingly).
+- Add/remove languages (writes/cleans `wpnt_language` terms accordingly).
 - Pick the site default language.
 - Optional AI connector preferences (model/temperature) — left blank uses core defaults.
 - **Customizable translation instructions** (see §4.3): a "Translation instructions"
@@ -117,7 +117,7 @@ Stored as one option `wpait_settings`:
   optional per-language overrides. Each field has a "Reset to default" link that
   restores the built-in baseline. Blank fields fall back to the plugin defaults.
 - On save, reconcile taxonomy terms with the configured list, with defined rules (S4):
-  - A language **code is immutable** once created (the `wpait_language` term slug ==
+  - A language **code is immutable** once created (the `wpnt_language` term slug ==
     code, so renaming would orphan all relationships). The UI disables editing the
     code of an in-use language; only the display/native name is editable.
   - **Deletion is blocked while content exists** — the language can be *disabled*
@@ -146,8 +146,8 @@ Responsibilities:
      return the error and create **nothing** (atomic — see below).
   4. Validate the returned markup (§4.4) — bail before any DB write if it fails.
   5. **Only after** a successful, validated translation: create a new draft post in
-     `$to_code`, copy the defined non-text field set (§4.5), assign `wpait_language`
-     term, join `_wpait_group` (store enforces the one-per-language invariant).
+     `$to_code`, copy the defined non-text field set (§4.5), assign `wpnt_language`
+     term, join `_wpnt_group` (store enforces the one-per-language invariant).
   6. Map taxonomy terms (see §4.1).
 - `translate_term( int $term_id, string $to_code ) : int|WP_Error`
   - Translates name + description, creates sibling term, links via group.
@@ -190,7 +190,7 @@ without being able to break the mechanics:
 
 1. **Markup-safety rules** (hardcoded, always last in priority / non-overridable) —
    the "keep blocks, attributes, shortcodes, URLs, code intact; translate only" rules.
-2. **Global instructions** — `wpait_settings['instructions']['global']`
+2. **Global instructions** — `wpnt_settings['instructions']['global']`
    (defaults to a sensible baseline string shipped with the plugin).
 3. **Content-type instructions** — `['post']` or `['term']` appended for the
    matching object type.
@@ -201,7 +201,7 @@ without being able to break the mechanics:
   `{target_lang}`, `{site_name}`. Documented under the settings fields.
 - All instruction fields are stored as plain text and sanitized; only users with
   `manage_options` can edit them.
-- A single `Wpait_Translator::build_system_prompt( $type, $from, $to )` method owns
+- A single `Wpnt_Translator::build_system_prompt( $type, $from, $to )` method owns
   this composition so both posts and terms use identical logic.
 - Markup-safety rules are concatenated such that admin text cannot remove them
   (they are appended by code regardless of the custom fields).
@@ -221,14 +221,14 @@ blind copy of all meta):
   (mapped to the parent's translation if one exists, else the original), page template,
   post format, sticky status.
 - Arbitrary third-party meta is **not** copied in v1 (explicit scope boundary); a filter
-  hook (`wpait_copy_fields`) lets integrators extend it.
+  hook (`wpnt_copy_fields`) lets integrators extend it.
 
 ---
 
 ## 5. Editor integration (Block Editor sidebar)
 
 A small PluginDocumentSettingPanel ("Translations") added via `@wordpress/plugins`:
-- **Language selector** for the current post (sets `wpait_language`).
+- **Language selector** for the current post (sets `wpnt_language`).
 - **Translations list**: each configured language shows status:
   - has translation → link to edit it + "Recreate" button
   - no translation → "Translate" button
@@ -247,7 +247,7 @@ A small PluginDocumentSettingPanel ("Translations") added via `@wordpress/plugin
   (group has fewer members than configured language count, or no group at all).
 
 ### 6.2 Dedicated overview page (optional, still simple)
-- Submenu under Settings → AI Translate → "Overview".
+- Submenu under Settings → WP Native Translations → "Overview".
 - Tabs / filters:
   - **Missing translations** — list items lacking ≥1 language, with quick "Translate" links.
   - **By language** — pick a language, list all its items.
@@ -264,7 +264,7 @@ A small PluginDocumentSettingPanel ("Translations") added via `@wordpress/plugin
 
 ## 7. REST API (`includes/class-rest.php`)
 
-Namespace `wp-ai-translate/v1`. Each route resolves the **concrete target object** and
+Namespace `native-translations/v1`. Each route resolves the **concrete target object** and
 checks the **correct capability for that object type against that object** — never a
 blanket `edit_posts` (S2). `type` is validated against an allowlist (`post` | `term`).
 Standard cookie-auth + REST nonce applies.
@@ -288,7 +288,7 @@ Standard cookie-auth + REST nonce applies.
 
 ## 8. Blocks (`src/` → built with `@wordpress/scripts`)
 
-### 8.1 Translation links block (`wp-ai-translate/post-links`)
+### 8.1 Translation links block (`native-translations/post-links`)
 - Dynamic (server-rendered) block.
 - On a singular view, resolves the current post's group and renders links to its
   **publicly-viewable** siblings (one per language that has a translation). Hides
@@ -296,7 +296,7 @@ Standard cookie-auth + REST nonce applies.
 - Attributes: display style (flags / names / both), show-current toggle.
 - Use in single templates (theme) or inside post content.
 
-### 8.2 Language switcher block (`wp-ai-translate/language-switcher`)
+### 8.2 Language switcher block (`native-translations/language-switcher`)
 - Dynamic block, site-wide.
 - Lists configured (enabled) languages; switching navigates to the **translation of the
   current view** when one genuinely exists: the sibling post on a singular view, the
@@ -328,8 +328,8 @@ Standard cookie-auth + REST nonce applies.
 ## 9. File structure
 
 ```
-wp-ai-translate/
-├── wp-ai-translate.php          # bootstrap, constants, autoload, hooks
+native-translations/
+├── native-translations.php          # bootstrap, constants, autoload, hooks
 ├── readme.txt
 ├── includes/
 │   ├── class-plugin.php         # singleton, wires everything
@@ -361,7 +361,7 @@ wp-ai-translate/
 
 ## 11. Milestones
 
-1. **Foundation** — plugin bootstrap, `wpait_language` taxonomy, settings page, and the
+1. **Foundation** — plugin bootstrap, `wpnt_language` taxonomy, settings page, and the
    **translation-store with its invariants, caching, and lifecycle hooks** (§2.2, §2.3,
    §13). i18n wiring (text domain + `wp_set_script_translations`) is set up here, not
    deferred (N1). This milestone locks the data model — do §13 C1/C2 now.

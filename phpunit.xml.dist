@@ -12,7 +12,7 @@
     </testsuites>
     <source>
         <include>
-            <directory suffix=".php">wp-ai-translate/includes</directory>
+            <directory suffix=".php">native-translations/includes</directory>
         </include>
     </source>
 </phpunit>

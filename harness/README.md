@@ -1,6 +1,6 @@
-# wp-ai-translate dev harness
+# native-translations dev harness
 
-A disposable, real-environment test surface for the `wp-ai-translate` plugin — the
+A disposable, real-environment test surface for the `native-translations` plugin — the
 same idea as [Automattic/wp-skill](https://github.com/Automattic/wp-skill): spin up a
 real WordPress site on [WordPress Playground](https://developer.wordpress.org/playground/)
 (PHP-WASM + SQLite, no Docker, no MySQL), mount the plugin live, and tear the whole
@@ -13,8 +13,8 @@ throw the environment away when it is done.
 - A real **WordPress 7.0** site (satisfies the plugin's `Requires at least: 7.0`
   guard) on PHP 8.3 with SQLite.
 - The **default bundled theme** (`twentytwentyfive`) — no custom theme, by design.
-- The plugin **mounted live** from `wp-ai-translate/`, so file edits take effect with
-  no copy/build step (block build artifacts are committed under `wp-ai-translate/build/`).
+- The plugin **mounted live** from `native-translations/`, so file edits take effect with
+  no copy/build step (block build artifacts are committed under `native-translations/build/`).
 - **Example content** seeded in two languages: US English (`en_US`) and Argentinean
   Spanish (`es_AR`) — posts, categories, and tags, with a couple of en/es pairs
   pre-linked as translation groups so the front-end blocks and admin lists render
@@ -92,11 +92,11 @@ npm ci && npm run test:js                # JS — *.test.js under src/
 
 Layers:
 
-- **PHP unit** (`tests/php/`) — exercise `wp-ai-translate/includes/` logic with lightweight
+- **PHP unit** (`tests/php/`) — exercise `native-translations/includes/` logic with lightweight
   WordPress stubs (`tests/php/bootstrap.php`) and a **recording fake of the WP 7.0 AI
   connector**, so a test can assert exactly which model/temperature a request would use.
   This is where the bug **#32** regression is guarded: `TranslatorTest` asserts a pinned
-  `wpait_model_preference` is sent to the connector and never silently dropped, and that
+  `wpnt_model_preference` is sent to the connector and never silently dropped, and that
   connector `WP_Error`s (incl. the "no models" case) are surfaced cleanly.
 - **JS unit** (`src/**/*.test.js`) — `@wordpress/scripts` (Jest) over the editor/front-end
   helpers.
@@ -130,10 +130,10 @@ Then:
 `up.sh` / `playground.sh provision-ai` install the [`ai-provider-for-openrouter`](https://wordpress.org/plugins/ai-provider-for-openrouter/)
 plugin, store the key in the `connectors_ai_openrouter_api_key` option (the WordPress `ai`-plugin
 convention), and drop `harness/e2e/mu-openrouter.php` into the site's mu-plugins — which injects
-the key into the AI Client registry and pins `z-ai/glm-5.2` via wp-ai-translate's
-`wpait_model_preference` filter.
+the key into the AI Client registry and pins `z-ai/glm-5.2` via native-translations's
+`wpnt_model_preference` filter.
 
-**The key never touches the plugin or the repo.** `wp-ai-translate` only ever calls the WP 7.0
+**The key never touches the plugin or the repo.** `native-translations` only ever calls the WP 7.0
 AI connector; the credential lives one layer down (the option + the registry), provided by the
 harness. The E2E test branches on capability — **with no `.env.local` key it SKIPs cleanly**
 (exit 0), it never asserts on the key value, and it deletes everything it creates.
@@ -154,7 +154,7 @@ The same flow also works against a configured-AI host like the local Apache site
 ./harness/playground.sh shot -- "/?p=3" /tmp/post.png
 
 # Admin page (Playground --login auto-authenticates the first visit)
-./harness/playground.sh shot -- "/wp-admin/options-general.php?page=wp-ai-translate" /tmp/settings.png
+./harness/playground.sh shot -- "/wp-admin/options-general.php?page=native-translations" /tmp/settings.png
 ```
 
 `shot.mjs` loads the harness cookie jar into the browser so the admin session is
@@ -184,7 +184,7 @@ prefer vos forms".
 
 Posts (all published, block markup):
 - **The Blue Garden** (en) ↔ **El jardín azul** (es) — linked translation group, both
-  carry the `wp-ai-translate/post-links` block so the single view shows sibling links.
+  carry the `native-translations/post-links` block so the single view shows sibling links.
 - **Pour-Over Coffee Basics** (en) — unlinked (only in English; good "untranslated"
   case for the admin lists/overview).
 - **Cómo preparar mate** (es) — unlinked (only in Spanish).
@@ -207,10 +207,10 @@ viajes (es).
 ./harness/up.sh                                   # live site with seed data
 ./harness/playground.sh wp -- plugin list          # inspect state
 ./harness/playground.sh shot -- "/" /tmp/a.png     # capture before / evidence
-# … make a change in wp-ai-translate/ (edits are live) …
+# … make a change in native-translations/ (edits are live) …
 ./harness/playground.sh wp -- cache flush          # if needed
 ./harness/playground.sh shot -- "/" /tmp/b.png     # capture after
-./harness/playground.sh cast -- "/wp-admin/options-general.php?page=wp-ai-translate" /tmp/settings.webm
+./harness/playground.sh cast -- "/wp-admin/options-general.php?page=native-translations" /tmp/settings.webm
 ./harness/playground.sh reset                      # throw it all away when done
 ```
 

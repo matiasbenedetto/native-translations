@@ -1,13 +1,13 @@
 <?php
 /**
- * Unit tests for Wpait_Queue — the background translation queue (#55).
+ * Unit tests for Wpnt_Queue — the background translation queue (#55).
  *
  * DB-free: Action Scheduler is replaced by the recording stubs in bootstrap.php
  * (as_enqueue_async_action / as_has_scheduled_action / a status-count store),
  * and the translator is a recording double so a test can assert which method the
  * job dispatches to and that a WP_Error re-throws (so AS records the failure).
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Recording translator double: captures dispatch + returns a configurable result.
  */
-final class Wpait_Recording_Translator extends Wpait_Translator {
+final class Wpnt_Recording_Translator extends Wpnt_Translator {
 	/** @var array<int,array{0:string,1:int,2:string}> */
 	public array $calls = array();
 
@@ -51,25 +51,25 @@ final class Wpait_Recording_Translator extends Wpait_Translator {
 
 final class QueueTest extends TestCase {
 
-	private Wpait_Translation_Store $store;
-	private Wpait_Languages $languages;
-	private Wpait_Recording_Translator $translator;
-	private Wpait_Queue $queue;
+	private Wpnt_Translation_Store $store;
+	private Wpnt_Languages $languages;
+	private Wpnt_Recording_Translator $translator;
+	private Wpnt_Queue $queue;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::reset();
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
 				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
 				array( 'code' => 'fr', 'name' => 'French', 'enabled' => false ),
 			),
 		);
-		$this->store      = new Wpait_Translation_Store();
-		$this->languages  = new Wpait_Languages();
-		$this->translator = new Wpait_Recording_Translator( $this->store, $this->languages );
-		$this->queue      = new Wpait_Queue( $this->store, $this->languages, $this->translator );
+		$this->store      = new Wpnt_Translation_Store();
+		$this->languages  = new Wpnt_Languages();
+		$this->translator = new Wpnt_Recording_Translator( $this->store, $this->languages );
+		$this->queue      = new Wpnt_Queue( $this->store, $this->languages, $this->translator );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -77,38 +77,38 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_enqueue_queued_records_single_payload_arg(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 
 		$status = $this->queue->enqueue( 'post', 7, 'es' );
 
 		$this->assertSame( 'queued', $status );
-		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
-		[ $hook, $args, $group ] = Wpait_Test_State::$as_enqueued[0];
-		$this->assertSame( Wpait_Queue::HOOK, $hook );
-		$this->assertSame( Wpait_Queue::GROUP, $group );
+		$this->assertCount( 1, Wpnt_Test_State::$as_enqueued );
+		[ $hook, $args, $group ] = Wpnt_Test_State::$as_enqueued[0];
+		$this->assertSame( Wpnt_Queue::HOOK, $hook );
+		$this->assertSame( Wpnt_Queue::GROUP, $group );
 		// Single positional arg = the payload array.
 		$this->assertSame( array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ), $args );
 	}
 
 	public function test_enqueue_invalid_type(): void {
 		$this->assertSame( 'invalid', $this->queue->enqueue( 'widget', 7, 'es' ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	public function test_enqueue_invalid_disabled_language(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		// 'fr' is configured but disabled; 'de' is unknown.
 		$this->assertSame( 'invalid', $this->queue->enqueue( 'post', 7, 'fr' ) );
 		$this->assertSame( 'invalid', $this->queue->enqueue( 'post', 7, 'de' ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	/** Seeds a post in a translation group with a given language (matches the store's model). */
 	private function seed_post( int $id, string $code, string $group = '' ): void {
-		Wpait_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post' );
-		Wpait_Test_State::$object_terms[ $id ][ Wpait_Languages::TAXONOMY ] = array( $code );
+		Wpnt_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post' );
+		Wpnt_Test_State::$object_terms[ $id ][ Wpnt_Languages::TAXONOMY ] = array( $code );
 		if ( '' !== $group ) {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
@@ -118,17 +118,17 @@ final class QueueTest extends TestCase {
 		$this->seed_post( 8, 'es', 'G' );
 
 		$this->assertSame( 'exists', $this->queue->enqueue( 'post', 7, 'es' ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	public function test_enqueue_pending_when_identical_action_scheduled(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$payload = array( 'type' => 'post', 'id' => 7, 'target' => 'es' );
-		$sig     = wpait_test_as_signature( Wpait_Queue::HOOK, array( $payload ), Wpait_Queue::GROUP );
-		Wpait_Test_State::$as_scheduled[ $sig ] = true;
+		$sig     = wpnt_test_as_signature( Wpnt_Queue::HOOK, array( $payload ), Wpnt_Queue::GROUP );
+		Wpnt_Test_State::$as_scheduled[ $sig ] = true;
 
 		$this->assertSame( 'pending', $this->queue->enqueue( 'post', 7, 'es' ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -136,27 +136,27 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_run_job_dispatches_to_translate_post(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) );
 		$this->assertSame( array( array( 'post', 7, 'es' ) ), $this->translator->calls );
 	}
 
 	public function test_run_job_dispatches_to_translate_term(): void {
-		Wpait_Test_State::$terms[3] = array( 'term_id' => 3, 'taxonomy' => 'category', 'name' => 'News', 'slug' => 'news' );
+		Wpnt_Test_State::$terms[3] = array( 'term_id' => 3, 'taxonomy' => 'category', 'name' => 'News', 'slug' => 'news' );
 		$this->queue->run_job( array( 'type' => 'term', 'id' => 3, 'target' => 'es' ) );
 		$this->assertSame( array( array( 'term', 3, 'es' ) ), $this->translator->calls );
 	}
 
 	public function test_run_job_retries_transient_failure_instead_of_throwing(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->post_result = new WP_Error( 'wpnt_ai', 'AI exploded' );
 
 		// First attempt (no attempt key): a failure schedules a retry and does NOT throw.
 		$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) );
 
-		$this->assertCount( 1, Wpait_Test_State::$as_scheduled_single );
-		[ , $hook, $args ] = Wpait_Test_State::$as_scheduled_single[0];
-		$this->assertSame( Wpait_Queue::HOOK, $hook );
+		$this->assertCount( 1, Wpnt_Test_State::$as_scheduled_single );
+		[ , $hook, $args ] = Wpnt_Test_State::$as_scheduled_single[0];
+		$this->assertSame( Wpnt_Queue::HOOK, $hook );
 		// The retry payload carries an incremented attempt counter.
 		$this->assertSame(
 			array( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => 2 ) ),
@@ -165,9 +165,9 @@ final class QueueTest extends TestCase {
 	}
 
 	public function test_run_job_records_failure_when_retry_scheduling_fails(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
-		Wpait_Test_State::$as_schedule_fails = true; // as_schedule_single_action returns 0.
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->post_result = new WP_Error( 'wpnt_ai', 'AI exploded' );
+		Wpnt_Test_State::$as_schedule_fails = true; // as_schedule_single_action returns 0.
 
 		// If the retry can't be scheduled, the failure must surface (re-throw) rather
 		// than the action completing with the work silently lost.
@@ -177,17 +177,17 @@ final class QueueTest extends TestCase {
 	}
 
 	public function test_run_job_throws_on_final_attempt(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		$this->translator->post_result = new WP_Error( 'wpait_ai', 'AI exploded' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->post_result = new WP_Error( 'wpnt_ai', 'AI exploded' );
 
 		// Final attempt (== MAX_ATTEMPTS): re-throw so AS records the failure; no further retry.
 		try {
-			$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => Wpait_Queue::MAX_ATTEMPTS ) );
+			$this->queue->run_job( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => Wpnt_Queue::MAX_ATTEMPTS ) );
 			$this->fail( 'Expected an exception on the final attempt.' );
 		} catch ( \Exception $e ) {
 			$this->assertSame( 'AI exploded', $e->getMessage() );
 		}
-		$this->assertSame( array(), Wpait_Test_State::$as_scheduled_single );
+		$this->assertSame( array(), Wpnt_Test_State::$as_scheduled_single );
 	}
 
 	public function test_run_job_throws_on_invalid_payload(): void {
@@ -209,37 +209,37 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_enqueue_detection_queues_unmarked_item(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 
 		$status = $this->queue->enqueue_detection( 'post', 7 );
 
 		$this->assertSame( 'queued', $status );
-		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
-		[ $hook, $args, $group ] = Wpait_Test_State::$as_enqueued[0];
-		$this->assertSame( Wpait_Queue::DETECT_HOOK, $hook );
-		$this->assertSame( Wpait_Queue::GROUP, $group );
+		$this->assertCount( 1, Wpnt_Test_State::$as_enqueued );
+		[ $hook, $args, $group ] = Wpnt_Test_State::$as_enqueued[0];
+		$this->assertSame( Wpnt_Queue::DETECT_HOOK, $hook );
+		$this->assertSame( Wpnt_Queue::GROUP, $group );
 		$this->assertSame( array( array( 'type' => 'post', 'id' => 7 ) ), $args );
 	}
 
 	public function test_enqueue_detection_skips_item_with_language(): void {
 		$this->seed_post( 7, 'en' );
 		$this->assertSame( 'has_language', $this->queue->enqueue_detection( 'post', 7 ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	public function test_enqueue_detection_invalid_type(): void {
 		$this->assertSame( 'invalid', $this->queue->enqueue_detection( 'widget', 7 ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	public function test_enqueue_detection_pending_when_identical_action_scheduled(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$payload = array( 'type' => 'post', 'id' => 7 );
-		$sig     = wpait_test_as_signature( Wpait_Queue::DETECT_HOOK, array( $payload ), Wpait_Queue::GROUP );
-		Wpait_Test_State::$as_scheduled[ $sig ] = true;
+		$sig     = wpnt_test_as_signature( Wpnt_Queue::DETECT_HOOK, array( $payload ), Wpnt_Queue::GROUP );
+		Wpnt_Test_State::$as_scheduled[ $sig ] = true;
 
 		$this->assertSame( 'pending', $this->queue->enqueue_detection( 'post', 7 ) );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -247,7 +247,7 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_run_detect_job_sets_detected_language(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
 		$this->translator->detect_result = 'es';
 
 		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
@@ -264,28 +264,28 @@ final class QueueTest extends TestCase {
 	}
 
 	public function test_run_detect_job_retries_transient_failure(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		$this->translator->detect_result = new WP_Error( 'wpait_detect_failed', 'Could not detect' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->detect_result = new WP_Error( 'wpnt_detect_failed', 'Could not detect' );
 
 		$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7 ) );
 
-		$this->assertCount( 1, Wpait_Test_State::$as_scheduled_single );
-		[ , $hook, $args ] = Wpait_Test_State::$as_scheduled_single[0];
-		$this->assertSame( Wpait_Queue::DETECT_HOOK, $hook );
+		$this->assertCount( 1, Wpnt_Test_State::$as_scheduled_single );
+		[ , $hook, $args ] = Wpnt_Test_State::$as_scheduled_single[0];
+		$this->assertSame( Wpnt_Queue::DETECT_HOOK, $hook );
 		$this->assertSame( array( array( 'type' => 'post', 'id' => 7, 'attempt' => 2 ) ), $args );
 	}
 
 	public function test_run_detect_job_throws_on_final_attempt(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		$this->translator->detect_result = new WP_Error( 'wpait_detect_failed', 'Could not detect' );
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		$this->translator->detect_result = new WP_Error( 'wpnt_detect_failed', 'Could not detect' );
 
 		try {
-			$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7, 'attempt' => Wpait_Queue::MAX_ATTEMPTS ) );
+			$this->queue->run_detect_job( array( 'type' => 'post', 'id' => 7, 'attempt' => Wpnt_Queue::MAX_ATTEMPTS ) );
 			$this->fail( 'Expected an exception on the final attempt.' );
 		} catch ( \Exception $e ) {
 			$this->assertSame( 'Could not detect', $e->getMessage() );
 		}
-		$this->assertSame( array(), Wpait_Test_State::$as_scheduled_single );
+		$this->assertSame( array(), Wpnt_Test_State::$as_scheduled_single );
 	}
 
 	public function test_run_detect_job_throws_on_invalid_payload(): void {
@@ -298,7 +298,7 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_get_status_counts_by_status(): void {
-		Wpait_Test_State::$as_counts = array(
+		Wpnt_Test_State::$as_counts = array(
 			ActionScheduler_Store::STATUS_PENDING => 4,
 			ActionScheduler_Store::STATUS_RUNNING => 1,
 			ActionScheduler_Store::STATUS_FAILED  => 2,
@@ -315,15 +315,15 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_get_failed_jobs_resolves_titles_and_messages(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Hello World' );
-		Wpait_Test_State::$as_failed_actions = array(
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Hello World' );
+		Wpnt_Test_State::$as_failed_actions = array(
 			101 => array(
-				'hook'    => Wpait_Queue::HOOK,
+				'hook'    => Wpnt_Queue::HOOK,
 				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
 				'message' => 'AI exploded',
 			),
 			102 => array(
-				'hook'    => Wpait_Queue::DETECT_HOOK,
+				'hook'    => Wpnt_Queue::DETECT_HOOK,
 				'args'    => array( array( 'type' => 'term', 'id' => 999 ) ),
 				'message' => 'Could not detect',
 			),
@@ -348,10 +348,10 @@ final class QueueTest extends TestCase {
 	}
 
 	public function test_retry_job_reenqueues_and_deletes_failed_record(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
-		Wpait_Test_State::$as_failed_actions = array(
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post' );
+		Wpnt_Test_State::$as_failed_actions = array(
 			101 => array(
-				'hook'    => Wpait_Queue::HOOK,
+				'hook'    => Wpnt_Queue::HOOK,
 				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es', 'attempt' => 2 ) ),
 				'message' => 'AI exploded',
 			),
@@ -360,33 +360,33 @@ final class QueueTest extends TestCase {
 		$this->assertTrue( $this->queue->retry_job( 101 ) );
 
 		// Re-enqueued with a fresh payload (no attempt key).
-		$this->assertCount( 1, Wpait_Test_State::$as_enqueued );
-		[ $hook, $args ] = Wpait_Test_State::$as_enqueued[0];
-		$this->assertSame( Wpait_Queue::HOOK, $hook );
+		$this->assertCount( 1, Wpnt_Test_State::$as_enqueued );
+		[ $hook, $args ] = Wpnt_Test_State::$as_enqueued[0];
+		$this->assertSame( Wpnt_Queue::HOOK, $hook );
 		$this->assertSame( array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ), $args );
 
 		// Failed record removed.
-		$this->assertSame( array( 101 ), Wpait_Test_State::$as_deleted );
+		$this->assertSame( array( 101 ), Wpnt_Test_State::$as_deleted );
 	}
 
 	public function test_retry_job_unknown_action_returns_error(): void {
 		$result = $this->queue->retry_job( 4242 );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
-		$this->assertSame( array(), Wpait_Test_State::$as_enqueued );
+		$this->assertSame( 'wpnt_unknown_action', $result->get_error_code() );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
 	public function test_get_pending_jobs_lists_running_then_pending(): void {
-		Wpait_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Running Post' );
-		Wpait_Test_State::$posts[8] = array( 'ID' => 8, 'post_type' => 'post', 'post_title' => 'Queued Post' );
-		Wpait_Test_State::$as_actions = array(
+		Wpnt_Test_State::$posts[7] = array( 'ID' => 7, 'post_type' => 'post', 'post_title' => 'Running Post' );
+		Wpnt_Test_State::$posts[8] = array( 'ID' => 8, 'post_type' => 'post', 'post_title' => 'Queued Post' );
+		Wpnt_Test_State::$as_actions = array(
 			201 => array(
-				'hook'   => Wpait_Queue::HOOK,
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 8, 'target' => 'es' ) ),
 				'status' => ActionScheduler_Store::STATUS_PENDING,
 			),
 			202 => array(
-				'hook'   => Wpait_Queue::HOOK,
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'fr' ) ),
 				'status' => ActionScheduler_Store::STATUS_RUNNING,
 			),
@@ -407,15 +407,15 @@ final class QueueTest extends TestCase {
 	}
 
 	public function test_describe_action_resolves_payload(): void {
-		Wpait_Test_State::$as_failed_actions = array(
+		Wpnt_Test_State::$as_failed_actions = array(
 			101 => array(
-				'hook'    => Wpait_Queue::HOOK,
+				'hook'    => Wpnt_Queue::HOOK,
 				'args'    => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
 				'message' => 'x',
 			),
 		);
 		$this->assertSame(
-			array( 'hook' => Wpait_Queue::HOOK, 'type' => 'post', 'id' => 7, 'target' => 'es' ),
+			array( 'hook' => Wpnt_Queue::HOOK, 'type' => 'post', 'id' => 7, 'target' => 'es' ),
 			$this->queue->describe_action( 101 )
 		);
 		$this->assertNull( $this->queue->describe_action( 999 ) );
@@ -426,30 +426,30 @@ final class QueueTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_cancel_job_unschedules_pending_action(): void {
-		Wpait_Test_State::$as_actions = array(
+		Wpnt_Test_State::$as_actions = array(
 			301 => array(
-				'hook'   => Wpait_Queue::HOOK,
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
 				'status' => ActionScheduler_Store::STATUS_PENDING,
 			),
 		);
 
 		$this->assertTrue( $this->queue->cancel_job( 301 ) );
-		$this->assertSame( array( 301 ), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( array( 301 ), Wpnt_Test_State::$as_cancelled );
 		// The cancelled action leaves the pending set.
-		$this->assertArrayNotHasKey( 301, Wpait_Test_State::$as_actions );
+		$this->assertArrayNotHasKey( 301, Wpnt_Test_State::$as_actions );
 	}
 
 	public function test_cancel_job_unknown_action_returns_error(): void {
 		$result = $this->queue->cancel_job( 4242 );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
-		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( 'wpnt_unknown_action', $result->get_error_code() );
+		$this->assertSame( array(), Wpnt_Test_State::$as_cancelled );
 	}
 
 	public function test_cancel_job_rejects_foreign_hook(): void {
 		// An action belonging to another plugin's group/hook must not be cancellable.
-		Wpait_Test_State::$as_actions = array(
+		Wpnt_Test_State::$as_actions = array(
 			301 => array(
 				'hook'   => 'some_other_plugin_hook',
 				'args'   => array( array() ),
@@ -460,24 +460,24 @@ final class QueueTest extends TestCase {
 		$result = $this->queue->cancel_job( 301 );
 		$this->assertInstanceOf( WP_Error::class, $result );
 		// Distinct code from the not-found (404) case so clients can disambiguate.
-		$this->assertSame( 'wpait_foreign_action', $result->get_error_code() );
-		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( 'wpnt_foreign_action', $result->get_error_code() );
+		$this->assertSame( array(), Wpnt_Test_State::$as_cancelled );
 	}
 
 	public function test_cancel_all_cancels_pending_and_running_only(): void {
-		Wpait_Test_State::$as_actions = array(
+		Wpnt_Test_State::$as_actions = array(
 			301 => array(
-				'hook'   => Wpait_Queue::HOOK,
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
 				'status' => ActionScheduler_Store::STATUS_PENDING,
 			),
 			302 => array(
-				'hook'   => Wpait_Queue::DETECT_HOOK,
+				'hook'   => Wpnt_Queue::DETECT_HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 8 ) ),
 				'status' => ActionScheduler_Store::STATUS_RUNNING,
 			),
 			303 => array(
-				'hook'   => Wpait_Queue::HOOK,
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => 9, 'target' => 'es' ) ),
 				'status' => ActionScheduler_Store::STATUS_PENDING,
 			),
@@ -486,13 +486,13 @@ final class QueueTest extends TestCase {
 		$cancelled = $this->queue->cancel_all();
 
 		$this->assertSame( 3, $cancelled );
-		$this->assertEqualsCanonicalizing( array( 301, 302, 303 ), Wpait_Test_State::$as_cancelled );
-		$this->assertSame( array(), Wpait_Test_State::$as_actions );
+		$this->assertEqualsCanonicalizing( array( 301, 302, 303 ), Wpnt_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpnt_Test_State::$as_actions );
 	}
 
 	public function test_cancel_all_empty_queue_returns_zero(): void {
 		$this->assertSame( 0, $this->queue->cancel_all() );
-		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpnt_Test_State::$as_cancelled );
 	}
 
 	/**
@@ -501,11 +501,11 @@ final class QueueTest extends TestCase {
 	 * actions leave the set, so each query returns the next batch) until none remain.
 	 */
 	public function test_cancel_all_paginates_until_backlog_cleared(): void {
-		Wpait_Test_State::$filters['wpait_cancel_batch_size'] = 2;
+		Wpnt_Test_State::$filters['wpnt_cancel_batch_size'] = 2;
 		$expected = array();
 		for ( $i = 401; $i <= 405; $i++ ) {
-			Wpait_Test_State::$as_actions[ $i ] = array(
-				'hook'   => Wpait_Queue::HOOK,
+			Wpnt_Test_State::$as_actions[ $i ] = array(
+				'hook'   => Wpnt_Queue::HOOK,
 				'args'   => array( array( 'type' => 'post', 'id' => $i, 'target' => 'es' ) ),
 				'status' => ActionScheduler_Store::STATUS_PENDING,
 			);
@@ -515,8 +515,8 @@ final class QueueTest extends TestCase {
 		$cancelled = $this->queue->cancel_all();
 
 		$this->assertSame( 5, $cancelled );
-		$this->assertEqualsCanonicalizing( $expected, Wpait_Test_State::$as_cancelled );
-		$this->assertSame( array(), Wpait_Test_State::$as_actions );
+		$this->assertEqualsCanonicalizing( $expected, Wpnt_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpnt_Test_State::$as_actions );
 	}
 
 	/**
@@ -524,8 +524,8 @@ final class QueueTest extends TestCase {
 	 * actions must stop the loop rather than re-fetch the same set forever.
 	 */
 	public function test_cancel_all_stops_when_batch_cancels_nothing(): void {
-		Wpait_Test_State::$filters['wpait_cancel_batch_size'] = 2;
-		Wpait_Test_State::$as_actions = array(
+		Wpnt_Test_State::$filters['wpnt_cancel_batch_size'] = 2;
+		Wpnt_Test_State::$as_actions = array(
 			501 => array(
 				'hook'   => 'some_other_plugin_hook',
 				'args'   => array( array() ),
@@ -541,8 +541,8 @@ final class QueueTest extends TestCase {
 		$cancelled = $this->queue->cancel_all();
 
 		$this->assertSame( 0, $cancelled );
-		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpnt_Test_State::$as_cancelled );
 		// Foreign actions are left untouched (still present, not cancelled).
-		$this->assertArrayHasKey( 501, Wpait_Test_State::$as_actions );
+		$this->assertArrayHasKey( 501, Wpnt_Test_State::$as_actions );
 	}
 }
