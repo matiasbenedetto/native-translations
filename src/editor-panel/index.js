@@ -11,7 +11,7 @@ import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/editor';
 import { useSelect } from '@wordpress/data';
 import { useState, useEffect, useCallback } from '@wordpress/element';
-import { PanelRow, SelectControl, Button, Spinner, Notice } from '@wordpress/components';
+import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
@@ -95,6 +95,14 @@ const TranslationsPanel = () => {
 		}
 		return request( 'set-language', { object_id: postId, code, type: 'post' }, 'lang' );
 	};
+
+	const setOriginal = ( isOriginal ) =>
+		request( 'overview-original', { object_id: postId, type: 'post', is_original: isOriginal }, 'original', {
+			reload: true,
+			successMsg: isOriginal
+				? __( 'Marked as the translation original.', 'wp-ai-translate' )
+				: __( 'No longer marked as an original.', 'wp-ai-translate' ),
+		} );
 
 	const translate = ( name, code ) =>
 		request( 'translate', { source_id: postId, target_code: code, type: 'post' }, code, {
@@ -180,6 +188,23 @@ const TranslationsPanel = () => {
 							{ __( 'This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'wp-ai-translate' ) }
 						</p>
 					) }
+				</div>
+			</PanelRow>
+
+			<PanelRow>
+				<div style={ { width: '100%' } }>
+					<ToggleControl
+						label={ __( 'Mark as original', 'wp-ai-translate' ) }
+						help={
+							currentLang
+								? __( 'Only originals can be translated into other languages.', 'wp-ai-translate' )
+								: __( 'Set a language above before marking this content as an original.', 'wp-ai-translate' )
+						}
+						checked={ !! ( data && data.is_original ) }
+						disabled={ loading || busy === 'original' || ! currentLang }
+						onChange={ setOriginal }
+						__nextHasNoMarginBottom
+					/>
 				</div>
 			</PanelRow>
 
