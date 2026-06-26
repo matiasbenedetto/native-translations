@@ -649,6 +649,29 @@ function Overview() {
 	const originalsCount = counts.originals || 0;
 	const unmarkedCount = counts.unmarked || 0;
 
+	// Short, muted line explaining what the current selection lists. Updates
+	// with the active view; each selection has its own translatable copy (#93).
+	const selectionDescription = useMemo( () => {
+		if ( isOriginals ) {
+			return __(
+				"Source entities you've marked as original. Translations are created from these.",
+				'wp-ai-translate'
+			);
+		}
+		if ( isUnmarked ) {
+			return __(
+				"Entities that don't have a language assigned yet. Mark or detect a language to start translating them.",
+				'wp-ai-translate'
+			);
+		}
+		const lang = languages.find( ( l ) => l.code === activeView );
+		return sprintf(
+			/* translators: %s: language name (e.g. "Spanish"). */
+			__( 'Entities assigned to %s.', 'wp-ai-translate' ),
+			lang ? lang.name : activeView
+		);
+	}, [ isOriginals, isUnmarked, activeView, languages ] );
+
 	return (
 		<div className="wpait-overview">
 			{ ! aiOk && (
@@ -804,6 +827,16 @@ function Overview() {
 					</FlexItem>
 				) ) }
 			</Flex>
+
+			<Text
+				className="wpait-ov-selection-desc"
+				as="p"
+				variant="muted"
+				size="13"
+				style={ { margin: '-4px 0 16px' } }
+			>
+				{ selectionDescription }
+			</Text>
 
 			<DataViews
 				data={ data }
