@@ -137,6 +137,46 @@ final class TranslationStoreTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * clear_language (#103)
+	 * ------------------------------------------------------------------ */
+
+	public function test_clear_language_removes_post_language_and_original_flag(): void {
+		$this->seed_post( 10, 'en' );
+		$this->store->set_original( 'post', 10, true );
+		$this->assertSame( 'en', $this->store->get_language( 'post', 10 ) );
+
+		$this->assertTrue( $this->store->clear_language( 'post', 10 ) );
+		$this->assertSame( '', $this->store->get_language( 'post', 10 ) );
+		$this->assertFalse( $this->store->is_original( 'post', 10 ), 'Clearing the language must clear the original flag.' );
+	}
+
+	public function test_clear_language_removes_term_language_and_original_flag(): void {
+		$this->seed_term( 20, 'es' );
+		$this->store->set_original( 'term', 20, true );
+
+		$this->assertTrue( $this->store->clear_language( 'term', 20 ) );
+		$this->assertSame( '', $this->store->get_language( 'term', 20 ) );
+		$this->assertFalse( $this->store->is_original( 'term', 20 ) );
+	}
+
+	public function test_clear_language_unlinks_from_group_leaving_siblings_intact(): void {
+		// A group of two: clearing one member must remove it from the group while the
+		// sibling keeps its language slot.
+		$this->seed_post( 10, 'en', 'grp-1' );
+		$this->seed_post( 11, 'es', 'grp-1' );
+
+		$this->assertTrue( $this->store->clear_language( 'post', 10 ) );
+
+		$this->assertSame( '', $this->store->get_group( 'post', 10 ), 'Cleared member must leave its group.' );
+		// The sibling is untouched: still grouped, still es.
+		$this->assertSame( 'grp-1', $this->store->get_group( 'post', 11 ) );
+		$this->assertSame( 'es', $this->store->get_language( 'post', 11 ) );
+		// And it is reachable as the sole remaining member of the group.
+		$translations = $this->store->get_translations( 'post', 11, array( 'include_self' => true ) );
+		$this->assertSame( array( 'es' => 11 ), $translations );
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * One-member-per-language invariant (C2)
 	 * ------------------------------------------------------------------ */
 

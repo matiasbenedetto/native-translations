@@ -167,6 +167,39 @@ class Wpait_Translation_Store {
 		return true;
 	}
 
+	/**
+	 * Removes an object's language assignment, returning it to the "Unmarked"
+	 * state (#103).
+	 *
+	 * Unlike {@see set_language()}, clearing is always safe for a grouped member:
+	 * the object leaves its group so the language slot the siblings rely on is
+	 * never silently dropped or mislabeled — the siblings keep their slots and
+	 * this object becomes a lone, unmarked entity. An item with no language also
+	 * cannot be a translation original (#92), so the original flag is cleared too.
+	 *
+	 * @param string $object_type 'post' | 'term'.
+	 * @param int    $object_id   Object id.
+	 * @return true
+	 */
+	public function clear_language( string $object_type, int $object_id ): bool {
+		$this->assert_type( $object_type );
+
+		if ( 'term' === $object_type ) {
+			delete_term_meta( $object_id, self::META_LANGUAGE );
+		} else {
+			wp_set_object_terms( $object_id, array(), Wpait_Languages::TAXONOMY, false );
+		}
+
+		// No language ⇒ cannot remain an explicit original (#92).
+		$this->set_original( $object_type, $object_id, false );
+
+		// Leave the group so a cleared member never orphans a sibling's slot; this
+		// also busts the group cache.
+		$this->unlink_translation( $object_type, $object_id );
+
+		return true;
+	}
+
 	/* ---------------------------------------------------------------------
 	 * Original flag (#92)
 	 * ------------------------------------------------------------------- */
