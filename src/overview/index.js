@@ -74,6 +74,7 @@ function Thumbnail( { item } ) {
 				) }
 				width={ THUMB_SIZE }
 				height={ THUMB_SIZE }
+				loading="lazy"
 				style={ { ...box, objectFit: 'cover', display: 'block' } }
 			/>
 		);
