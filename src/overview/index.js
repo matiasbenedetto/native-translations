@@ -542,6 +542,95 @@ function Overview() {
 		[ fetchData ]
 	);
 
+	// Change an already-assigned language (#103). Reuses /set-languages so the
+	// store's group invariants apply; a grouped member with siblings is refused
+	// (wpait_language_reassign) and surfaced per item rather than failing silently.
+	const runChangeLanguage = useCallback(
+		( items, code, name ) => {
+			const eligible = items.filter( ( it ) => it.language && it.language.code !== code );
+			if ( ! eligible.length ) {
+				return Promise.resolve();
+			}
+			setNotice( '' );
+			setError( '' );
+			return apiFetch( {
+				path: `/${ cfg.namespace }/set-languages`,
+				method: 'POST',
+				data: {
+					items: eligible.map( ( it ) => ( { id: it.id, type: it.type } ) ),
+					code,
+				},
+			} )
+				.then( ( res ) => {
+					const n = res.set || 0;
+					const errs = ( res.results || [] ).filter( ( r ) => 'error' === r.status );
+					if ( errs.length ) {
+						setError(
+							errs[ 0 ].message ||
+								__( 'Some items could not be changed — unlink them from their translation group first.', 'wp-ai-translate' )
+						);
+					}
+					if ( n ) {
+						setNotice(
+							sprintf(
+								/* translators: 1: count, 2: language name. */
+								__( '%1$d item(s) changed to %2$s.', 'wp-ai-translate' ),
+								n,
+								name
+							)
+						);
+					}
+					fetchData();
+				} )
+				.catch( ( e ) =>
+					setError( e.message || __( 'Could not change the language.', 'wp-ai-translate' ) )
+				);
+		},
+		[ fetchData ]
+	);
+
+	// Unset an entity's language (#103): returns it to the Unmarked state, clearing
+	// the original flag and unlinking it from its group (siblings keep their slots).
+	const runClearLanguage = useCallback(
+		( items ) => {
+			const eligible = items.filter( ( it ) => !! it.language );
+			if ( ! eligible.length ) {
+				return Promise.resolve();
+			}
+			setNotice( '' );
+			setError( '' );
+			return Promise.allSettled(
+				eligible.map( ( it ) =>
+					apiFetch( {
+						path: `/${ cfg.namespace }/clear-language`,
+						method: 'POST',
+						data: { object_id: it.id, type: it.type },
+					} )
+				)
+			).then( ( results ) => {
+				const failed = results.filter( ( r ) => 'rejected' === r.status );
+				const succeeded = results.length - failed.length;
+				if ( failed.length ) {
+					setError(
+						failed[ 0 ].reason?.message ||
+							__( 'Could not unset the language.', 'wp-ai-translate' )
+					);
+				}
+				if ( succeeded ) {
+					setNotice(
+						sprintf(
+							/* translators: %d: count. */
+							__( '%d item(s) returned to Unmarked.', 'wp-ai-translate' ),
+							succeeded
+						)
+					);
+				}
+				fetchData();
+			} );
+		},
+		[ fetchData ]
+	);
+
 	// AI detection: queue background detection jobs for the unmarked items (#56).
 	const runDetect = useCallback(
 		( items ) => {
@@ -600,6 +689,42 @@ function Overview() {
 						}
 					} ),
 			} );
+		} );
+
+		// Manual "Change language to <name>" for items that already have a language
+		// (#103). The store enforces group invariants; a grouped member is refused
+		// and surfaced rather than silently relabeled.
+		languages.forEach( ( lang ) => {
+			list.push( {
+				id: `change-language-${ lang.code }`,
+				label: sprintf(
+					/* translators: %s: language name. */
+					__( 'Change language to %s', 'wp-ai-translate' ),
+					lang.name
+				),
+				supportsBulk: true,
+				isEligible: ( item ) => !! item.language && item.language.code !== lang.code,
+				callback: ( items, { onActionPerformed } ) =>
+					runChangeLanguage( items, lang.code, lang.name ).then( () => {
+						if ( onActionPerformed ) {
+							onActionPerformed( items );
+						}
+					} ),
+			} );
+		} );
+
+		// "Unset language" — returns an item to Unmarked (#103).
+		list.push( {
+			id: 'clear-language',
+			label: __( 'Unset language', 'wp-ai-translate' ),
+			supportsBulk: true,
+			isEligible: ( item ) => !! item.language,
+			callback: ( items, { onActionPerformed } ) =>
+				runClearLanguage( items ).then( () => {
+					if ( onActionPerformed ) {
+						onActionPerformed( items );
+					}
+				} ),
 		} );
 
 		// AI "Detect language (AI)" for unmarked items (#56).
@@ -748,7 +873,7 @@ function Overview() {
 		} );
 
 		return list;
-	}, [ languages, aiOk, isLang, runBulk, runSetLanguage, runDetect, fetchData ] );
+	}, [ languages, aiOk, isLang, runBulk, runSetLanguage, runChangeLanguage, runClearLanguage, runDetect, fetchData ] );
 
 	const originalsCount = counts.originals || 0;
 	const unmarkedCount = counts.unmarked || 0;

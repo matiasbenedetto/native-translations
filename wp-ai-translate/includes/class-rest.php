@@ -296,6 +296,20 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/clear-language',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_clear_language' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/test-connection',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -840,6 +854,26 @@ class Wpait_Rest {
 		}
 
 		$result = $this->store->set_language( $type, $object_id, $code );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return rest_ensure_response( $this->payload( $type, $object_id ) );
+	}
+
+	/**
+	 * `POST /clear-language` — removes the object's language, returning it to the
+	 * "Unmarked" state (#103). Also clears the original flag and unlinks it from its
+	 * translation group (siblings keep their slots). Gated on edit capability.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_clear_language( WP_REST_Request $request ) {
+		$type      = (string) $request->get_param( 'type' );
+		$object_id = (int) $request->get_param( 'object_id' );
+
+		$result = $this->store->clear_language( $type, $object_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
