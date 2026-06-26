@@ -832,7 +832,7 @@ function Overview() {
 				className="wpait-ov-selection-desc"
 				as="p"
 				variant="muted"
-				size="13"
+				size="12"
 				style={ { margin: '-4px 0 16px' } }
 			>
 				{ selectionDescription }
