@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for Wpait_Frontend — the shared link builders the two front-end
+ * Unit tests for Wpnt_Frontend — the shared link builders the two front-end
  * blocks both call (#16) and the context-safety guards of the resolver (S6/S7).
  *
  * Covers links_for_post / links_for_term (own-language row, viewable siblings,
@@ -9,11 +9,11 @@
  * the refusal to guess a post/term outside a safe context).
  *
  * NOTE: render_* and register_blocks need WordPress block registration +
- * WPAIT_PLUGIN_DIR asset files (real block.json / build manifests on disk), so
+ * WPNT_PLUGIN_DIR asset files (real block.json / build manifests on disk), so
  * they are out of scope for a DB/asset-free unit suite and are covered by E2E.
- * has_balanced_blocks lives on Wpait_Translator (private), not the frontend.
+ * has_balanced_blocks lives on Wpnt_Translator (private), not the frontend.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -22,36 +22,36 @@ use PHPUnit\Framework\TestCase;
 
 final class FrontendTest extends TestCase {
 
-	private Wpait_Frontend $frontend;
-	private Wpait_Translation_Store $store;
+	private Wpnt_Frontend $frontend;
+	private Wpnt_Translation_Store $store;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::reset();
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'languages' => array(
 				array( 'code' => 'en', 'name' => 'English', 'native' => 'English', 'flag' => '🇺🇸', 'enabled' => true ),
 				array( 'code' => 'es', 'name' => 'Spanish', 'native' => 'Español', 'flag' => '🇦🇷', 'enabled' => true ),
 				array( 'code' => 'de', 'name' => 'German', 'native' => 'Deutsch', 'flag' => '', 'enabled' => false ),
 			),
 		);
-		$this->store    = new Wpait_Translation_Store();
-		$this->frontend = new Wpait_Frontend( $this->store, new Wpait_Languages() );
+		$this->store    = new Wpnt_Translation_Store();
+		$this->frontend = new Wpnt_Frontend( $this->store, new Wpnt_Languages() );
 	}
 
 	private function seed_post( int $id, string $code, string $group = '', string $status = 'publish' ): void {
-		Wpait_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => $status );
-		Wpait_Test_State::$object_terms[ $id ][ Wpait_Languages::TAXONOMY ] = array( $code );
+		Wpnt_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => $status );
+		Wpnt_Test_State::$object_terms[ $id ][ Wpnt_Languages::TAXONOMY ] = array( $code );
 		if ( '' !== $group ) {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
 	private function seed_term( int $id, string $code, string $group = '' ): void {
-		Wpait_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id", 'slug' => "term-$id" );
-		Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_LANGUAGE ] = $code;
+		Wpnt_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id", 'slug' => "term-$id" );
+		Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_LANGUAGE ] = $code;
 		if ( '' !== $group ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
@@ -104,7 +104,7 @@ final class FrontendTest extends TestCase {
 	public function test_links_for_post_omits_non_viewable_sibling(): void {
 		$this->seed_post( 10, 'en', 'g1', 'publish' );
 		$this->seed_post( 11, 'es', 'g1', 'draft' );
-		Wpait_Test_State::$not_viewable[11] = true;
+		Wpnt_Test_State::$not_viewable[11] = true;
 
 		$rows = $this->frontend->links_for_post( 10, true );
 		// The non-viewable Spanish draft is filtered out; only the current row remains.
@@ -136,8 +136,8 @@ final class FrontendTest extends TestCase {
 		// Sibling term meta points at a term id with no term row → get_term_link()
 		// returns WP_Error → the row is dropped.
 		$this->seed_term( 20, 'en', 'tg1' );
-		Wpait_Test_State::$term_meta[99][ Wpait_Translation_Store::META_LANGUAGE ] = 'es';
-		Wpait_Test_State::$term_meta[99][ Wpait_Translation_Store::META_GROUP ]    = 'tg1';
+		Wpnt_Test_State::$term_meta[99][ Wpnt_Translation_Store::META_LANGUAGE ] = 'es';
+		Wpnt_Test_State::$term_meta[99][ Wpnt_Translation_Store::META_GROUP ]    = 'tg1';
 		// Term 99 intentionally absent from $terms.
 
 		$rows = $this->frontend->links_for_term( 20, true );
@@ -159,7 +159,7 @@ final class FrontendTest extends TestCase {
 
 	public function test_resolve_post_id_uses_singular_queried_object(): void {
 		$post     = new WP_Post( array( 'ID' => 7, 'post_type' => 'post' ) );
-		Wpait_Test_State::$queried_object = $post;
+		Wpnt_Test_State::$queried_object = $post;
 		$this->assertSame( 7, $this->frontend->resolve_post_id() );
 	}
 
@@ -171,13 +171,13 @@ final class FrontendTest extends TestCase {
 	public function test_resolve_post_id_zero_on_term_archive(): void {
 		// A term archive's queried object is a WP_Term, not a WP_Post: resolve_post_id
 		// must NOT treat it as a current post (S6).
-		Wpait_Test_State::$queried_object = ( function () {
+		Wpnt_Test_State::$queried_object = ( function () {
 			$t           = new WP_Term();
 			$t->term_id  = 5;
 			$t->taxonomy = 'category';
 			return $t;
 		} )();
-		Wpait_Test_State::$archive_type = 'category';
+		Wpnt_Test_State::$archive_type = 'category';
 		$this->assertSame( 0, $this->frontend->resolve_post_id() );
 	}
 
@@ -189,8 +189,8 @@ final class FrontendTest extends TestCase {
 		$term           = new WP_Term();
 		$term->term_id  = 5;
 		$term->taxonomy = 'category';
-		Wpait_Test_State::$queried_object = $term;
-		Wpait_Test_State::$archive_type   = 'category';
+		Wpnt_Test_State::$queried_object = $term;
+		Wpnt_Test_State::$archive_type   = 'category';
 		$this->assertSame( 5, $this->frontend->resolve_term_id() );
 	}
 
@@ -198,14 +198,14 @@ final class FrontendTest extends TestCase {
 		$term           = new WP_Term();
 		$term->term_id  = 8;
 		$term->taxonomy = 'post_tag';
-		Wpait_Test_State::$queried_object = $term;
-		Wpait_Test_State::$archive_type   = 'post_tag';
+		Wpnt_Test_State::$queried_object = $term;
+		Wpnt_Test_State::$archive_type   = 'post_tag';
 		$this->assertSame( 8, $this->frontend->resolve_term_id() );
 	}
 
 	public function test_resolve_term_id_zero_when_not_a_term_archive(): void {
 		// Singular view: not a category/tag archive → 0.
-		Wpait_Test_State::$queried_object = new WP_Post( array( 'ID' => 7 ) );
+		Wpnt_Test_State::$queried_object = new WP_Post( array( 'ID' => 7 ) );
 		$this->assertSame( 0, $this->frontend->resolve_term_id() );
 	}
 
@@ -214,8 +214,8 @@ final class FrontendTest extends TestCase {
 		$term           = new WP_Term();
 		$term->term_id  = 5;
 		$term->taxonomy = 'product_cat';
-		Wpait_Test_State::$queried_object = $term;
-		Wpait_Test_State::$archive_type   = 'category';
+		Wpnt_Test_State::$queried_object = $term;
+		Wpnt_Test_State::$archive_type   = 'category';
 		$this->assertSame( 0, $this->frontend->resolve_term_id() );
 	}
 }

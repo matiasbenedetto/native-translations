@@ -1,10 +1,10 @@
 /**
- * AI Translate — block editor sidebar panel.
+ * WP Native Translations — block editor sidebar panel.
  *
  * Shows the current post's language and original flag — edited through the
  * editor's native dirty state and saved on Update (#106) — and manages its
  * translations (Translate / Recreate / View / Edit / Unlink / Delete) over the
- * wp-ai-translate/v1 REST endpoints, with success feedback.
+ * native-translations/v1 REST endpoints, with success feedback.
  */
 
 import { registerPlugin } from '@wordpress/plugins';
@@ -18,25 +18,25 @@ import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
 import { buildLanguageOptions, hasSiblings } from './language-options';
 
-// Post meta keys (kept in sync with Wpait_Editor): the original flag (the store's
+// Post meta keys (kept in sync with Wpnt_Editor): the original flag (the store's
 // own meta) and the staging field the language picker writes into (#106).
-const META_IS_ORIGINAL = '_wpait_is_original';
-const META_EDITOR_LANGUAGE = '_wpait_editor_language';
+const META_IS_ORIGINAL = '_wpnt_is_original';
+const META_EDITOR_LANGUAGE = '_wpnt_editor_language';
 
-const cfg = window.wpaitEditor || {
-	namespace: 'wp-ai-translate/v1',
+const cfg = window.wpntEditor || {
+	namespace: 'native-translations/v1',
 	languages: [],
 	defaultLanguage: '',
 	aiAvailable: false,
 };
 
 const STATUS_LABELS = {
-	publish: __( 'Published', 'wp-ai-translate' ),
-	draft: __( 'Draft', 'wp-ai-translate' ),
-	pending: __( 'Pending', 'wp-ai-translate' ),
-	future: __( 'Scheduled', 'wp-ai-translate' ),
-	private: __( 'Private', 'wp-ai-translate' ),
-	trash: __( 'Trash', 'wp-ai-translate' ),
+	publish: __( 'Published', 'native-translations' ),
+	draft: __( 'Draft', 'native-translations' ),
+	pending: __( 'Pending', 'native-translations' ),
+	future: __( 'Scheduled', 'native-translations' ),
+	private: __( 'Private', 'native-translations' ),
+	trash: __( 'Trash', 'native-translations' ),
 };
 
 const TranslationsPanel = () => {
@@ -78,7 +78,7 @@ const TranslationsPanel = () => {
 			path: addQueryArgs( `/${ cfg.namespace }/translations`, { object_id: postId, type: 'post' } ),
 		} )
 			.then( ( res ) => setData( res ) )
-			.catch( ( e ) => setError( e.message || __( 'Could not load translations.', 'wp-ai-translate' ) ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not load translations.', 'native-translations' ) ) )
 			.finally( () => setLoading( false ) );
 	}, [ postId ] );
 
@@ -113,7 +113,7 @@ const TranslationsPanel = () => {
 					setNotice( opts.successMsg );
 				}
 			} )
-			.catch( ( e ) => setError( e.message || __( 'Request failed.', 'wp-ai-translate' ) ) )
+			.catch( ( e ) => setError( e.message || __( 'Request failed.', 'native-translations' ) ) )
 			.finally( () => setBusy( '' ) );
 	};
 
@@ -133,27 +133,27 @@ const TranslationsPanel = () => {
 	const translate = ( name, code ) =>
 		request( 'translate', { source_id: postId, target_code: code, type: 'post' }, code, {
 			/* translators: %s: language name. */
-			successMsg: sprintf( __( '%s translation created as a draft.', 'wp-ai-translate' ), name ),
+			successMsg: sprintf( __( '%s translation created as a draft.', 'native-translations' ), name ),
 		} );
 
 	const recreate = ( name, id, code ) =>
 		request( 'recreate', { object_id: id, type: 'post' }, code, {
 			/* translators: %s: language name. */
-			successMsg: sprintf( __( '%s translation regenerated.', 'wp-ai-translate' ), name ),
+			successMsg: sprintf( __( '%s translation regenerated.', 'native-translations' ), name ),
 		} );
 
 	const unlink = ( name, id, code ) =>
 		request( 'unlink', { object_id: id, type: 'post' }, 'unlink-' + code, {
 			reload: true,
 			/* translators: %s: language name. */
-			successMsg: sprintf( __( '%s translation unlinked from this group.', 'wp-ai-translate' ), name ),
+			successMsg: sprintf( __( '%s translation unlinked from this group.', 'native-translations' ), name ),
 		} );
 
 	const del = ( name, id, code ) =>
 		request( 'delete', { object_id: id, type: 'post' }, 'del-' + code, {
 			reload: true,
 			/* translators: %s: language name. */
-			successMsg: sprintf( __( '%s translation moved to Trash.', 'wp-ai-translate' ), name ),
+			successMsg: sprintf( __( '%s translation moved to Trash.', 'native-translations' ), name ),
 		} );
 
 	// Only post/page screens enqueue this script, but guard defensively.
@@ -178,13 +178,13 @@ const TranslationsPanel = () => {
 	const languageOptions = buildLanguageOptions(
 		cfg.languages,
 		currentLang,
-		__( '— Not set —', 'wp-ai-translate' )
+		__( '— Not set —', 'native-translations' )
 	);
 
 	const isConfirming = ( action, code ) => confirm && confirm.action === action && confirm.code === code;
 
 	return (
-		<PluginDocumentSettingPanel name="wpait-translations" title={ __( 'Translations', 'wp-ai-translate' ) } icon="translation">
+		<PluginDocumentSettingPanel name="wpnt-translations" title={ __( 'Translations', 'native-translations' ) } icon="translation">
 			{ error && (
 				<Notice status="error" isDismissible onRemove={ () => setError( '' ) }>
 					{ error }
@@ -199,20 +199,20 @@ const TranslationsPanel = () => {
 
 			{ ! cfg.aiAvailable && (
 				<Notice status="warning" isDismissible={ false }>
-					{ __( 'No AI provider is configured, so new translations cannot be generated.', 'wp-ai-translate' ) }
+					{ __( 'No AI provider is configured, so new translations cannot be generated.', 'native-translations' ) }
 				</Notice>
 			) }
 
 			{ isNew && (
 				<Notice status="info" isDismissible={ false }>
-					{ __( 'Save this content before generating translations.', 'wp-ai-translate' ) }
+					{ __( 'Save this content before generating translations.', 'native-translations' ) }
 				</Notice>
 			) }
 
 			<PanelRow>
 				<div style={ { width: '100%' } }>
 					<SelectControl
-						label={ __( 'Language of this content', 'wp-ai-translate' ) }
+						label={ __( 'Language of this content', 'native-translations' ) }
 						value={ currentLang || '' }
 						options={ languageOptions }
 						disabled={ loading || siblingsExist }
@@ -221,7 +221,7 @@ const TranslationsPanel = () => {
 					/>
 					{ siblingsExist && (
 						<p className="description" style={ { margin: '4px 0 0' } }>
-							{ __( 'This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'wp-ai-translate' ) }
+							{ __( 'This content belongs to a translation group, so its language is fixed. Unlink its other translations to change it.', 'native-translations' ) }
 						</p>
 					) }
 				</div>
@@ -230,11 +230,11 @@ const TranslationsPanel = () => {
 			<PanelRow>
 				<div style={ { width: '100%' } }>
 					<ToggleControl
-						label={ __( 'Mark as original', 'wp-ai-translate' ) }
+						label={ __( 'Mark as original', 'native-translations' ) }
 						help={
 							currentLang
-								? __( 'Only originals can be translated into other languages.', 'wp-ai-translate' )
-								: __( 'Set a language above before marking this content as an original.', 'wp-ai-translate' )
+								? __( 'Only originals can be translated into other languages.', 'native-translations' )
+								: __( 'Set a language above before marking this content as an original.', 'native-translations' )
 						}
 						checked={ isOriginalPending }
 						disabled={ loading || ! currentLang }
@@ -243,7 +243,7 @@ const TranslationsPanel = () => {
 					/>
 					{ hasPendingChange && (
 						<p className="description" style={ { margin: '4px 0 0' } }>
-							{ __( 'Unsaved changes — save or update this content to apply.', 'wp-ai-translate' ) }
+							{ __( 'Unsaved changes — save or update this content to apply.', 'native-translations' ) }
 						</p>
 					) }
 				</div>
@@ -253,13 +253,13 @@ const TranslationsPanel = () => {
 				<PanelRow><Spinner /></PanelRow>
 			) : ! currentLang ? (
 				<Notice status="info" isDismissible={ false }>
-					{ __( 'Set the language of this content above to generate translations.', 'wp-ai-translate' ) }
+					{ __( 'Set the language of this content above to generate translations.', 'native-translations' ) }
 				</Notice>
 			) : (
 				<>
 				{ ! isOriginal && (
 					<Notice status="info" isDismissible={ false }>
-						{ __( 'Only originals can be translated. Turn on “Mark as original” above to create translations from this content.', 'wp-ai-translate' ) }
+						{ __( 'Only originals can be translated. Turn on “Mark as original” above to create translations from this content.', 'native-translations' ) }
 					</Notice>
 				) }
 				{ cfg.languages
@@ -272,7 +272,7 @@ const TranslationsPanel = () => {
 								<div style={ { width: '100%' } }>
 									<strong>{ l.name }</strong>
 									{ existing && existing.status && (
-										<span className="wpait-status-badge" style={ { marginLeft: '6px', fontSize: '11px', color: '#50575e' } }>
+										<span className="wpnt-status-badge" style={ { marginLeft: '6px', fontSize: '11px', color: '#50575e' } }>
 											{ STATUS_LABELS[ existing.status ] || existing.status }
 										</span>
 									) }
@@ -282,15 +282,15 @@ const TranslationsPanel = () => {
 												<p className="description" style={ { margin: '0 0 4px' } }>
 													{ sprintf(
 														/* translators: %s: language name. */
-														__( 'This overwrites the current %s translation. A revision is saved first so you can restore it. Continue?', 'wp-ai-translate' ),
+														__( 'This overwrites the current %s translation. A revision is saved first so you can restore it. Continue?', 'native-translations' ),
 														l.name
 													) }
 												</p>
 												<Button variant="primary" isSmall isBusy={ working } onClick={ () => recreate( l.name, existing.id, l.code ) }>
-													{ __( 'Yes, regenerate', 'wp-ai-translate' ) }
+													{ __( 'Yes, regenerate', 'native-translations' ) }
 												</Button>{ ' ' }
 												<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
-													{ __( 'Cancel', 'wp-ai-translate' ) }
+													{ __( 'Cancel', 'native-translations' ) }
 												</Button>
 											</div>
 										) : isConfirming( 'delete', l.code ) ? (
@@ -298,44 +298,44 @@ const TranslationsPanel = () => {
 												<p className="description" style={ { margin: '0 0 4px' } }>
 													{ sprintf(
 														/* translators: %s: language name. */
-														__( 'Move the %s translation to Trash and unlink it from this group?', 'wp-ai-translate' ),
+														__( 'Move the %s translation to Trash and unlink it from this group?', 'native-translations' ),
 														l.name
 													) }
 												</p>
 												<Button variant="primary" isDestructive isSmall isBusy={ working } onClick={ () => del( l.name, existing.id, l.code ) }>
-													{ __( 'Yes, trash it', 'wp-ai-translate' ) }
+													{ __( 'Yes, trash it', 'native-translations' ) }
 												</Button>{ ' ' }
 												<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
-													{ __( 'Cancel', 'wp-ai-translate' ) }
+													{ __( 'Cancel', 'native-translations' ) }
 												</Button>
 											</div>
 										) : (
 											<div style={ { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' } }>
 												{ existing.edit_link && (
-													<Button variant="link" href={ existing.edit_link }>{ __( 'Edit', 'wp-ai-translate' ) }</Button>
+													<Button variant="link" href={ existing.edit_link }>{ __( 'Edit', 'native-translations' ) }</Button>
 												) }
 												{ existing.view_link && (
-													<Button variant="link" href={ existing.view_link }>{ __( 'View', 'wp-ai-translate' ) }</Button>
+													<Button variant="link" href={ existing.view_link }>{ __( 'View', 'native-translations' ) }</Button>
 												) }
 												<Button variant="secondary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable } onClick={ () => setConfirm( { action: 'recreate', id: existing.id, code: l.code } ) }>
-													{ __( 'Recreate', 'wp-ai-translate' ) }
+													{ __( 'Recreate', 'native-translations' ) }
 												</Button>
 												<Button variant="link" isBusy={ busy === 'unlink-' + l.code } onClick={ () => unlink( l.name, existing.id, l.code ) }>
-													{ __( 'Unlink', 'wp-ai-translate' ) }
+													{ __( 'Unlink', 'native-translations' ) }
 												</Button>
 												<Button variant="link" isDestructive onClick={ () => setConfirm( { action: 'delete', id: existing.id, code: l.code } ) }>
-													{ __( 'Delete', 'wp-ai-translate' ) }
+													{ __( 'Delete', 'native-translations' ) }
 												</Button>
 											</div>
 										)
 									) : (
 										<div style={ { marginTop: '4px' } }>
 											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || isNew || ! isOriginal } onClick={ () => translate( l.name, l.code ) }>
-												{ __( 'Translate', 'wp-ai-translate' ) }
+												{ __( 'Translate', 'native-translations' ) }
 											</Button>
 											{ isNew && (
 												<p className="description" style={ { margin: '4px 0 0' } }>
-													{ __( 'Save this content before translating.', 'wp-ai-translate' ) }
+													{ __( 'Save this content before translating.', 'native-translations' ) }
 												</p>
 											) }
 										</div>
@@ -350,7 +350,7 @@ const TranslationsPanel = () => {
 	);
 };
 
-registerPlugin( 'wpait-translations-panel', {
+registerPlugin( 'wpnt-translations-panel', {
 	render: TranslationsPanel,
 	icon: 'translation',
 } );

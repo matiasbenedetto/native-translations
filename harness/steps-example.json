@@ -6,18 +6,18 @@
   { "type": "screenshot", "path": "/tmp/cast-list-all.png" },
 
   { "type": "note", "text": "Filter by Spanish (deterministic filtered URL)" },
-  { "type": "goto", "url": "/wp-admin/edit.php?wpait_lang=es" },
+  { "type": "goto", "url": "/wp-admin/edit.php?wpnt_lang=es" },
   { "type": "wait_for", "selector": ".wp-list-table", "timeout": 15000 },
   { "type": "wait", "ms": 1000 },
   { "type": "screenshot", "path": "/tmp/cast-list-es.png" },
 
   { "type": "note", "text": "Show the Untranslated filter" },
-  { "type": "goto", "url": "/wp-admin/edit.php?wpait_lang=untranslated" },
+  { "type": "goto", "url": "/wp-admin/edit.php?wpnt_lang=untranslated" },
   { "type": "wait_for", "selector": ".wp-list-table", "timeout": 15000 },
   { "type": "wait", "ms": 1000 },
 
-  { "type": "note", "text": "Open AI Translate settings" },
-  { "type": "goto", "url": "/wp-admin/options-general.php?page=wp-ai-translate" },
+  { "type": "note", "text": "Open WP Native Translations settings" },
+  { "type": "goto", "url": "/wp-admin/options-general.php?page=native-translations" },
   { "type": "wait_for", "selector": ".wrap h1", "timeout": 15000 },
   { "type": "wait", "ms": 1000 },
   { "type": "scroll", "y": 600 },

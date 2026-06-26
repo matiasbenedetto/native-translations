@@ -4,3 +4,7 @@
 *.log
 .DS_Store
 /shot.mjs
+
+# Release build artifacts (scripts/package.sh)
+/native-translations.zip
+/dist/

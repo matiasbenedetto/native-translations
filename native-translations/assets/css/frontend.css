@@ -1,0 +1,59 @@
+/**
+ * Front-end styles for the native-translations blocks (post-links + language-switcher).
+ *
+ * Shared because both blocks render the same `.wpnt-language-list` markup. Enqueued
+ * per-block via wp_enqueue_block_style() so it only loads on pages that use a block.
+ * Deliberately minimal and theme-overridable (everything keys off the wpnt-* hooks):
+ * turn the default bulleted <ul> into a tidy inline row of chip-style links.
+ */
+
+.wpnt-language-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
+}
+
+.wpnt-language-item {
+	margin: 0;
+	padding: 0;
+}
+
+.wpnt-language-item a,
+.wpnt-language-item > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding: 0.2em 0.7em;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	line-height: 1.5;
+	text-decoration: none;
+}
+
+.wpnt-language-item a:hover,
+.wpnt-language-item a:focus {
+	text-decoration: underline;
+}
+
+/* Current language: marked, not a link. */
+.wpnt-language-item.is-current > span {
+	font-weight: 600;
+	opacity: 0.85;
+}
+
+.wpnt-flag {
+	font-size: 1.1em;
+	line-height: 1;
+}
+
+/* flagcdn SVG flag icon (#80). */
+.wpnt-flag .wpnt-flag-img {
+	height: 1em;
+	width: auto;
+	border-radius: 2px;
+	vertical-align: -0.1em;
+	box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.1 );
+}

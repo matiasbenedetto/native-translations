@@ -5,7 +5,7 @@
  *
  * This file is copied into the live site's wp-content/mu-plugins/ by
  * `playground.sh provision-ai` ONLY when harness/.env.local supplies an
- * OPENROUTER_API_KEY. It is NOT part of the wp-ai-translate plugin — the plugin
+ * OPENROUTER_API_KEY. It is NOT part of the native-translations plugin — the plugin
  * never holds or reads the API key; it only calls the WP 7.0 AI connector.
  *
  * Two jobs:
@@ -13,13 +13,13 @@
  *     the harness, the WordPress `ai`-plugin naming convention) into the AI Client
  *     registry for the `openrouter` provider registered by the
  *     ai-provider-for-openrouter plugin.
- *  2. Pin the model the plugin requests, via wp-ai-translate's documented
- *     `wpait_model_preference` filter (the plugin has no model UI by design — N4).
+ *  2. Pin the model the plugin requests, via native-translations's documented
+ *     `wpnt_model_preference` filter (the plugin has no model UI by design — N4).
  *
- * @package WpAiTranslate\Harness
+ * @package WpNativeTranslations\Harness
  */
 
-namespace Wpait\Harness\E2E;
+namespace Wpnt\Harness\E2E;
 
 use WordPress\AiClient\AiClient;
 use WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication;
@@ -46,11 +46,11 @@ add_action(
 	6
 );
 
-// Pin the GLM model wp-ai-translate should request (the OpenRouter default would
+// Pin the GLM model native-translations should request (the OpenRouter default would
 // otherwise be left to the connector). Mirrors the production pattern of selecting
 // an accessible model via the plugin's own filter.
 add_filter(
-	'wpait_model_preference',
+	'wpnt_model_preference',
 	static function () {
 		return array( 'z-ai/glm-5.2' );
 	}

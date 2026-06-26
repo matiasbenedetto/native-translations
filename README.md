@@ -1,4 +1,4 @@
-# AI Translate (`wp-ai-translate`)
+# WP Native Translations (`native-translations`)
 
 A deliberately small multilingual plugin for **WordPress 7.0+**. It manages translations of
 posts, pages, and the category/tag taxonomies, and generates them on demand using the
@@ -16,7 +16,7 @@ publish.
 
 ## Functionality
 
-### AI Translate menu
+### WP Native Translations menu
 
 Configure languages (add/remove with the explicit controls), the default language, the **AI
 provider status** with a live *Test connection* check, the **AI model** to use, and the
@@ -77,9 +77,9 @@ Both are server-rendered, filtered to publicly-viewable targets, and styled as c
 
 1. **Requirements:** WordPress 7.0+, PHP 8.1+, and a configured WordPress AI provider (e.g. an
    `ai-provider-for-*` plugin with an API key).
-2. **Install:** copy `wp-ai-translate/` to `wp-content/plugins/` (or upload a zip of that folder
-   via **Plugins → Add New → Upload**), then activate **AI Translate**.
-3. **Configure:** under the **AI Translate** menu, add at least two languages, set the default
+2. **Install:** copy `native-translations/` to `wp-content/plugins/` (or upload a zip of that folder
+   via **Plugins → Add New → Upload**), then activate **WP Native Translations**.
+3. **Configure:** under the **WP Native Translations** menu, add at least two languages, set the default
    language, confirm the **AI provider** status is green (use *Test connection*), and pick a
    model.
 4. **Translate:** open a post, set its language in the **Translations** sidebar panel, click
@@ -111,8 +111,8 @@ PR.
 
 | Path | What |
 |---|---|
-| `wp-ai-translate/` | The plugin source (PHP in `includes/`, `blocks/`, built JS in `build/`, `assets/`, `languages/`). |
-| `src/` | Block-editor / front-end JS sources, built into `wp-ai-translate/build/` by `@wordpress/scripts`. |
+| `native-translations/` | The plugin source (PHP in `includes/`, `blocks/`, built JS in `build/`, `assets/`, `languages/`). |
+| `src/` | Block-editor / front-end JS sources, built into `native-translations/build/` by `@wordpress/scripts`. |
 | `harness/` | Disposable WordPress Playground dev/test harness (spin up a real WP 7.0 site, screenshots, screencasts, tests). |
 | `tests/php/` | PHPUnit unit suite (+ `phpunit.xml.dist`, `composer.json`). |
 | `plan/` | The design spec. |
@@ -126,7 +126,7 @@ npm run build           # build all blocks (editor-panel, post-links, language-s
 npm run start           # watch the editor panel during development
 ```
 
-Built bundles under `wp-ai-translate/build/` are committed; CI verifies they're in sync with
+Built bundles under `native-translations/build/` are committed; CI verifies they're in sync with
 `src/`.
 
 ### Local environment
@@ -142,14 +142,14 @@ screencasts, tests, and wiring a real AI provider for E2E).
 
 ### Conventions
 
-- Prefixes `wpait_` / `Wpait_` / `_wpait_`; WordPress-Extra docblocks; `defined( 'ABSPATH' ) || exit;`.
-- All language/group meta goes through `Wpait_Translation_Store`; all AI connector calls go
-  through `Wpait_Translator`.
+- Prefixes `wpnt_` / `Wpnt_` / `_wpnt_`; WordPress-Extra docblocks; `defined( 'ABSPATH' ) || exit;`.
+- All language/group meta goes through `Wpnt_Translation_Store`; all AI connector calls go
+  through `Wpnt_Translator`.
 - Branch off `trunk`; PRs target `trunk`.
 
 ### Extending
 
-- `wpait_model_preference` — ordered preferred model IDs (defaults to the configured model).
-- `wpait_temperature` — generation temperature (omitted by default).
-- `wpait_request_timeout`, `wpait_chunk_threshold`, `wpait_chunk_target`, `wpait_copy_fields`,
-  `wpait_overview_skip` — see the inline docblocks.
+- `wpnt_model_preference` — ordered preferred model IDs (defaults to the configured model).
+- `wpnt_temperature` — generation temperature (omitted by default).
+- `wpnt_request_timeout`, `wpnt_chunk_threshold`, `wpnt_chunk_target`, `wpnt_copy_fields`,
+  `wpnt_overview_skip` — see the inline docblocks.

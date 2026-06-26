@@ -14,11 +14,11 @@
  *
  * Run via `wp eval-file`, so WP_CLI is available.
  *
- * @package WpAiTranslate\Harness
+ * @package WpNativeTranslations\Harness
  */
 
-if ( ! class_exists( 'Wpait_Plugin' ) ) {
-	WP_CLI::error( 'wp-ai-translate is not active.' );
+if ( ! class_exists( 'Wpnt_Plugin' ) ) {
+	WP_CLI::error( 'native-translations is not active.' );
 }
 
 // Run as an administrator so capability-dependent values (edit/view links, REST
@@ -42,12 +42,12 @@ $check = static function ( string $label, bool $ok ) use ( &$failures ) {
 };
 
 // --- Gate: skip cleanly when no usable AI provider is configured. ---
-if ( ! Wpait_Translator::can_generate_text() ) {
+if ( ! Wpnt_Translator::can_generate_text() ) {
 	WP_CLI::log( 'SKIP: no usable AI provider/model configured (set harness/.env.local + run provision-ai). Non-generation tests are covered by the PHP unit suite.' );
 	return;
 }
 
-$plugin = Wpait_Plugin::instance();
+$plugin = Wpnt_Plugin::instance();
 $store  = $plugin->store();
 $trans  = $plugin->translator();
 $front  = $plugin->frontend();
@@ -130,7 +130,7 @@ try {
 	$check( 'language switcher resolves the en sibling for the translation', $has_en );
 
 	WP_CLI::log( '== REST payload shape ==' );
-	$req = new WP_REST_Request( 'GET', '/' . Wpait_Rest::NS . '/translations' );
+	$req = new WP_REST_Request( 'GET', '/' . Wpnt_Rest::NS . '/translations' );
 	$req->set_param( 'object_id', $src_id );
 	$req->set_param( 'type', 'post' );
 	$res  = $plugin->rest()->handle_translations( $req );

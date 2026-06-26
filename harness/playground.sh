@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# playground.sh — disposable WordPress Playground lifecycle for the wp-ai-translate
+# playground.sh — disposable WordPress Playground lifecycle for the native-translations
 # dev harness. Spins up a real, isolated WordPress 7.0 site (PHP-WASM + SQLite) that
 # coding agents can tear down and rebuild in seconds. Adapted from Automattic/wp-skill.
 #
@@ -26,7 +26,7 @@
 # State lives in harness/.state/ (gitignored). The WordPress files themselves live in
 # ~/.wordpress-playground/sites/<hash>/ — `reset` deletes that dir too so nothing
 # survives. The plugin is mounted read/write from the repo, so edits are live without a
-# copy/build step (build artifacts are committed under wp-ai-translate/build/).
+# copy/build step (build artifacts are committed under native-translations/build/).
 #
 # Mount consistency is enforced by construction (same idea as wp-skill): `ensure`
 # records its extra mounts and `wp`/`shot`/`cast` replay them. Calling `ensure` with a
@@ -40,8 +40,8 @@ set -euo pipefail
 # Resolve repo + harness dirs regardless of cwd.
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
-PLUGIN_DIR="$REPO_DIR/wp-ai-translate"
-PLUGIN_VFS="/wordpress/wp-content/plugins/wp-ai-translate"
+PLUGIN_DIR="$REPO_DIR/native-translations"
+PLUGIN_VFS="/wordpress/wp-content/plugins/native-translations"
 
 STATE="$HARNESS_DIR/.state"
 PHAR="$STATE/wp-cli.phar"
@@ -337,10 +337,10 @@ cmd_provision_ai() {
   # every request (front end, REST, editor) — not just one eval.
   local mu_dir; mu_dir="$(site_dir)/wp-content/mu-plugins"
   mkdir -p "$mu_dir"
-  cp "$HARNESS_DIR/e2e/mu-openrouter.php" "$mu_dir/wpait-e2e-openrouter.php"
+  cp "$HARNESS_DIR/e2e/mu-openrouter.php" "$mu_dir/wpnt-e2e-openrouter.php"
 
   # Bust the plugin's cached capability probe so it re-detects the now-usable model.
-  cmd_wp -- transient delete wpait_text_generation_supported >/dev/null 2>&1 || true
+  cmd_wp -- transient delete wpnt_text_generation_supported >/dev/null 2>&1 || true
 
   echo "provision-ai: OpenRouter provider configured (model z-ai/glm-5.2)."
 }

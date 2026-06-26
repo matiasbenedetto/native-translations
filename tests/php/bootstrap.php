@@ -1,26 +1,26 @@
 <?php
 /**
- * PHPUnit bootstrap for the wp-ai-translate unit suite.
+ * PHPUnit bootstrap for the native-translations unit suite.
  *
  * These are true unit tests: no database, no Docker, no WordPress install. The
  * handful of WordPress functions the units touch are stubbed here, and the WP 7.0
- * AI connector is replaced by a recording fake ({@see Wpait_Fake_Prompt_Builder})
+ * AI connector is replaced by a recording fake ({@see Wpnt_Fake_Prompt_Builder})
  * so tests can assert exactly which model/temperature a request would use — the
  * core of the bug #32 regression guard.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
 
 define( 'ABSPATH', __DIR__ . '/' );
-define( 'WPAIT_TESTING', true );
+define( 'WPNT_TESTING', true );
 
 /**
  * Mutable test state shared with the WordPress stubs below. Reset in each test's
- * setUp() via Wpait_Test_State::reset().
+ * setUp() via Wpnt_Test_State::reset().
  */
-final class Wpait_Test_State {
+final class Wpnt_Test_State {
 	/** @var bool Return value of wp_supports_ai(). */
 	public static bool $supports_ai = true;
 
@@ -57,7 +57,7 @@ final class Wpait_Test_State {
 	public static array $options = array();
 
 	/* ---------------------------------------------------------------------
-	 * In-memory object model for the REAL Wpait_Translation_Store (and the
+	 * In-memory object model for the REAL Wpnt_Translation_Store (and the
 	 * admin-list / frontend units that read through it). There is no DB: the
 	 * WP_Query / get_terms / *_meta / object-term stubs below all read and write
 	 * these arrays, so a test can model groups + languages declaratively.
@@ -86,7 +86,7 @@ final class Wpait_Test_State {
 	public static array $term_meta = array();
 
 	/**
-	 * Object terms (post → taxonomy → slugs), used for the `wpait_language`
+	 * Object terms (post → taxonomy → slugs), used for the `wpnt_language`
 	 * taxonomy a post carries its language through.
 	 *
 	 * @var array<int,array<string,string[]>>
@@ -264,7 +264,7 @@ final class Wpait_Test_State {
  * Recording fake of WP_AI_Client_Prompt_Builder. Captures the fluent calls so a
  * test can assert the model/temperature/system instruction a request would carry.
  */
-final class Wpait_Fake_Prompt_Builder {
+final class Wpnt_Fake_Prompt_Builder {
 	/** @var array<string,mixed> */
 	public array $calls = array();
 
@@ -288,16 +288,16 @@ final class Wpait_Fake_Prompt_Builder {
 	}
 
 	public function is_supported(): bool {
-		return Wpait_Test_State::$is_supported;
+		return Wpnt_Test_State::$is_supported;
 	}
 
 	public function generate_text() {
-		Wpait_Test_State::$requests[]    = $this->calls;
-		Wpait_Test_State::$last_request = $this->calls;
-		if ( ! empty( Wpait_Test_State::$connector_results ) ) {
-			return array_shift( Wpait_Test_State::$connector_results );
+		Wpnt_Test_State::$requests[]    = $this->calls;
+		Wpnt_Test_State::$last_request = $this->calls;
+		if ( ! empty( Wpnt_Test_State::$connector_results ) ) {
+			return array_shift( Wpnt_Test_State::$connector_results );
 		}
-		return Wpait_Test_State::$connector_result;
+		return Wpnt_Test_State::$connector_result;
 	}
 }
 
@@ -351,16 +351,16 @@ function esc_html_e( $text, $domain = 'default' ) {
 }
 
 function wp_supports_ai(): bool {
-	return Wpait_Test_State::$supports_ai;
+	return Wpnt_Test_State::$supports_ai;
 }
 
-function wp_ai_client_prompt( $prompt = null ): Wpait_Fake_Prompt_Builder {
-	return new Wpait_Fake_Prompt_Builder( $prompt );
+function wp_ai_client_prompt( $prompt = null ): Wpnt_Fake_Prompt_Builder {
+	return new Wpnt_Fake_Prompt_Builder( $prompt );
 }
 
 function apply_filters( $tag, $value = null, ...$args ) {
-	if ( array_key_exists( $tag, Wpait_Test_State::$filters ) ) {
-		return Wpait_Test_State::$filters[ $tag ];
+	if ( array_key_exists( $tag, Wpnt_Test_State::$filters ) ) {
+		return Wpnt_Test_State::$filters[ $tag ];
 	}
 	return $value;
 }
@@ -374,11 +374,11 @@ function remove_filter( ...$args ): bool {
 }
 
 function get_transient( $key ) {
-	return Wpait_Test_State::$transients[ $key ] ?? false;
+	return Wpnt_Test_State::$transients[ $key ] ?? false;
 }
 
 function set_transient( $key, $value, $ttl = 0 ): bool {
-	Wpait_Test_State::$transients[ $key ] = $value;
+	Wpnt_Test_State::$transients[ $key ] = $value;
 	return true;
 }
 
@@ -413,7 +413,7 @@ function wp_unslash( $value ) {
 }
 
 function get_option( $name, $default = false ) {
-	return Wpait_Test_State::$options[ $name ] ?? $default;
+	return Wpnt_Test_State::$options[ $name ] ?? $default;
 }
 
 function wp_list_pluck( $list, $field, $index_key = null ) {
@@ -429,7 +429,7 @@ function add_action( ...$args ) {
 	return true;
 }
 
-/* Term/taxonomy stubs for Wpait_Languages::reconcile() (S4). These read/write the
+/* Term/taxonomy stubs for Wpnt_Languages::reconcile() (S4). These read/write the
  * in-memory $terms model so a reconcile test can seed pre-existing language terms
  * and assert add/update/disable/blocked-delete outcomes. With an empty $terms set
  * (the AdminSettingsTest path) get_term_by() returns false, i.e. "all new". */
@@ -446,7 +446,7 @@ function register_term_meta( ...$args ): bool {
 }
 
 function get_term_by( $field, $value, $taxonomy = '' ) {
-	foreach ( Wpait_Test_State::$terms as $id => $row ) {
+	foreach ( Wpnt_Test_State::$terms as $id => $row ) {
 		if ( ( $row['taxonomy'] ?? '' ) !== $taxonomy ) {
 			continue;
 		}
@@ -462,7 +462,7 @@ function wp_insert_term( $term, $taxonomy, $args = array() ) {
 	static $next = 1000;
 	$id          = ++$next;
 	$slug        = $args['slug'] ?? sanitize_title( $term );
-	Wpait_Test_State::$terms[ $id ] = array(
+	Wpnt_Test_State::$terms[ $id ] = array(
 		'term_id'  => $id,
 		'taxonomy' => $taxonomy,
 		'name'     => (string) $term,
@@ -473,19 +473,19 @@ function wp_insert_term( $term, $taxonomy, $args = array() ) {
 }
 
 function wp_update_term( $term_id, $taxonomy, $args = array() ) {
-	if ( isset( Wpait_Test_State::$terms[ (int) $term_id ] ) && isset( $args['name'] ) ) {
-		Wpait_Test_State::$terms[ (int) $term_id ]['name'] = (string) $args['name'];
+	if ( isset( Wpnt_Test_State::$terms[ (int) $term_id ] ) && isset( $args['name'] ) ) {
+		Wpnt_Test_State::$terms[ (int) $term_id ]['name'] = (string) $args['name'];
 	}
 	return array( 'term_id' => (int) $term_id, 'term_taxonomy_id' => (int) $term_id );
 }
 
 function wp_delete_term( $term_id, $taxonomy = '' ) {
-	unset( Wpait_Test_State::$terms[ (int) $term_id ], Wpait_Test_State::$term_meta[ (int) $term_id ] );
+	unset( Wpnt_Test_State::$terms[ (int) $term_id ], Wpnt_Test_State::$term_meta[ (int) $term_id ] );
 	return true;
 }
 
 function update_term_meta( $term_id, $key, $value ) {
-	Wpait_Test_State::$term_meta[ (int) $term_id ][ $key ] = $value;
+	Wpnt_Test_State::$term_meta[ (int) $term_id ][ $key ] = $value;
 	return true;
 }
 
@@ -493,7 +493,7 @@ function add_settings_error( ...$args ) {
 	return true;
 }
 
-// Minimal WP_Term shim (Wpait_Languages::get_term_for_code return type).
+// Minimal WP_Term shim (Wpnt_Languages::get_term_for_code return type).
 if ( ! class_exists( 'WP_Term' ) ) {
 	class WP_Term {
 		public $term_id = 0;
@@ -506,9 +506,9 @@ if ( ! class_exists( 'WP_Term' ) ) {
 }
 
 /* -------------------------------------------------------------------------
- * In-memory WP object model: the stubs the REAL Wpait_Translation_Store (and the
+ * In-memory WP object model: the stubs the REAL Wpnt_Translation_Store (and the
  * admin-list / frontend units that read through it) depend on. All of them read
- * and write Wpait_Test_State::$posts/$terms/$post_meta/$term_meta/$object_terms/
+ * and write Wpnt_Test_State::$posts/$terms/$post_meta/$term_meta/$object_terms/
  * $cache, so a test models groups + languages without a database. They implement
  * real WordPress semantics (single-meta returns '' when unset, get_post() returns
  * null for an unknown id, etc.) so the tests exercise the unit, not the stub.
@@ -554,20 +554,20 @@ function absint( $n ): int {
 
 function wp_generate_uuid4(): string {
 	// Deterministic, unique per call — enough for group-id identity in tests.
-	return sprintf( 'uuid-%04d', ++Wpait_Test_State::$uuid_seq );
+	return sprintf( 'uuid-%04d', ++Wpnt_Test_State::$uuid_seq );
 }
 
 /* --- Post / term lookups ------------------------------------------------- */
 
 function get_post( $id = null ) {
 	$id  = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	$row = Wpait_Test_State::$posts[ $id ] ?? null;
+	$row = Wpnt_Test_State::$posts[ $id ] ?? null;
 	return null === $row ? null : new WP_Post( $row );
 }
 
 function get_term( $id, $taxonomy = '' ) {
 	$id  = (int) $id;
-	$row = Wpait_Test_State::$terms[ $id ] ?? null;
+	$row = Wpnt_Test_State::$terms[ $id ] ?? null;
 	if ( null === $row ) {
 		return null;
 	}
@@ -596,7 +596,7 @@ function get_post_stati() {
 
 function is_post_publicly_viewable( $post ): bool {
 	$id = (int) ( $post instanceof WP_Post ? $post->ID : $post );
-	return empty( Wpait_Test_State::$not_viewable[ $id ] );
+	return empty( Wpnt_Test_State::$not_viewable[ $id ] );
 }
 
 function wp_is_post_revision( $id ): bool {
@@ -610,61 +610,61 @@ function wp_is_post_autosave( $id ): bool {
 /* --- Meta ---------------------------------------------------------------- */
 
 function get_post_meta( $id, $key = '', $single = false ) {
-	$value = Wpait_Test_State::$post_meta[ (int) $id ][ $key ] ?? '';
+	$value = Wpnt_Test_State::$post_meta[ (int) $id ][ $key ] ?? '';
 	return $single ? $value : ( '' === $value ? array() : array( $value ) );
 }
 
 function update_post_meta( $id, $key, $value ) {
-	Wpait_Test_State::$post_meta[ (int) $id ][ $key ] = $value;
+	Wpnt_Test_State::$post_meta[ (int) $id ][ $key ] = $value;
 	return true;
 }
 
 function delete_post_meta( $id, $key ) {
-	unset( Wpait_Test_State::$post_meta[ (int) $id ][ $key ] );
+	unset( Wpnt_Test_State::$post_meta[ (int) $id ][ $key ] );
 	return true;
 }
 
 function get_term_meta( $id, $key = '', $single = false ) {
-	$value = Wpait_Test_State::$term_meta[ (int) $id ][ $key ] ?? '';
+	$value = Wpnt_Test_State::$term_meta[ (int) $id ][ $key ] ?? '';
 	return $single ? $value : ( '' === $value ? array() : array( $value ) );
 }
 
 function delete_term_meta( $id, $key ) {
-	unset( Wpait_Test_State::$term_meta[ (int) $id ][ $key ] );
+	unset( Wpnt_Test_State::$term_meta[ (int) $id ][ $key ] );
 	return true;
 }
 
-/* --- Object terms (a post's wpait_language taxonomy slug) ---------------- */
+/* --- Object terms (a post's wpnt_language taxonomy slug) ---------------- */
 
 function wp_get_object_terms( $object_id, $taxonomy, $args = array() ) {
-	$slugs = Wpait_Test_State::$object_terms[ (int) $object_id ][ $taxonomy ] ?? array();
+	$slugs = Wpnt_Test_State::$object_terms[ (int) $object_id ][ $taxonomy ] ?? array();
 	return array_values( $slugs );
 }
 
 function wp_set_object_terms( $object_id, $terms, $taxonomy, $append = false ) {
 	$slugs = array_map( 'strval', (array) $terms );
-	Wpait_Test_State::$object_terms[ (int) $object_id ][ $taxonomy ] = $slugs;
+	Wpnt_Test_State::$object_terms[ (int) $object_id ][ $taxonomy ] = $slugs;
 	return $slugs;
 }
 
-/* --- Object cache (single 'wpait' group is all the store uses) ----------- */
+/* --- Object cache (single 'wpnt' group is all the store uses) ----------- */
 
 function wp_cache_get( $key, $group = '' ) {
-	return Wpait_Test_State::$cache[ $group ][ $key ] ?? false;
+	return Wpnt_Test_State::$cache[ $group ][ $key ] ?? false;
 }
 
 function wp_cache_set( $key, $value, $group = '', $ttl = 0 ): bool {
-	Wpait_Test_State::$cache[ $group ][ $key ] = $value;
+	Wpnt_Test_State::$cache[ $group ][ $key ] = $value;
 	return true;
 }
 
 function wp_cache_delete( $key, $group = '' ): bool {
-	unset( Wpait_Test_State::$cache[ $group ][ $key ] );
+	unset( Wpnt_Test_State::$cache[ $group ][ $key ] );
 	return true;
 }
 
 function delete_transient( $key ): bool {
-	unset( Wpait_Test_State::$transients[ $key ] );
+	unset( Wpnt_Test_State::$transients[ $key ] );
 	return true;
 }
 
@@ -673,11 +673,11 @@ function delete_transient( $key ): bool {
 function current_user_can( $cap, ...$args ): bool {
 	if ( ! empty( $args ) ) {
 		$keyed = $cap . ':' . (int) $args[0];
-		if ( array_key_exists( $keyed, Wpait_Test_State::$caps ) ) {
-			return (bool) Wpait_Test_State::$caps[ $keyed ];
+		if ( array_key_exists( $keyed, Wpnt_Test_State::$caps ) ) {
+			return (bool) Wpnt_Test_State::$caps[ $keyed ];
 		}
 	}
-	return (bool) ( Wpait_Test_State::$caps[ $cap ] ?? false );
+	return (bool) ( Wpnt_Test_State::$caps[ $cap ] ?? false );
 }
 
 function _doing_it_wrong( $function, $message, $version ): void {
@@ -725,7 +725,7 @@ function strip_shortcodes( $content ) {
 /**
  * In-memory WP_Query: only the read shape the store's query_post_members() needs —
  * `meta_key`/`meta_value` against post meta, returning ids. Scans
- * Wpait_Test_State::$posts; status/post_type are not filtered (the store includes
+ * Wpnt_Test_State::$posts; status/post_type are not filtered (the store includes
  * all statuses and `post_type => 'any'`).
  */
 if ( ! class_exists( 'WP_Query' ) ) {
@@ -747,7 +747,7 @@ if ( ! class_exists( 'WP_Query' ) ) {
 			$this->query_vars = $args;
 
 			// The store's group lookup keys off meta_key/meta_value; the admin-list
-			// by-language / count queries key off a wpait_language tax_query. Both scan
+			// by-language / count queries key off a wpnt_language tax_query. Both scan
 			// the in-memory post model. (admin-list filter_query constructs an empty
 			// WP_Query and drives it via set()/get(), so neither path runs there.)
 			$meta_key   = $args['meta_key'] ?? null;
@@ -755,8 +755,8 @@ if ( ! class_exists( 'WP_Query' ) ) {
 			$tax_query  = $args['tax_query'] ?? null;
 
 			if ( null !== $meta_key ) {
-				foreach ( Wpait_Test_State::$posts as $id => $row ) {
-					$have = Wpait_Test_State::$post_meta[ (int) $id ][ $meta_key ] ?? null;
+				foreach ( Wpnt_Test_State::$posts as $id => $row ) {
+					$have = Wpnt_Test_State::$post_meta[ (int) $id ][ $meta_key ] ?? null;
 					if ( $have === $meta_value ) {
 						$this->posts[] = (int) $id;
 					}
@@ -764,8 +764,8 @@ if ( ! class_exists( 'WP_Query' ) ) {
 			} elseif ( is_array( $tax_query ) && isset( $tax_query[0]['taxonomy'] ) ) {
 				$tax  = (string) $tax_query[0]['taxonomy'];
 				$want = (array) ( $tax_query[0]['terms'] ?? array() );
-				foreach ( Wpait_Test_State::$posts as $id => $row ) {
-					$slugs = Wpait_Test_State::$object_terms[ (int) $id ][ $tax ] ?? array();
+				foreach ( Wpnt_Test_State::$posts as $id => $row ) {
+					$slugs = Wpnt_Test_State::$object_terms[ (int) $id ][ $tax ] ?? array();
 					if ( array_intersect( $slugs, $want ) ) {
 						$this->posts[] = (int) $id;
 					}
@@ -810,12 +810,12 @@ function get_terms( $args = array() ) {
 	}
 
 	$ids = array();
-	foreach ( Wpait_Test_State::$terms as $id => $row ) {
+	foreach ( Wpnt_Test_State::$terms as $id => $row ) {
 		if ( ! empty( $taxonomies ) && ! in_array( $row['taxonomy'] ?? '', $taxonomies, true ) ) {
 			continue;
 		}
 		if ( null !== $want_key ) {
-			$have = Wpait_Test_State::$term_meta[ (int) $id ][ $want_key ] ?? null;
+			$have = Wpnt_Test_State::$term_meta[ (int) $id ][ $want_key ] ?? null;
 			if ( $have !== $want_value ) {
 				continue;
 			}
@@ -829,7 +829,7 @@ function get_terms( $args = array() ) {
 }
 
 /* -------------------------------------------------------------------------
- * REST plumbing: only the surface Wpait_Rest's permission + validation logic
+ * REST plumbing: only the surface Wpnt_Rest's permission + validation logic
  * touches. The handlers themselves drive the translator/store (covered by their
  * own tests + E2E); these tests target the permission callbacks and arg checks.
  * ---------------------------------------------------------------------- */
@@ -914,80 +914,80 @@ function get_post_type_object( $post_type ) {
 }
 
 /* -------------------------------------------------------------------------
- * Front-end link + view-context stubs (Wpait_Frontend). Permalinks are simple
+ * Front-end link + view-context stubs (Wpnt_Frontend). Permalinks are simple
  * derived strings so a test can assert "a URL was produced" and the chosen id.
  * View context (is_singular / is_category / is_tag / queried object) is driven
- * from Wpait_Test_State so resolve_post_id()/resolve_term_id() can be exercised.
+ * from Wpnt_Test_State so resolve_post_id()/resolve_term_id() can be exercised.
  * ---------------------------------------------------------------------- */
 
 function get_permalink( $id = 0 ) {
 	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id : false;
+	return isset( Wpnt_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id : false;
 }
 
 function get_term_link( $id, $taxonomy = '' ) {
 	$id = (int) ( $id instanceof WP_Term ? $id->term_id : $id );
-	return isset( Wpait_Test_State::$terms[ $id ] )
+	return isset( Wpnt_Test_State::$terms[ $id ] )
 		? 'https://example.test/?term=' . $id
 		: new WP_Error( 'invalid_term', 'Invalid term.' );
 }
 
 function is_singular( $types = '' ): bool {
-	return null !== Wpait_Test_State::$queried_object
-		&& Wpait_Test_State::$queried_object instanceof WP_Post;
+	return null !== Wpnt_Test_State::$queried_object
+		&& Wpnt_Test_State::$queried_object instanceof WP_Post;
 }
 
 function is_category( $cat = '' ): bool {
-	return 'category' === Wpait_Test_State::$archive_type;
+	return 'category' === Wpnt_Test_State::$archive_type;
 }
 
 function is_tag( $tag = '' ): bool {
-	return 'post_tag' === Wpait_Test_State::$archive_type;
+	return 'post_tag' === Wpnt_Test_State::$archive_type;
 }
 
 function get_queried_object() {
-	return Wpait_Test_State::$queried_object;
+	return Wpnt_Test_State::$queried_object;
 }
 
 /* --- Locale switching context (#62) -------------------------------------- */
 
 function wp_doing_ajax(): bool {
-	return Wpait_Test_State::$doing_ajax;
+	return Wpnt_Test_State::$doing_ajax;
 }
 
 function is_feed(): bool {
-	return Wpait_Test_State::$is_feed;
+	return Wpnt_Test_State::$is_feed;
 }
 
 function is_robots(): bool {
-	return Wpait_Test_State::$is_robots;
+	return Wpnt_Test_State::$is_robots;
 }
 
 function is_main_query(): bool {
-	return Wpait_Test_State::$is_main_query;
+	return Wpnt_Test_State::$is_main_query;
 }
 
 function is_tax( $taxonomy = '', $term = '' ): bool {
-	return Wpait_Test_State::$is_tax;
+	return Wpnt_Test_State::$is_tax;
 }
 
 function get_locale(): string {
-	return Wpait_Test_State::$locale;
+	return Wpnt_Test_State::$locale;
 }
 
 function get_available_languages( $dir = null ): array {
-	return Wpait_Test_State::$available_languages;
+	return Wpnt_Test_State::$available_languages;
 }
 
 function switch_to_locale( $locale ): bool {
-	Wpait_Test_State::$switched_locales[] = (string) $locale;
-	Wpait_Test_State::$locale             = (string) $locale;
+	Wpnt_Test_State::$switched_locales[] = (string) $locale;
+	Wpnt_Test_State::$locale             = (string) $locale;
 	return true;
 }
 
 function wp_download_language_pack( $locale ) {
-	Wpait_Test_State::$downloaded_locales[] = (string) $locale;
-	$result = Wpait_Test_State::$download_result;
+	Wpnt_Test_State::$downloaded_locales[] = (string) $locale;
+	$result = Wpnt_Test_State::$download_result;
 	return '' === $result ? (string) $locale : $result;
 }
 
@@ -1007,15 +1007,15 @@ if ( ! class_exists( 'WP_Block' ) ) {
 /* -------------------------------------------------------------------------
  * Admin-list stubs: the discriminator (get_terms_args, #13) and the untranslated
  * cross-join. Admin context, current screen, and the candidate post query all read
- * from Wpait_Test_State so a test can model the screen + content set declaratively.
+ * from Wpnt_Test_State so a test can model the screen + content set declaratively.
  * ---------------------------------------------------------------------- */
 
 function is_admin(): bool {
-	return Wpait_Test_State::$is_admin;
+	return Wpnt_Test_State::$is_admin;
 }
 
 function get_current_screen() {
-	return Wpait_Test_State::$current_screen;
+	return Wpnt_Test_State::$current_screen;
 }
 
 /**
@@ -1028,7 +1028,7 @@ function get_current_screen() {
 function get_posts( $args = array() ) {
 	$type = $args['post_type'] ?? 'post';
 	$ids  = array();
-	foreach ( Wpait_Test_State::$posts as $id => $row ) {
+	foreach ( Wpnt_Test_State::$posts as $id => $row ) {
 		if ( ( $row['post_type'] ?? 'post' ) === $type ) {
 			$ids[] = (int) $id;
 		}
@@ -1040,27 +1040,27 @@ function get_posts( $args = array() ) {
 
 function get_the_title( $id = 0 ) {
 	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	return (string) ( Wpait_Test_State::$posts[ $id ]['post_title'] ?? ( 'Post ' . $id ) );
+	return (string) ( Wpnt_Test_State::$posts[ $id ]['post_title'] ?? ( 'Post ' . $id ) );
 }
 
 function get_post_type( $id = 0 ) {
 	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	return (string) ( Wpait_Test_State::$posts[ $id ]['post_type'] ?? 'post' );
+	return (string) ( Wpnt_Test_State::$posts[ $id ]['post_type'] ?? 'post' );
 }
 
 function get_edit_post_link( $id = 0, $context = 'display' ) {
 	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/wp-admin/post.php?post=' . $id . '&action=edit' : '';
+	return isset( Wpnt_Test_State::$posts[ $id ] ) ? 'https://example.test/wp-admin/post.php?post=' . $id . '&action=edit' : '';
 }
 
 function get_edit_term_link( $id, $taxonomy = '' ) {
 	$id = (int) ( $id instanceof WP_Term ? $id->term_id : $id );
-	return isset( Wpait_Test_State::$terms[ $id ] ) ? 'https://example.test/wp-admin/term.php?tag_ID=' . $id : '';
+	return isset( Wpnt_Test_State::$terms[ $id ] ) ? 'https://example.test/wp-admin/term.php?tag_ID=' . $id : '';
 }
 
 function get_preview_post_link( $id = 0 ) {
 	$id = (int) ( $id instanceof WP_Post ? $id->ID : $id );
-	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id . '&preview=true' : '';
+	return isset( Wpnt_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id . '&preview=true' : '';
 }
 
 /**
@@ -1070,7 +1070,7 @@ function get_preview_post_link( $id = 0 ) {
  */
 function get_post_thumbnail_id( $post = null ) {
 	$id = (int) ( $post instanceof WP_Post ? $post->ID : $post );
-	return (int) ( Wpait_Test_State::$post_meta[ $id ]['_thumbnail_id'] ?? 0 );
+	return (int) ( Wpnt_Test_State::$post_meta[ $id ]['_thumbnail_id'] ?? 0 );
 }
 
 function wp_get_attachment_image_src( $attachment_id, $size = 'thumbnail', $icon = false ) {
@@ -1091,7 +1091,7 @@ function wp_reset_postdata(): void {}
  */
 function get_the_excerpt( $post = 0 ) {
 	$id = (int) ( $post instanceof WP_Post ? $post->ID : $post );
-	return (string) ( Wpait_Test_State::$posts[ $id ]['post_excerpt'] ?? '' );
+	return (string) ( Wpnt_Test_State::$posts[ $id ]['post_excerpt'] ?? '' );
 }
 
 function wp_trim_words( $text, $num_words = 55, $more = null ) {
@@ -1109,12 +1109,12 @@ function wp_trim_words( $text, $num_words = 55, $more = null ) {
 /* -------------------------------------------------------------------------
  * Action Scheduler stubs (#55 queue). The queue unit only touches three AS
  * surfaces: enqueue, the "already scheduled?" dedup probe, and a status-count
- * store query. All record into / read from Wpait_Test_State so QueueTest can
+ * store query. All record into / read from Wpnt_Test_State so QueueTest can
  * assert the enqueued payload and drive the dedup branches declaratively.
  * ---------------------------------------------------------------------- */
 
 /** Signature for an (hook, args, group) tuple used by the dedup stub. */
-function wpait_test_as_signature( $hook, $args, $group ): string {
+function wpnt_test_as_signature( $hook, $args, $group ): string {
 	return md5( wp_json_encode( array( $hook, $args, $group ) ) );
 }
 
@@ -1123,26 +1123,26 @@ function wp_json_encode( $data, $options = 0, $depth = 512 ) {
 }
 
 function as_enqueue_async_action( $hook, $args = array(), $group = '', $unique = false, $priority = 10 ) {
-	Wpait_Test_State::$as_enqueued[] = array( $hook, $args, $group );
-	return count( Wpait_Test_State::$as_enqueued ); // A fake action id.
+	Wpnt_Test_State::$as_enqueued[] = array( $hook, $args, $group );
+	return count( Wpnt_Test_State::$as_enqueued ); // A fake action id.
 }
 
 function as_has_scheduled_action( $hook, $args = null, $group = '' ): bool {
-	$sig = wpait_test_as_signature( $hook, $args, $group );
-	return ! empty( Wpait_Test_State::$as_scheduled[ $sig ] );
+	$sig = wpnt_test_as_signature( $hook, $args, $group );
+	return ! empty( Wpnt_Test_State::$as_scheduled[ $sig ] );
 }
 
 function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '', $unique = false, $priority = 10 ) {
-	Wpait_Test_State::$as_scheduled_single[] = array( (int) $timestamp, $hook, $args, $group );
-	if ( Wpait_Test_State::$as_schedule_fails ) {
+	Wpnt_Test_State::$as_scheduled_single[] = array( (int) $timestamp, $hook, $args, $group );
+	if ( Wpnt_Test_State::$as_schedule_fails ) {
 		return 0; // Scheduling failed to persist.
 	}
-	return count( Wpait_Test_State::$as_scheduled_single ); // A fake action id.
+	return count( Wpnt_Test_State::$as_scheduled_single ); // A fake action id.
 }
 
-if ( ! class_exists( 'Wpait_Fake_AS_Action' ) ) {
+if ( ! class_exists( 'Wpnt_Fake_AS_Action' ) ) {
 	/** Minimal stand-in for ActionScheduler_Action used by fetch_action(). */
-	class Wpait_Fake_AS_Action {
+	class Wpnt_Fake_AS_Action {
 		private string $hook;
 		private array $args;
 		public function __construct( string $hook, array $args ) {
@@ -1158,9 +1158,9 @@ if ( ! class_exists( 'Wpait_Fake_AS_Action' ) ) {
 	}
 }
 
-if ( ! class_exists( 'Wpait_Fake_AS_LogEntry' ) ) {
+if ( ! class_exists( 'Wpnt_Fake_AS_LogEntry' ) ) {
 	/** Minimal stand-in for ActionScheduler_LogEntry. */
-	class Wpait_Fake_AS_LogEntry {
+	class Wpnt_Fake_AS_LogEntry {
 		private string $message;
 		public function __construct( string $message ) {
 			$this->message = $message;
@@ -1184,9 +1184,9 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 			if ( 'count' !== $return_format ) {
 				// 'select' returns an array of action ids (mirrors the real store).
 				$ids = self::STATUS_FAILED === $status
-					? array_keys( Wpait_Test_State::$as_failed_actions )
+					? array_keys( Wpnt_Test_State::$as_failed_actions )
 					: array();
-				foreach ( Wpait_Test_State::$as_actions as $id => $rec ) {
+				foreach ( Wpnt_Test_State::$as_actions as $id => $rec ) {
 					if ( ( $rec['status'] ?? '' ) === $status ) {
 						$ids[] = $id;
 					}
@@ -1198,37 +1198,37 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 				}
 				return $ids;
 			}
-			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
+			return (int) ( Wpnt_Test_State::$as_counts[ $status ] ?? 0 );
 		}
 
-		/** @return Wpait_Fake_AS_Action|null */
+		/** @return Wpnt_Fake_AS_Action|null */
 		public function fetch_action( $action_id ) {
-			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ]
-				?? Wpait_Test_State::$as_actions[ (int) $action_id ]
+			$rec = Wpnt_Test_State::$as_failed_actions[ (int) $action_id ]
+				?? Wpnt_Test_State::$as_actions[ (int) $action_id ]
 				?? null;
-			return $rec ? new Wpait_Fake_AS_Action( $rec['hook'], $rec['args'] ) : null;
+			return $rec ? new Wpnt_Fake_AS_Action( $rec['hook'], $rec['args'] ) : null;
 		}
 
 		public function delete_action( $action_id ): void {
-			Wpait_Test_State::$as_deleted[] = (int) $action_id;
-			unset( Wpait_Test_State::$as_failed_actions[ (int) $action_id ] );
+			Wpnt_Test_State::$as_deleted[] = (int) $action_id;
+			unset( Wpnt_Test_State::$as_failed_actions[ (int) $action_id ] );
 		}
 
 		public function cancel_action( $action_id ): void {
-			Wpait_Test_State::$as_cancelled[] = (int) $action_id;
+			Wpnt_Test_State::$as_cancelled[] = (int) $action_id;
 			// A cancelled action leaves the pending/running set (mirrors the real store
 			// flipping its status to 'canceled', so it no longer runs / is listed).
-			unset( Wpait_Test_State::$as_actions[ (int) $action_id ] );
+			unset( Wpnt_Test_State::$as_actions[ (int) $action_id ] );
 		}
 	}
 }
 
-if ( ! class_exists( 'Wpait_Fake_AS_Logger' ) ) {
-	class Wpait_Fake_AS_Logger {
-		/** @return array<int,Wpait_Fake_AS_LogEntry> */
+if ( ! class_exists( 'Wpnt_Fake_AS_Logger' ) ) {
+	class Wpnt_Fake_AS_Logger {
+		/** @return array<int,Wpnt_Fake_AS_LogEntry> */
 		public function get_logs( $action_id ): array {
-			$rec = Wpait_Test_State::$as_failed_actions[ (int) $action_id ] ?? null;
-			return $rec ? array( new Wpait_Fake_AS_LogEntry( 'action failed: ' . $rec['message'] ) ) : array();
+			$rec = Wpnt_Test_State::$as_failed_actions[ (int) $action_id ] ?? null;
+			return $rec ? array( new Wpnt_Fake_AS_LogEntry( 'action failed: ' . $rec['message'] ) ) : array();
 		}
 	}
 }
@@ -1236,7 +1236,7 @@ if ( ! class_exists( 'Wpait_Fake_AS_Logger' ) ) {
 if ( ! class_exists( 'ActionScheduler' ) ) {
 	class ActionScheduler {
 		private static ?ActionScheduler_Store $store = null;
-		private static ?Wpait_Fake_AS_Logger $logger = null;
+		private static ?Wpnt_Fake_AS_Logger $logger = null;
 
 		public static function store(): ActionScheduler_Store {
 			if ( null === self::$store ) {
@@ -1245,9 +1245,9 @@ if ( ! class_exists( 'ActionScheduler' ) ) {
 			return self::$store;
 		}
 
-		public static function logger(): Wpait_Fake_AS_Logger {
+		public static function logger(): Wpnt_Fake_AS_Logger {
 			if ( null === self::$logger ) {
-				self::$logger = new Wpait_Fake_AS_Logger();
+				self::$logger = new Wpnt_Fake_AS_Logger();
 			}
 			return self::$logger;
 		}
@@ -1260,13 +1260,13 @@ if ( ! class_exists( 'ActionScheduler' ) ) {
  * Translator, whose constructor type-hints it.
  * ---------------------------------------------------------------------- */
 
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-translation-store.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-settings.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-languages.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-translator.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-queue.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-rest.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-frontend.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-locale.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-list.php';
-require_once __DIR__ . '/../../wp-ai-translate/includes/class-editor.php';
+require_once __DIR__ . '/../../native-translations/includes/class-translation-store.php';
+require_once __DIR__ . '/../../native-translations/includes/class-admin-settings.php';
+require_once __DIR__ . '/../../native-translations/includes/class-languages.php';
+require_once __DIR__ . '/../../native-translations/includes/class-translator.php';
+require_once __DIR__ . '/../../native-translations/includes/class-queue.php';
+require_once __DIR__ . '/../../native-translations/includes/class-rest.php';
+require_once __DIR__ . '/../../native-translations/includes/class-frontend.php';
+require_once __DIR__ . '/../../native-translations/includes/class-locale.php';
+require_once __DIR__ . '/../../native-translations/includes/class-admin-list.php';
+require_once __DIR__ . '/../../native-translations/includes/class-editor.php';

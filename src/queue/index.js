@@ -1,7 +1,7 @@
 /**
- * AI Translate — Translation Queue page (#96).
+ * WP Native Translations — Translation Queue page (#96).
  *
- * A dedicated admin sub-section (slug `wp-ai-translate-queue`) that lists the
+ * A dedicated admin sub-section (slug `native-translations-queue`) that lists the
  * plugin's background translation/detection jobs with their state
  * (pending / running / failed), the target entity (title + type), target
  * language and action type. Failed jobs surface their error message and keep the
@@ -22,8 +22,8 @@ import apiFetch from '@wordpress/api-fetch';
 import { __, sprintf } from '@wordpress/i18n';
 import { Button, Notice, Spinner, Flex, FlexItem, __experimentalText as Text } from '@wordpress/components';
 
-const cfg = window.wpaitQueue || {
-	namespace: 'wp-ai-translate/v1',
+const cfg = window.wpntQueue || {
+	namespace: 'native-translations/v1',
 	languages: [],
 	overviewUrl: '',
 };
@@ -38,12 +38,12 @@ const POLL_MS = 5000;
  */
 function typeLabel( type ) {
 	if ( 'term' === type ) {
-		return __( 'Term', 'wp-ai-translate' );
+		return __( 'Term', 'native-translations' );
 	}
 	if ( 'post' === type ) {
-		return __( 'Post', 'wp-ai-translate' );
+		return __( 'Post', 'native-translations' );
 	}
-	return type || __( 'Item', 'wp-ai-translate' );
+	return type || __( 'Item', 'native-translations' );
 }
 
 /**
@@ -54,8 +54,8 @@ function typeLabel( type ) {
  */
 function kindLabel( kind ) {
 	return 'detect' === kind
-		? __( 'Detect language', 'wp-ai-translate' )
-		: __( 'Translate', 'wp-ai-translate' );
+		? __( 'Detect language', 'native-translations' )
+		: __( 'Translate', 'native-translations' );
 }
 
 /**
@@ -82,13 +82,13 @@ function languageName( code ) {
  */
 function StateBadge( { state } ) {
 	const map = {
-		running: { bg: '#cce5ff', fg: '#004085', label: __( 'Running', 'wp-ai-translate' ) },
-		pending: { bg: '#f0f0f1', fg: '#3c434a', label: __( 'Pending', 'wp-ai-translate' ) },
-		failed: { bg: '#f8d7da', fg: '#842029', label: __( 'Failed', 'wp-ai-translate' ) },
+		running: { bg: '#cce5ff', fg: '#004085', label: __( 'Running', 'native-translations' ) },
+		pending: { bg: '#f0f0f1', fg: '#3c434a', label: __( 'Pending', 'native-translations' ) },
+		failed: { bg: '#f8d7da', fg: '#842029', label: __( 'Failed', 'native-translations' ) },
 		// 'completed' is unreachable today (Action Scheduler prunes completed actions,
 		// so they never appear in the queue list) — kept as a forward-looking mapping
 		// in case completed jobs are ever surfaced.
-		completed: { bg: '#d4edda', fg: '#155724', label: __( 'Completed', 'wp-ai-translate' ) },
+		completed: { bg: '#d4edda', fg: '#155724', label: __( 'Completed', 'native-translations' ) },
 	};
 	const s = map[ state ] || map.pending;
 	return (
@@ -138,7 +138,7 @@ function Queue() {
 				setJobs( [ ...activeJobs, ...failedJobs ] );
 				setError( '' );
 			} )
-			.catch( ( e ) => setError( e.message || __( 'Could not load the queue.', 'wp-ai-translate' ) ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not load the queue.', 'native-translations' ) ) )
 			.finally( () => setIsLoading( false ) );
 	}, [] );
 
@@ -164,10 +164,10 @@ function Queue() {
 				data: { action_id: actionId },
 			} )
 				.then( () => {
-					setNotice( __( 'Job re-queued.', 'wp-ai-translate' ) );
+					setNotice( __( 'Job re-queued.', 'native-translations' ) );
 					return load( { quiet: true } );
 				} )
-				.catch( ( e ) => setError( e.message || __( 'Could not re-run the job.', 'wp-ai-translate' ) ) )
+				.catch( ( e ) => setError( e.message || __( 'Could not re-run the job.', 'native-translations' ) ) )
 				.finally( () => setBusyId( 0 ) );
 		},
 		[ load ]
@@ -184,10 +184,10 @@ function Queue() {
 				data: { action_id: actionId },
 			} )
 				.then( () => {
-					setNotice( __( 'Job cancelled.', 'wp-ai-translate' ) );
+					setNotice( __( 'Job cancelled.', 'native-translations' ) );
 					return load( { quiet: true } );
 				} )
-				.catch( ( e ) => setError( e.message || __( 'Could not cancel the job.', 'wp-ai-translate' ) ) )
+				.catch( ( e ) => setError( e.message || __( 'Could not cancel the job.', 'native-translations' ) ) )
 				.finally( () => setBusyId( 0 ) );
 		},
 		[ load ]
@@ -195,7 +195,7 @@ function Queue() {
 
 	const cancelAll = useCallback( () => {
 		// eslint-disable-next-line no-alert
-		if ( typeof window !== 'undefined' && window.confirm && ! window.confirm( __( 'Cancel all pending and running jobs?', 'wp-ai-translate' ) ) ) {
+		if ( typeof window !== 'undefined' && window.confirm && ! window.confirm( __( 'Cancel all pending and running jobs?', 'native-translations' ) ) ) {
 			return;
 		}
 		setCancellingAll( true );
@@ -210,13 +210,13 @@ function Queue() {
 				setNotice(
 					sprintf(
 						/* translators: %d: number of cancelled jobs. */
-						__( '%d job(s) cancelled.', 'wp-ai-translate' ),
+						__( '%d job(s) cancelled.', 'native-translations' ),
 						res.cancelled || 0
 					)
 				);
 				return load( { quiet: true } );
 			} )
-			.catch( ( e ) => setError( e.message || __( 'Could not cancel the jobs.', 'wp-ai-translate' ) ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not cancel the jobs.', 'native-translations' ) ) )
 			.finally( () => setCancellingAll( false ) );
 	}, [ load ] );
 
@@ -224,11 +224,11 @@ function Queue() {
 	const cellStyle = { padding: '8px 10px', verticalAlign: 'top' };
 
 	return (
-		<div className="wpait-queue">
+		<div className="wpnt-queue">
 			<Flex justify="flex-start" gap={ 3 } style={ { margin: '12px 0' } }>
 				<FlexItem>
 					<Button variant="secondary" onClick={ () => load() } disabled={ isLoading }>
-						{ __( 'Refresh', 'wp-ai-translate' ) }
+						{ __( 'Refresh', 'native-translations' ) }
 					</Button>
 				</FlexItem>
 				<FlexItem>
@@ -239,8 +239,8 @@ function Queue() {
 						disabled={ cancellingAll || activeCount === 0 }
 					>
 						{ cancellingAll
-							? __( 'Cancelling…', 'wp-ai-translate' )
-							: __( 'Cancel all', 'wp-ai-translate' ) }
+							? __( 'Cancelling…', 'native-translations' )
+							: __( 'Cancel all', 'native-translations' ) }
 					</Button>
 				</FlexItem>
 				{ isLoading && (
@@ -263,11 +263,11 @@ function Queue() {
 
 			{ ! isLoading && jobs.length === 0 ? (
 				<Text as="p">
-					{ __( 'The translation queue is empty. Queue translations from the Overview page.', 'wp-ai-translate' ) }
+					{ __( 'The translation queue is empty. Queue translations from the Overview page.', 'native-translations' ) }
 					{ cfg.overviewUrl ? (
 						<>
 							{ ' ' }
-							<a href={ cfg.overviewUrl }>{ __( 'Open the Overview.', 'wp-ai-translate' ) }</a>
+							<a href={ cfg.overviewUrl }>{ __( 'Open the Overview.', 'native-translations' ) }</a>
 						</>
 					) : null }
 				</Text>
@@ -275,12 +275,12 @@ function Queue() {
 				<table className="wp-list-table widefat fixed striped" style={ { marginTop: '8px' } }>
 					<thead>
 						<tr>
-							<th scope="col">{ __( 'Entity', 'wp-ai-translate' ) }</th>
-							<th scope="col">{ __( 'Type', 'wp-ai-translate' ) }</th>
-							<th scope="col">{ __( 'Action', 'wp-ai-translate' ) }</th>
-							<th scope="col">{ __( 'Target language', 'wp-ai-translate' ) }</th>
-							<th scope="col">{ __( 'State', 'wp-ai-translate' ) }</th>
-							<th scope="col">{ __( 'Actions', 'wp-ai-translate' ) }</th>
+							<th scope="col">{ __( 'Entity', 'native-translations' ) }</th>
+							<th scope="col">{ __( 'Type', 'native-translations' ) }</th>
+							<th scope="col">{ __( 'Action', 'native-translations' ) }</th>
+							<th scope="col">{ __( 'Target language', 'native-translations' ) }</th>
+							<th scope="col">{ __( 'State', 'native-translations' ) }</th>
+							<th scope="col">{ __( 'Actions', 'native-translations' ) }</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -293,7 +293,7 @@ function Queue() {
 										<strong>{ job.title }</strong>
 										{ isFailed && job.message ? (
 											<div
-												className="wpait-queue-error"
+												className="wpnt-queue-error"
 												style={ { color: '#842029', fontSize: '12px', marginTop: '4px' } }
 											>
 												{ job.message }
@@ -317,8 +317,8 @@ function Queue() {
 												disabled={ isBusy }
 											>
 												{ isBusy
-													? __( 'Re-running…', 'wp-ai-translate' )
-													: __( 'Re-run', 'wp-ai-translate' ) }
+													? __( 'Re-running…', 'native-translations' )
+													: __( 'Re-run', 'native-translations' ) }
 											</Button>
 										) : (
 											<Button
@@ -329,8 +329,8 @@ function Queue() {
 												disabled={ isBusy }
 											>
 												{ isBusy
-													? __( 'Cancelling…', 'wp-ai-translate' )
-													: __( 'Cancel', 'wp-ai-translate' ) }
+													? __( 'Cancelling…', 'native-translations' )
+													: __( 'Cancel', 'native-translations' ) }
 											</Button>
 										) }
 									</td>
@@ -344,7 +344,7 @@ function Queue() {
 	);
 }
 
-const mount = document.getElementById( 'wpait-queue-app' );
+const mount = document.getElementById( 'wpnt-queue-app' );
 if ( mount ) {
 	createRoot( mount ).render( <Queue /> );
 }

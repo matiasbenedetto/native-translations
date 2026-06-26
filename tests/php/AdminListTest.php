@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for Wpait_Admin_List — the term-list `get_terms_args` discriminator
+ * Unit tests for Wpnt_Admin_List — the term-list `get_terms_args` discriminator
  * (#13) and the untranslated cross-join computation (N6).
  *
  * The discriminator must rewrite ONLY the main edit-tags list query on a
@@ -9,7 +9,7 @@
  * untranslated computation is exercised through the public filter entry points so
  * the real present-codes logic runs against the in-memory model.
  *
- * @package WpAiTranslate\Tests
+ * @package WpNativeTranslations\Tests
  */
 
 declare( strict_types=1 );
@@ -18,47 +18,47 @@ use PHPUnit\Framework\TestCase;
 
 final class AdminListTest extends TestCase {
 
-	private Wpait_Admin_List $list;
+	private Wpnt_Admin_List $list;
 
 	protected function setUp(): void {
-		Wpait_Test_State::reset();
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
+		Wpnt_Test_State::reset();
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
 			'default_language' => 'en',
 			'languages'        => array(
 				array( 'code' => 'en', 'name' => 'English', 'flag' => 'us', 'enabled' => true ),
 				array( 'code' => 'es', 'name' => 'Spanish', 'flag' => 'es', 'enabled' => true ),
 			),
 		);
-		$this->list = new Wpait_Admin_List( new Wpait_Translation_Store(), new Wpait_Languages() );
-		Wpait_Test_State::$is_admin = true;
+		$this->list = new Wpnt_Admin_List( new Wpnt_Translation_Store(), new Wpnt_Languages() );
+		Wpnt_Test_State::$is_admin = true;
 	}
 
 	private function term_screen( string $taxonomy = 'category' ): void {
-		Wpait_Test_State::$current_screen = (object) array( 'base' => 'edit-tags', 'taxonomy' => $taxonomy );
+		Wpnt_Test_State::$current_screen = (object) array( 'base' => 'edit-tags', 'taxonomy' => $taxonomy );
 	}
 
 	private function post_screen( string $post_type = 'post' ): void {
-		Wpait_Test_State::$current_screen = (object) array( 'base' => 'edit', 'post_type' => $post_type );
+		Wpnt_Test_State::$current_screen = (object) array( 'base' => 'edit', 'post_type' => $post_type );
 	}
 
 	private function seed_post( int $id, string $code, string $group = '' ): void {
-		Wpait_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => 'publish' );
+		Wpnt_Test_State::$posts[ $id ] = array( 'ID' => $id, 'post_type' => 'post', 'post_status' => 'publish' );
 		if ( '' !== $code ) {
-			Wpait_Test_State::$object_terms[ $id ][ Wpait_Languages::TAXONOMY ] = array( $code );
+			Wpnt_Test_State::$object_terms[ $id ][ Wpnt_Languages::TAXONOMY ] = array( $code );
 		}
 		if ( '' !== $group ) {
-			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$post_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
 	private function seed_term( int $id, string $code, string $group = '' ): void {
-		Wpait_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id" );
+		Wpnt_Test_State::$terms[ $id ] = array( 'term_id' => $id, 'taxonomy' => 'category', 'name' => "Term $id" );
 		if ( '' !== $code ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_LANGUAGE ] = $code;
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_LANGUAGE ] = $code;
 		}
 		if ( '' !== $group ) {
-			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_GROUP ] = $group;
+			Wpnt_Test_State::$term_meta[ $id ][ Wpnt_Translation_Store::META_GROUP ] = $group;
 		}
 	}
 
@@ -71,7 +71,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_post( 11, 'es', 'g1' );
 
 		ob_start();
-		$this->list->render_column( Wpait_Admin_List::COLUMN, 11 );
+		$this->list->render_column( Wpnt_Admin_List::COLUMN, 11 );
 		$html = (string) ob_get_clean();
 
 		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
@@ -88,7 +88,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_post( 11, 'es', 'g1' );
 
 		ob_start();
-		$this->list->render_column( Wpait_Admin_List::COLUMN, 10 );
+		$this->list->render_column( Wpnt_Admin_List::COLUMN, 10 );
 		$html = (string) ob_get_clean();
 
 		$this->assertStringContainsString( 'https://flagcdn.com/us.svg', $html );
@@ -101,7 +101,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_term( 20, 'en', 'tg1' );
 		$this->seed_term( 21, 'es', 'tg1' );
 
-		$html = $this->list->render_term_column( '', Wpait_Admin_List::COLUMN, 21 );
+		$html = $this->list->render_term_column( '', Wpnt_Admin_List::COLUMN, 21 );
 
 		$this->assertStringContainsString( 'https://flagcdn.com/es.svg', $html );
 		$this->assertStringContainsString( '<strong>es</strong>', $html );
@@ -117,16 +117,16 @@ final class AdminListTest extends TestCase {
 	 * ------------------------------------------------------------------ */
 
 	public function test_passthrough_when_not_admin(): void {
-		Wpait_Test_State::$is_admin = false;
+		Wpnt_Test_State::$is_admin = false;
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$args = array( 'taxonomy' => array( 'category' ) );
 		$this->assertSame( $args, $this->list->filter_terms_query( $args, array( 'category' ) ) );
 	}
 
 	public function test_passthrough_on_non_term_screen(): void {
 		$this->post_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$args = array( 'taxonomy' => array( 'category' ) );
 		$this->assertSame( $args, $this->list->filter_terms_query( $args, array( 'category' ) ) );
 	}
@@ -135,7 +135,7 @@ final class AdminListTest extends TestCase {
 		// Screen is the category list, but this query asks for both taxonomies (the
 		// internal untranslated scan shape) — must not be rewritten.
 		$this->term_screen( 'category' );
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$args = array( 'taxonomy' => array( 'category', 'post_tag' ) );
 		$this->assertSame( $args, $this->list->filter_terms_query( $args, array( 'category', 'post_tag' ) ) );
 	}
@@ -144,7 +144,7 @@ final class AdminListTest extends TestCase {
 		// wp_dropdown_categories() leaves `value_field` set — these list-every-term
 		// dropdowns must never be filtered (#13).
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$args = array( 'taxonomy' => array( 'category' ), 'value_field' => 'term_id' );
 		$this->assertSame( $args, $this->list->filter_terms_query( $args, array( 'category' ) ) );
 	}
@@ -158,17 +158,17 @@ final class AdminListTest extends TestCase {
 
 	public function test_language_filter_adds_meta_query(): void {
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$out = $this->list->filter_terms_query( array( 'taxonomy' => array( 'category' ) ), array( 'category' ) );
 
 		$this->assertArrayHasKey( 'meta_query', $out );
-		$this->assertSame( Wpait_Translation_Store::META_LANGUAGE, $out['meta_query'][0]['key'] );
+		$this->assertSame( Wpnt_Translation_Store::META_LANGUAGE, $out['meta_query'][0]['key'] );
 		$this->assertSame( 'es', $out['meta_query'][0]['value'] );
 	}
 
 	public function test_language_filter_preserves_existing_meta_query(): void {
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$existing = array( array( 'key' => '_other', 'value' => 'x' ) );
 		$out      = $this->list->filter_terms_query(
 			array( 'taxonomy' => array( 'category' ), 'meta_query' => $existing ),
@@ -190,7 +190,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_term( 30, 'en' );
 
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = Wpait_Admin_List::UNTRANSLATED;
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = Wpnt_Admin_List::UNTRANSLATED;
 		$out = $this->list->filter_terms_query( array( 'taxonomy' => array( 'category' ) ), array( 'category' ) );
 
 		$this->assertArrayHasKey( 'include', $out );
@@ -204,7 +204,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_term( 21, 'es', 'tg1' );
 
 		$this->term_screen();
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = Wpait_Admin_List::UNTRANSLATED;
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = Wpnt_Admin_List::UNTRANSLATED;
 		$out = $this->list->filter_terms_query( array( 'taxonomy' => array( 'category' ) ), array( 'category' ) );
 
 		// Nothing untranslated → an impossible include so the list shows zero rows.
@@ -222,7 +222,7 @@ final class AdminListTest extends TestCase {
 		$this->seed_post( 20, 'en' );
 
 		$this->post_screen( 'post' );
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = Wpait_Admin_List::UNTRANSLATED;
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = Wpnt_Admin_List::UNTRANSLATED;
 
 		$query          = new WP_Query();
 		$query->is_main = true;
@@ -237,7 +237,7 @@ final class AdminListTest extends TestCase {
 	public function test_post_language_filter_sets_tax_query(): void {
 		$this->seed_post( 10, 'en' );
 		$this->post_screen( 'post' );
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 
 		$query          = new WP_Query();
 		$query->is_main = true;
@@ -248,13 +248,13 @@ final class AdminListTest extends TestCase {
 		// present regardless of index.
 		$tax_query = $query->get( 'tax_query' );
 		$clause    = array_values( array_filter( (array) $tax_query, 'is_array' ) )[0];
-		$this->assertSame( Wpait_Languages::TAXONOMY, $clause['taxonomy'] );
+		$this->assertSame( Wpnt_Languages::TAXONOMY, $clause['taxonomy'] );
 		$this->assertSame( 'es', $clause['terms'] );
 	}
 
 	public function test_filter_query_ignored_for_non_main_query(): void {
 		$this->post_screen( 'post' );
-		$_GET[ Wpait_Admin_List::QUERY_VAR ] = 'es';
+		$_GET[ Wpnt_Admin_List::QUERY_VAR ] = 'es';
 		$query          = new WP_Query();
 		$query->is_main = false; // not the main query.
 		$this->list->filter_query( $query );
@@ -268,18 +268,18 @@ final class AdminListTest extends TestCase {
 	public function test_set_overview_hidden_writes_and_clears_post_meta(): void {
 		$this->seed_post( 10, 'en' );
 		$this->list->set_overview_hidden( 'post', 10, true );
-		$this->assertSame( '1', Wpait_Test_State::$post_meta[10][ Wpait_Admin_List::HIDE_META ] );
+		$this->assertSame( '1', Wpnt_Test_State::$post_meta[10][ Wpnt_Admin_List::HIDE_META ] );
 
 		$this->list->set_overview_hidden( 'post', 10, false );
-		$this->assertArrayNotHasKey( Wpait_Admin_List::HIDE_META, Wpait_Test_State::$post_meta[10] ?? array() );
+		$this->assertArrayNotHasKey( Wpnt_Admin_List::HIDE_META, Wpnt_Test_State::$post_meta[10] ?? array() );
 	}
 
 	public function test_set_overview_hidden_writes_and_clears_term_meta(): void {
 		$this->seed_term( 20, 'en' );
 		$this->list->set_overview_hidden( 'term', 20, true );
-		$this->assertSame( '1', Wpait_Test_State::$term_meta[20][ Wpait_Admin_List::HIDE_META ] );
+		$this->assertSame( '1', Wpnt_Test_State::$term_meta[20][ Wpnt_Admin_List::HIDE_META ] );
 
 		$this->list->set_overview_hidden( 'term', 20, false );
-		$this->assertArrayNotHasKey( Wpait_Admin_List::HIDE_META, Wpait_Test_State::$term_meta[20] ?? array() );
+		$this->assertArrayNotHasKey( Wpnt_Admin_List::HIDE_META, Wpnt_Test_State::$term_meta[20] ?? array() );
 	}
 }

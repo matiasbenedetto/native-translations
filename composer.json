@@ -1,5 +1,5 @@
 {
-    "name": "wp-ai-translate/wp-ai-translate",
+    "name": "native-translations/native-translations",
     "description": "AI-powered translation for WordPress (developer tooling: test suite).",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",

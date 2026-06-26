@@ -17,20 +17,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Should only run via wp eval-file.
 }
 
-if ( ! function_exists( 'wpait' ) ) {
-	WP_CLI::warning( 'wp-ai-translate plugin is not active — run `playground.sh wp -- plugin activate wp-ai-translate` first.' );
+if ( ! function_exists( 'wpnt' ) ) {
+	WP_CLI::warning( 'native-translations plugin is not active — run `playground.sh wp -- plugin activate native-translations` first.' );
 	return;
 }
 
 $force = isset( $args ) && is_array( $args ) && in_array( '--force', $args, true );
-if ( ! $force && get_option( 'wpait_harness_seeded' ) ) {
-	WP_CLI::log( 'Harness already seeded (option wpait_harness_seeded set). Re-run with --force to reseed.' );
+if ( ! $force && get_option( 'wpnt_harness_seeded' ) ) {
+	WP_CLI::log( 'Harness already seeded (option wpnt_harness_seeded set). Re-run with --force to reseed.' );
 	return;
 }
 
-$languages = wpait()->languages();
-$store     = wpait()->store();
-$settings  = Wpait_Admin_Settings::get_settings();
+$languages = wpnt()->languages();
+$store     = wpnt()->store();
+$settings  = Wpnt_Admin_Settings::get_settings();
 
 // --- 1. Configure two languages: en (US English) + es (Argentinean Spanish). ---
 $lang_rows = array(
@@ -60,7 +60,7 @@ $new_settings['default_language'] = 'en';
 // A per-language instruction so the prompt-composition path has something to show.
 $new_settings['instructions']['per_language']['es'] =
 	'Use Argentinean Spanish (rioplatense). Prefer "vos" forms where natural; keep it friendly and informal.';
-update_option( Wpait_Admin_Settings::OPTION, $new_settings );
+update_option( Wpnt_Admin_Settings::OPTION, $new_settings );
 $languages::flush_index();
 
 // --- 2. Categories and tags, with languages + translation-group links. ---
@@ -141,7 +141,7 @@ $ensure_post = static function ( $args ) use ( $store ) {
 
 // A couple of shared block snippets. The post-links block is appended to linked
 // posts so the front-end demonstrates the sibling-links block out of the box.
-$links_block = '<!-- wp:wp-ai-translate/post-links /-->';
+$links_block = '<!-- wp:native-translations/post-links /-->';
 
 $en_garden = $ensure_post( array(
 	'post_name'    => 'the-blue-garden',
@@ -239,7 +239,7 @@ foreach ( array( $en_garden, $es_garden, $en_brooklyn, $es_buenos_aires ) as $pi
 	if ( ! $post ) {
 		continue;
 	}
-	if ( false === strpos( $post->post_content, 'wp:wp-ai-translate/post-links' ) ) {
+	if ( false === strpos( $post->post_content, 'wp:native-translations/post-links' ) ) {
 		wp_update_post( array( 'ID' => $pid, 'post_content' => $post->post_content . "\n\n" . $links_block ) );
 	}
 }
@@ -254,7 +254,7 @@ foreach ( $first_comment as $cid ) {
 	wp_delete_comment( $cid, true );
 }
 
-update_option( 'wpait_harness_seeded', time() );
+update_option( 'wpnt_harness_seeded', time() );
 
 // --- 5. Summary an agent can read. ---
 $report = array(

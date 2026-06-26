@@ -15,7 +15,7 @@ import { createRequire } from 'module';
 import { dirname, join } from 'path';
 
 const require = createRequire(import.meta.url);
-const DEST = 'wp-ai-translate/build/overview/style-index.css';
+const DEST = 'native-translations/build/overview/style-index.css';
 const mode = process.argv[2];
 
 // Resolve the package root via its package.json (build-style/style.css is not

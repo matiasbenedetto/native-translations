@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
       - name: Lint plugin PHP
-        run: find wp-ai-translate -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+        run: find native-translations -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
       - name: Run PHPUnit
         run: composer test
 
@@ -41,5 +41,5 @@ jobs:
       - name: Verify the editor-panel bundle is up to date
         run: |
           npm run build:editor-panel
-          git diff --exit-code wp-ai-translate/build/editor-panel \
+          git diff --exit-code native-translations/build/editor-panel \
             || (echo "::error::Built bundle is out of date — run 'npm run build' and commit the result." && exit 1)
