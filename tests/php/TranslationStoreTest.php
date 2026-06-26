@@ -91,6 +91,52 @@ final class TranslationStoreTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * Original flag (#92)
+	 * ------------------------------------------------------------------ */
+
+	public function test_is_original_false_by_default(): void {
+		$this->seed_post( 10, 'en' );
+		$this->seed_term( 20, 'es' );
+		$this->assertFalse( $this->store->is_original( 'post', 10 ) );
+		$this->assertFalse( $this->store->is_original( 'term', 20 ) );
+	}
+
+	public function test_set_original_marks_and_unmarks_post_and_term(): void {
+		$this->seed_post( 10, 'en' );
+		$this->seed_term( 20, 'es' );
+
+		$this->assertTrue( $this->store->set_original( 'post', 10, true ) );
+		$this->assertTrue( $this->store->set_original( 'term', 20, true ) );
+		$this->assertTrue( $this->store->is_original( 'post', 10 ) );
+		$this->assertTrue( $this->store->is_original( 'term', 20 ) );
+		// Persisted as the '1' marker meta.
+		$this->assertSame( '1', Wpait_Test_State::$post_meta[10][ Wpait_Translation_Store::META_IS_ORIGINAL ] );
+		$this->assertSame( '1', Wpait_Test_State::$term_meta[20][ Wpait_Translation_Store::META_IS_ORIGINAL ] );
+
+		$this->assertTrue( $this->store->set_original( 'post', 10, false ) );
+		$this->assertTrue( $this->store->set_original( 'term', 20, false ) );
+		$this->assertFalse( $this->store->is_original( 'post', 10 ) );
+		$this->assertFalse( $this->store->is_original( 'term', 20 ) );
+		$this->assertArrayNotHasKey( Wpait_Translation_Store::META_IS_ORIGINAL, Wpait_Test_State::$post_meta[10] ?? array() );
+		$this->assertArrayNotHasKey( Wpait_Translation_Store::META_IS_ORIGINAL, Wpait_Test_State::$term_meta[20] ?? array() );
+	}
+
+	public function test_set_original_rejects_marking_an_item_with_no_language(): void {
+		// An item without a language cannot be a translation original (#92).
+		$this->seed_post( 10, '' );
+		$result = $this->store->set_original( 'post', 10, true );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_no_language', $result->get_error_code() );
+		$this->assertFalse( $this->store->is_original( 'post', 10 ) );
+	}
+
+	public function test_set_original_unmark_allowed_even_without_language(): void {
+		// Unmarking is always safe, language or not.
+		$this->seed_post( 10, '' );
+		$this->assertTrue( $this->store->set_original( 'post', 10, false ) );
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * One-member-per-language invariant (C2)
 	 * ------------------------------------------------------------------ */
 

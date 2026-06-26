@@ -336,6 +336,24 @@ class Wpait_Rest {
 				),
 			)
 		);
+
+		register_rest_route(
+			self::NS,
+			'/overview-original',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_overview_original' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id'   => $id_arg,
+					'type'        => $type_arg,
+					'is_original' => array(
+						'type'     => 'boolean',
+						'required' => true,
+					),
+				),
+			)
+		);
 	}
 
 	/* ---------------------------------------------------------------------
@@ -823,6 +841,26 @@ class Wpait_Rest {
 			(int) $request->get_param( 'object_id' ),
 			(bool) $request->get_param( 'hidden' )
 		);
+		return rest_ensure_response( array( 'ok' => true ) );
+	}
+
+	/**
+	 * `POST /overview-original` — marks or unmarks an item as a translation original
+	 * from the Overview (#92). Marking is rejected by the store when the item has no
+	 * language assigned. Gated on edit capability for the concrete target object.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_overview_original( WP_REST_Request $request ) {
+		$result = $this->store->set_original(
+			(string) $request->get_param( 'type' ),
+			(int) $request->get_param( 'object_id' ),
+			(bool) $request->get_param( 'is_original' )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
 		return rest_ensure_response( array( 'ok' => true ) );
 	}
 
