@@ -419,6 +419,82 @@ class Wpait_Queue {
 	}
 
 	/**
+	 * Cancels a single scheduled job by action id (#96): unschedules a pending
+	 * action so it never runs, or best-effort cancels a running one. Only this
+	 * plugin's own actions (the translate/detect hooks) are cancellable here, so a
+	 * stray id from another group can't be touched through the queue UI.
+	 *
+	 * @param int $action_id Action Scheduler action id.
+	 * @return true|WP_Error True on success.
+	 */
+	public function cancel_job( int $action_id ) {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return new WP_Error( 'wpait_no_scheduler', __( 'The background scheduler is unavailable.', 'wp-ai-translate' ) );
+		}
+		$store  = ActionScheduler::store();
+		$action = $store->fetch_action( $action_id );
+		if ( ! $action || ! method_exists( $action, 'get_hook' ) || '' === $action->get_hook() ) {
+			return new WP_Error( 'wpait_unknown_action', __( 'That job no longer exists.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$hook = $action->get_hook();
+		if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+			return new WP_Error( 'wpait_unknown_action', __( 'That job cannot be cancelled.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		try {
+			$store->cancel_action( $action_id );
+		} catch ( \Exception $e ) {
+			return new WP_Error( 'wpait_cancel_failed', __( 'The job could not be cancelled.', 'wp-ai-translate' ), array( 'status' => 500 ) );
+		}
+		return true;
+	}
+
+	/**
+	 * Cancels every pending and (best-effort) running job in this plugin's group
+	 * (#96). Completed/failed actions are left alone — failed jobs keep their
+	 * Re-run affordance — so only in-flight work is unscheduled. Returns the number
+	 * of actions cancelled.
+	 *
+	 * @return int Count of cancelled actions.
+	 */
+	public function cancel_all(): int {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return 0;
+		}
+		$store     = ActionScheduler::store();
+		$cancelled = 0;
+		foreach ( array( ActionScheduler_Store::STATUS_PENDING, ActionScheduler_Store::STATUS_RUNNING ) as $status ) {
+			$ids = $store->query_actions(
+				array(
+					'group'    => self::GROUP,
+					'status'   => $status,
+					'per_page' => 1000,
+				),
+				'select'
+			);
+			foreach ( (array) $ids as $action_id ) {
+				$action = $store->fetch_action( (int) $action_id );
+				if ( ! $action || ! method_exists( $action, 'get_hook' ) ) {
+					continue;
+				}
+				$hook = $action->get_hook();
+				if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+					continue;
+				}
+				try {
+					$store->cancel_action( (int) $action_id );
+					++$cancelled;
+				} catch ( \Exception $e ) {
+					// Best-effort: skip an action that can't be cancelled (e.g. it just ran).
+					continue;
+				}
+			}
+		}
+		return $cancelled;
+	}
+
+	/**
 	 * Resolves a scheduled/failed action to its `{hook,type,id,target}` so a caller
 	 * (e.g. the REST layer) can run a per-item capability check before retrying.
 	 *
