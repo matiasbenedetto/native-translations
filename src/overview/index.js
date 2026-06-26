@@ -115,6 +115,8 @@ function Snippet( { item } ) {
 				color: '#757575',
 				fontSize: '12px',
 				lineHeight: '1.4',
+				whiteSpace: 'normal',
+				wordBreak: 'break-word',
 			} }
 		>
 			{ snippet }
@@ -401,13 +403,17 @@ function Overview() {
 				render: ( { item } ) => (
 					<span
 						className="wpait-ov-title-block"
-						style={ { display: 'flex', flexDirection: 'column' } }
+						style={ { display: 'block' } }
 					>
-						{ item.edit_url ? (
-							<a href={ item.edit_url }>{ item.title }</a>
-						) : (
-							<span>{ item.title }</span>
-						) }
+						<span style={ { display: 'block' } }>
+							{ item.edit_url ? (
+								<a href={ item.edit_url }>
+									{ item.title }
+								</a>
+							) : (
+								item.title
+							) }
+						</span>
 						<Snippet item={ item } />
 					</span>
 				),
