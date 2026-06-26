@@ -208,6 +208,9 @@ final class Wpait_Test_State {
 	/** @var bool When true, as_schedule_single_action() returns 0 (scheduling failed). */
 	public static bool $as_schedule_fails = false;
 
+	/** @var array<int,int> Action ids passed to cancel_action() (#96). */
+	public static array $as_cancelled = array();
+
 	/** @var object|null Return value of get_current_screen() (e.g. ->base, ->taxonomy). */
 	public static $current_screen = null;
 
@@ -252,6 +255,7 @@ final class Wpait_Test_State {
 		self::$as_deleted       = array();
 		self::$as_actions       = array();
 		self::$as_schedule_fails = false;
+		self::$as_cancelled     = array();
 		$_GET                   = array();
 	}
 }
@@ -1187,7 +1191,12 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 						$ids[] = $id;
 					}
 				}
-				return array_map( 'intval', $ids );
+				$ids = array_map( 'intval', $ids );
+				// Honour per_page/offset so pagination (e.g. cancel_all batching) is exercised.
+				if ( isset( $args['per_page'] ) && (int) $args['per_page'] > 0 ) {
+					$ids = array_slice( $ids, (int) ( $args['offset'] ?? 0 ), (int) $args['per_page'] );
+				}
+				return $ids;
 			}
 			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
 		}
@@ -1203,6 +1212,13 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 		public function delete_action( $action_id ): void {
 			Wpait_Test_State::$as_deleted[] = (int) $action_id;
 			unset( Wpait_Test_State::$as_failed_actions[ (int) $action_id ] );
+		}
+
+		public function cancel_action( $action_id ): void {
+			Wpait_Test_State::$as_cancelled[] = (int) $action_id;
+			// A cancelled action leaves the pending/running set (mirrors the real store
+			// flipping its status to 'canceled', so it no longer runs / is listed).
+			unset( Wpait_Test_State::$as_actions[ (int) $action_id ] );
 		}
 	}
 }

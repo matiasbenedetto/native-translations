@@ -27,6 +27,7 @@ const cfg = window.wpaitOverview || {
 	aiOk: false,
 	perPage: 20,
 	settingsUrl: '',
+	queueUrl: '',
 };
 
 const DEFAULT_VIEW = {
@@ -808,6 +809,14 @@ function Overview() {
 							? __( 'Hide queue', 'wp-ai-translate' )
 							: __( 'Show queue', 'wp-ai-translate' ) }
 					</button>
+					{ cfg.queueUrl && (
+						<>
+							{ ' ' }
+							<a href={ cfg.queueUrl }>
+								{ __( 'Manage the Translation Queue', 'wp-ai-translate' ) }
+							</a>
+						</>
+					) }
 					{ showQueue && (
 						<ul className="wpait-queue-list" style={ { margin: '8px 0 0' } }>
 							{ queueJobs.length === 0 && (
@@ -853,6 +862,14 @@ function Overview() {
 							? __( 'Hide details', 'wp-ai-translate' )
 							: __( 'Show details', 'wp-ai-translate' ) }
 					</button>
+					{ cfg.queueUrl && (
+						<>
+							{ ' ' }
+							<a href={ cfg.queueUrl }>
+								{ __( 'Manage the Translation Queue', 'wp-ai-translate' ) }
+							</a>
+						</>
+					) }
 					{ showFailed && (
 						<ul className="wpait-failed-list" style={ { margin: '8px 0 0' } }>
 							{ failedJobs.length === 0 && (

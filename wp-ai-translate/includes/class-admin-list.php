@@ -47,12 +47,25 @@ class Wpait_Admin_List {
 	const OVERVIEW_SLUG = 'wp-ai-translate-overview';
 
 	/**
+	 * Translation Queue page slug (#96).
+	 */
+	const QUEUE_SLUG = 'wp-ai-translate-queue';
+
+	/**
 	 * Hook suffix returned by add_submenu_page for the Overview page, used to
 	 * gate asset enqueuing without hardcoding the (fragile) hook string.
 	 *
 	 * @var string
 	 */
 	private string $overview_hook = '';
+
+	/**
+	 * Hook suffix returned by add_submenu_page for the Queue page (#96), used to
+	 * gate asset enqueuing without hardcoding the (fragile) hook string.
+	 *
+	 * @var string
+	 */
+	private string $queue_hook = '';
 
 	/**
 	 * Meta flag marking an item as hidden from the Overview's curated lists.
@@ -124,8 +137,10 @@ class Wpait_Admin_List {
 		add_action( 'restrict_manage_posts', array( $this, 'render_filter' ) );
 		add_action( 'pre_get_posts', array( $this, 'filter_query' ) );
 		add_action( 'admin_menu', array( $this, 'add_overview_page' ) );
+		add_action( 'admin_menu', array( $this, 'add_queue_page' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_list_assets' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_overview_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_queue_assets' ) );
 		// Note: the /overview REST route is registered from Wpait_Plugin (unconditionally,
 		// so it works in non-admin REST context), not here.
 
@@ -1470,6 +1485,7 @@ class Wpait_Admin_List {
 			'aiOk'      => Wpait_Translator::can_generate_text(),
 			'perPage'   => self::PER_PAGE,
 			'settingsUrl' => admin_url( 'admin.php?page=' . Wpait_Admin_Settings::PAGE_SLUG ),
+			'queueUrl'  => admin_url( 'admin.php?page=' . self::QUEUE_SLUG ),
 		);
 
 		wp_add_inline_script(
@@ -1503,6 +1519,99 @@ class Wpait_Admin_List {
 		<?php
 	}
 
+
+	/**
+	 * Registers the Translation Queue submenu under the AI Translate top-level menu
+	 * (#96), alongside Settings and Overview.
+	 *
+	 * @return void
+	 */
+	public function add_queue_page(): void {
+		$this->queue_hook = (string) add_submenu_page(
+			Wpait_Admin_Settings::PAGE_SLUG,
+			__( 'Translation Queue', 'wp-ai-translate' ),
+			__( 'Queue', 'wp-ai-translate' ),
+			'manage_options',
+			self::QUEUE_SLUG,
+			array( $this, 'render_queue' )
+		);
+	}
+
+	/**
+	 * Enqueues the Translation Queue React app on the Queue page (#96). apiFetch (a
+	 * build dependency) wires the REST root + nonce, so the cancel/retry writes are
+	 * nonce-protected without any extra localization.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 * @return void
+	 */
+	public function enqueue_queue_assets( $hook_suffix ): void {
+		if ( '' === $this->queue_hook || $hook_suffix !== $this->queue_hook ) {
+			return;
+		}
+
+		$asset_file = WPAIT_PLUGIN_DIR . 'build/queue/index.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			// Build artifact missing; the page renders its <noscript> fallback only.
+			return;
+		}
+		$asset = require $asset_file;
+
+		wp_enqueue_script(
+			'wpait-queue',
+			WPAIT_PLUGIN_URL . 'build/queue/index.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		// The queue app uses @wordpress/components; ensure their styles load.
+		wp_enqueue_style( 'wp-components' );
+
+		$languages = array_map(
+			static function ( $lang ) {
+				return array( 'code' => $lang['code'], 'name' => $lang['name'] );
+			},
+			$this->enabled_languages()
+		);
+
+		$config = array(
+			'namespace'   => Wpait_Rest::NS,
+			'languages'   => array_values( $languages ),
+			'overviewUrl' => admin_url( 'admin.php?page=' . self::OVERVIEW_SLUG ),
+		);
+
+		wp_add_inline_script(
+			'wpait-queue',
+			'window.wpaitQueue = ' . wp_json_encode( $config ) . ';',
+			'before'
+		);
+
+		wp_set_script_translations( 'wpait-queue', 'wp-ai-translate' );
+	}
+
+	/**
+	 * Renders the Translation Queue page (#96): a React mount point for the queue
+	 * app that lists pending/running/failed jobs with their state and per-job +
+	 * bulk cancel.
+	 *
+	 * @return void
+	 */
+	public function render_queue(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Translation Queue', 'wp-ai-translate' ); ?></h1>
+			<div id="wpait-queue-app">
+				<noscript>
+					<?php esc_html_e( 'The Translation Queue requires JavaScript to display background jobs.', 'wp-ai-translate' ); ?>
+				</noscript>
+			</div>
+		</div>
+		<?php
+	}
 
 	/**
 	 * Emits the N6 scan-truncation warning as a top-level admin notice (used on the

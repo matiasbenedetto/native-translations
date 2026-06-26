@@ -223,6 +223,36 @@ class Wpait_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/queue/cancel',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_cancel_job' ),
+				'permission_callback' => array( $this, 'permission_manage' ),
+				'args'                => array(
+					'action_id' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+						'validate_callback' => static function ( $value ) {
+							return absint( $value ) > 0;
+						},
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/queue/cancel-all',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_cancel_all' ),
+				'permission_callback' => array( $this, 'permission_manage' ),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/recreate',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -725,6 +755,36 @@ class Wpait_Rest {
 			return $result;
 		}
 		return rest_ensure_response( array( 'retried' => true ) );
+	}
+
+	/**
+	 * `POST /queue/cancel` — cancels a single scheduled job by `action_id` (#96),
+	 * unscheduling a pending action via Action Scheduler (best-effort for a running
+	 * one). Admin-only (`manage_options`) and nonce-protected like the other write
+	 * routes.
+	 *
+	 * @param WP_REST_Request $request Request with `action_id`.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_cancel_job( WP_REST_Request $request ) {
+		$action_id = (int) $request->get_param( 'action_id' );
+
+		$result = $this->queue->cancel_job( $action_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response( array( 'cancelled' => true ) );
+	}
+
+	/**
+	 * `POST /queue/cancel-all` — cancels every pending (and best-effort running) job
+	 * in this plugin's queue group (#96). Admin-only (`manage_options`). Returns the
+	 * number of actions cancelled.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function handle_cancel_all() {
+		return rest_ensure_response( array( 'cancelled' => $this->queue->cancel_all() ) );
 	}
 
 	/**

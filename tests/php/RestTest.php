@@ -383,6 +383,58 @@ final class RestTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * /queue/cancel + /queue/cancel-all (#96) — manage_options gate + behavior
+	 * ------------------------------------------------------------------ */
+
+	public function test_cancel_routes_require_manage_options(): void {
+		// Both cancel routes share the manage_options permission callback.
+		Wpait_Test_State::$caps['manage_options'] = false;
+		$this->assertFalse( $this->rest->permission_manage() );
+		Wpait_Test_State::$caps['manage_options'] = true;
+		$this->assertTrue( $this->rest->permission_manage() );
+	}
+
+	public function test_cancel_job_handler_cancels_pending_action(): void {
+		Wpait_Test_State::$as_actions = array(
+			301 => array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			),
+		);
+
+		$response = $this->rest->handle_cancel_job( $this->request( array( 'action_id' => 301 ) ) );
+		$this->assertSame( array( 'cancelled' => true ), $response->get_data() );
+		$this->assertSame( array( 301 ), Wpait_Test_State::$as_cancelled );
+	}
+
+	public function test_cancel_job_handler_surfaces_unknown_action(): void {
+		$result = $this->rest->handle_cancel_job( $this->request( array( 'action_id' => 999 ) ) );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
+	}
+
+	public function test_cancel_all_handler_clears_pending_group(): void {
+		Wpait_Test_State::$as_actions = array(
+			301 => array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => 7, 'target' => 'es' ) ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			),
+			302 => array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => 8, 'target' => 'es' ) ),
+				'status' => ActionScheduler_Store::STATUS_RUNNING,
+			),
+		);
+
+		$response = $this->rest->handle_cancel_all();
+		$this->assertSame( array( 'cancelled' => 2 ), $response->get_data() );
+		$this->assertEqualsCanonicalizing( array( 301, 302 ), Wpait_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpait_Test_State::$as_actions );
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * /install-language-pack (#62) — manage_options gate + configured-locale bound
 	 * ------------------------------------------------------------------ */
 

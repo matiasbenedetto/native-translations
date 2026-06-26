@@ -419,6 +419,110 @@ class Wpait_Queue {
 	}
 
 	/**
+	 * Cancels a single scheduled job by action id (#96): unschedules a pending
+	 * action so it never runs, or best-effort cancels a running one. Only this
+	 * plugin's own actions (the translate/detect hooks) are cancellable here, so a
+	 * stray id from another group can't be touched through the queue UI.
+	 *
+	 * @param int $action_id Action Scheduler action id.
+	 * @return true|WP_Error True on success.
+	 */
+	public function cancel_job( int $action_id ) {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return new WP_Error( 'wpait_no_scheduler', __( 'The background scheduler is unavailable.', 'wp-ai-translate' ) );
+		}
+		$store  = ActionScheduler::store();
+		$action = $store->fetch_action( $action_id );
+		if ( ! $action || ! method_exists( $action, 'get_hook' ) || '' === $action->get_hook() ) {
+			return new WP_Error( 'wpait_unknown_action', __( 'That job no longer exists.', 'wp-ai-translate' ), array( 'status' => 404 ) );
+		}
+
+		$hook = $action->get_hook();
+		if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+			// Distinct from the 404 not-found case above: the action exists but belongs
+			// to another hook/group, so it isn't this plugin's to cancel (400).
+			return new WP_Error( 'wpait_foreign_action', __( 'That job cannot be cancelled.', 'wp-ai-translate' ), array( 'status' => 400 ) );
+		}
+
+		try {
+			$store->cancel_action( $action_id );
+		} catch ( \Exception $e ) {
+			return new WP_Error( 'wpait_cancel_failed', __( 'The job could not be cancelled.', 'wp-ai-translate' ), array( 'status' => 500 ) );
+		}
+		return true;
+	}
+
+	/**
+	 * Default batch size for {@see Wpait_Queue::cancel_all()} pagination — how many
+	 * actions per status are fetched and cancelled per query. Filterable via
+	 * `wpait_cancel_batch_size`.
+	 *
+	 * @var int
+	 */
+	const CANCEL_BATCH_SIZE = 100;
+
+	/**
+	 * Cancels every pending and (best-effort) running job in this plugin's group
+	 * (#96). Completed/failed actions are left alone — failed jobs keep their
+	 * Re-run affordance — so only in-flight work is unscheduled. Returns the number
+	 * of actions cancelled.
+	 *
+	 * Paginates so a backlog larger than a single page is fully cleared in one call:
+	 * each batch fetches up to {@see Wpait_Queue::CANCEL_BATCH_SIZE} actions and
+	 * cancels the plugin's own (cancelling flips status to 'canceled', so they leave
+	 * the pending/running set and the next query returns the following batch). The
+	 * loop stops when a query returns no actions, or when a batch cancels nothing —
+	 * guarding against an infinite loop should a fetched action be un-cancellable
+	 * (e.g. a foreign hook that lingers in the result, or one that just ran).
+	 *
+	 * @return int Count of cancelled actions.
+	 */
+	public function cancel_all(): int {
+		if ( ! class_exists( 'ActionScheduler' ) || ! class_exists( 'ActionScheduler_Store' ) ) {
+			return 0;
+		}
+		$store      = ActionScheduler::store();
+		$batch_size = max( 1, (int) apply_filters( 'wpait_cancel_batch_size', self::CANCEL_BATCH_SIZE ) );
+		$cancelled  = 0;
+		foreach ( array( ActionScheduler_Store::STATUS_PENDING, ActionScheduler_Store::STATUS_RUNNING ) as $status ) {
+			do {
+				$ids = $store->query_actions(
+					array(
+						'group'    => self::GROUP,
+						'status'   => $status,
+						'per_page' => $batch_size,
+					),
+					'select'
+				);
+
+				$batch_cancelled = 0;
+				foreach ( (array) $ids as $action_id ) {
+					$action = $store->fetch_action( (int) $action_id );
+					if ( ! $action || ! method_exists( $action, 'get_hook' ) ) {
+						continue;
+					}
+					$hook = $action->get_hook();
+					if ( self::HOOK !== $hook && self::DETECT_HOOK !== $hook ) {
+						continue;
+					}
+					try {
+						$store->cancel_action( (int) $action_id );
+						++$cancelled;
+						++$batch_cancelled;
+					} catch ( \Exception $e ) {
+						// Best-effort: skip an action that can't be cancelled (e.g. it just ran).
+						continue;
+					}
+				}
+				// Continue only while there's a full-or-partial batch AND this batch made
+				// progress; a batch that cancelled nothing means only un-cancellable
+				// actions remain, so stop rather than re-fetch the same set forever.
+			} while ( ! empty( $ids ) && $batch_cancelled > 0 );
+		}
+		return $cancelled;
+	}
+
+	/**
 	 * Resolves a scheduled/failed action to its `{hook,type,id,target}` so a caller
 	 * (e.g. the REST layer) can run a per-item capability check before retrying.
 	 *
