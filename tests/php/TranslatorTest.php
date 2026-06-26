@@ -293,6 +293,79 @@ final class TranslatorTest extends TestCase {
 		Wpait_Languages::flush_index();
 	}
 
+	/** Seeds a registered wpait_language taxonomy term so get_term_for_code() resolves. */
+	private function seed_language_term( string $code, int $term_id ): void {
+		Wpait_Test_State::$terms[ $term_id ] = array(
+			'term_id'  => $term_id,
+			'taxonomy' => Wpait_Languages::TAXONOMY,
+			'slug'     => $code,
+			'name'     => strtoupper( $code ),
+		);
+	}
+
+	/** Invokes the private validate_target() for focused source/target-guard tests. */
+	private function invoke_validate( string $type, int $source_id, string $to_code ) {
+		$ref = new ReflectionMethod( Wpait_Translator::class, 'validate_target' );
+		return $ref->invoke( $this->translator, $type, $source_id, $to_code );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * validate_target — originals-only translation source (#104)
+	 * ------------------------------------------------------------------ */
+
+	public function test_validate_target_rejects_non_original_source(): void {
+		$this->seed_languages();
+		$this->seed_language_term( 'es', 100 );
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		// Has a language (en) but is NOT marked original.
+		Wpait_Test_State::$object_terms[5][ Wpait_Languages::TAXONOMY ] = array( 'en' );
+
+		$result = $this->invoke_validate( 'post', 5, 'es' );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_source_not_original', $result->get_error_code() );
+		$this->assertSame( 409, $result->get_error_data()['status'] );
+	}
+
+	public function test_validate_target_allows_marked_original_source(): void {
+		$this->seed_languages();
+		$this->seed_language_term( 'es', 100 );
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$object_terms[5][ Wpait_Languages::TAXONOMY ] = array( 'en' );
+		Wpait_Test_State::$post_meta[5]['_wpait_is_original'] = '1';
+
+		$result = $this->invoke_validate( 'post', 5, 'es' );
+		$this->assertSame( 'en', $result, 'An original source returns its resolved language code.' );
+	}
+
+	public function test_validate_target_originals_only_applies_to_terms(): void {
+		$this->seed_languages();
+		$this->seed_language_term( 'es', 100 );
+		Wpait_Test_State::$terms[7] = array( 'term_id' => 7, 'taxonomy' => 'category', 'slug' => 'news', 'name' => 'News' );
+		Wpait_Test_State::$term_meta[7]['_wpait_language'] = 'en';
+		// Not marked original → rejected.
+
+		$result = $this->invoke_validate( 'term', 7, 'es' );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_source_not_original', $result->get_error_code() );
+
+		// Marking it original lets the same call through.
+		Wpait_Test_State::$term_meta[7]['_wpait_is_original'] = '1';
+		$this->assertSame( 'en', $this->invoke_validate( 'term', 7, 'es' ) );
+	}
+
+	public function test_validate_target_keeps_same_language_guard_for_originals(): void {
+		$this->seed_languages();
+		$this->seed_language_term( 'es', 100 );
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$object_terms[5][ Wpait_Languages::TAXONOMY ] = array( 'es' );
+		Wpait_Test_State::$post_meta[5]['_wpait_is_original'] = '1';
+
+		// Original, but source language already equals the target.
+		$result = $this->invoke_validate( 'post', 5, 'es' );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpait_same_language', $result->get_error_code() );
+	}
+
 	public function test_detect_language_returns_validated_code(): void {
 		$this->seed_languages();
 		Wpait_Test_State::$posts[5] = array(

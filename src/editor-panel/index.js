@@ -137,6 +137,7 @@ const TranslationsPanel = () => {
 
 	const currentLang = data ? data.language : '';
 	const translations = data ? data.translations : {};
+	const isOriginal = data ? !! data.is_original : false;
 	const siblingsExist = hasSiblings( translations );
 
 	const languageOptions = buildLanguageOptions(
@@ -215,7 +216,13 @@ const TranslationsPanel = () => {
 					{ __( 'Set the language of this content above to generate translations.', 'wp-ai-translate' ) }
 				</Notice>
 			) : (
-				cfg.languages
+				<>
+				{ ! isOriginal && (
+					<Notice status="info" isDismissible={ false }>
+						{ __( 'Only originals can be translated. Turn on “Mark as original” above to create translations from this content.', 'wp-ai-translate' ) }
+					</Notice>
+				) }
+				{ cfg.languages
 					.filter( ( l ) => l.code !== currentLang )
 					.map( ( l ) => {
 						const existing = translations[ l.code ];
@@ -283,7 +290,7 @@ const TranslationsPanel = () => {
 										)
 									) : (
 										<div style={ { marginTop: '4px' } }>
-											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || isNew } onClick={ () => translate( l.name, l.code ) }>
+											<Button variant="primary" isSmall isBusy={ working } disabled={ working || ! cfg.aiAvailable || isNew || ! isOriginal } onClick={ () => translate( l.name, l.code ) }>
 												{ __( 'Translate', 'wp-ai-translate' ) }
 											</Button>
 											{ isNew && (
@@ -296,7 +303,8 @@ const TranslationsPanel = () => {
 								</div>
 							</PanelRow>
 						);
-					} )
+					} ) }
+				</>
 			) }
 		</PluginDocumentSettingPanel>
 	);
