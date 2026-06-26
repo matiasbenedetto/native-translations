@@ -88,6 +88,41 @@ function Thumbnail( { item } ) {
 }
 
 /**
+ * Renders a row's text snippet below its title: smaller and muted (lower visual
+ * hierarchy than the title) and clamped to two lines so rows stay compact. The
+ * Overview CSS pipeline only vendors the DataViews stylesheet, so the clamp is
+ * applied inline. Renders nothing when the row has no snippet, so the title
+ * block stays clean (no stray empty line/separator).
+ *
+ * @param {Object} props      Props.
+ * @param {Object} props.item Row.
+ * @return {JSX.Element|null} Snippet, or null when empty.
+ */
+function Snippet( { item } ) {
+	const snippet = ( item.snippet || '' ).trim();
+	if ( ! snippet ) {
+		return null;
+	}
+	return (
+		<span
+			className="wpait-ov-snippet"
+			style={ {
+				display: '-webkit-box',
+				WebkitLineClamp: 2,
+				WebkitBoxOrient: 'vertical',
+				overflow: 'hidden',
+				marginTop: '2px',
+				color: '#757575',
+				fontSize: '12px',
+				lineHeight: '1.4',
+			} }
+		>
+			{ snippet }
+		</span>
+	);
+}
+
+/**
  * Renders the missing-language names as small chips.
  *
  * @param {Object} props      Props.
@@ -363,12 +398,19 @@ function Overview() {
 				enableSorting: true,
 				enableGlobalSearch: true,
 				getValue: ( { item } ) => item.title,
-				render: ( { item } ) =>
-					item.edit_url ? (
-						<a href={ item.edit_url }>{ item.title }</a>
-					) : (
-						<span>{ item.title }</span>
-					),
+				render: ( { item } ) => (
+					<span
+						className="wpait-ov-title-block"
+						style={ { display: 'flex', flexDirection: 'column' } }
+					>
+						{ item.edit_url ? (
+							<a href={ item.edit_url }>{ item.title }</a>
+						) : (
+							<span>{ item.title }</span>
+						) }
+						<Snippet item={ item } />
+					</span>
+				),
 			},
 			{
 				id: 'type_label',

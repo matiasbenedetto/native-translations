@@ -192,6 +192,61 @@ final class OverviewRestTest extends TestCase {
 		$this->assertNull( $by_key['term:50']['thumbnail'] );
 	}
 
+	public function test_rows_include_snippet_from_excerpt_content_or_term_description(): void {
+		// post 20: explicit excerpt → snippet is the excerpt, content ignored.
+		$this->seed_post( 20, 'en', '', 'post', 'Has excerpt' );
+		Wpait_Test_State::$posts[20]['post_excerpt'] = 'A hand-written excerpt.';
+		Wpait_Test_State::$posts[20]['post_content'] = 'Body content that should be ignored.';
+		$this->mark_original( 20 );
+
+		// post 21: no excerpt → snippet falls back to stripped/trimmed content.
+		$this->seed_post( 21, 'en', '', 'post', 'No excerpt' );
+		Wpait_Test_State::$posts[21]['post_content'] = '<p>Hello [shortcode] <strong>world</strong> of content.</p>';
+		$this->mark_original( 21 );
+
+		// post 22: no excerpt and no content → empty snippet.
+		$this->seed_post( 22, 'en', '', 'post', 'Empty body' );
+		$this->mark_original( 22 );
+
+		// term 50: snippet is the description with HTML stripped.
+		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News', 'description' => '<em>Latest</em> news here.' );
+		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		$this->mark_original( 50, 'term' );
+
+		// term 51: no description → empty snippet.
+		Wpait_Test_State::$terms[51] = array( 'term_id' => 51, 'taxonomy' => 'post_tag', 'name' => 'Untagged' );
+		Wpait_Test_State::$term_meta[51][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		$this->mark_original( 51, 'term' );
+
+		$data   = $this->payload();
+		$by_key = array();
+		foreach ( $data['rows'] as $row ) {
+			$this->assertArrayHasKey( 'snippet', $row, 'every row carries a snippet key' );
+			$by_key[ $row['key'] ] = $row;
+		}
+
+		$this->assertSame( 'A hand-written excerpt.', $by_key['post:20']['snippet'], 'excerpt used verbatim when present' );
+		// Content fallback: HTML + shortcodes stripped, collapsed to plain text.
+		$this->assertSame( 'Hello world of content.', $by_key['post:21']['snippet'] );
+		$this->assertSame( '', $by_key['post:22']['snippet'], 'empty snippet when neither excerpt nor content' );
+		$this->assertSame( 'Latest news here.', $by_key['term:50']['snippet'], 'term description, HTML stripped' );
+		$this->assertSame( '', $by_key['term:51']['snippet'], 'empty snippet for a term with no description' );
+	}
+
+	public function test_snippet_content_fallback_truncated_to_word_limit(): void {
+		// A long, excerpt-less body is truncated to SNIPPET_WORDS with an ellipsis.
+		$this->seed_post( 30, 'en', '', 'post', 'Long body' );
+		Wpait_Test_State::$posts[30]['post_content'] = implode( ' ', array_fill( 0, 60, 'word' ) );
+		$this->mark_original( 30 );
+
+		$row     = $this->payload()['rows'][0];
+		$snippet = $row['snippet'];
+
+		$this->assertStringEndsWith( '…', $snippet, 'truncated content gets an ellipsis tail' );
+		$words = preg_split( '/\s+/', rtrim( $snippet, '…' ), -1, PREG_SPLIT_NO_EMPTY );
+		$this->assertSame( Wpait_Admin_List::SNIPPET_WORDS, count( $words ), 'kept exactly SNIPPET_WORDS words' );
+	}
+
 	public function test_originals_count_zero_when_nothing_marked(): void {
 		// Backs the React empty-state default-to-Unmarked: with content present but
 		// nothing marked original, the Originals view is empty and the count is 0,

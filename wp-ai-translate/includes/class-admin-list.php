@@ -983,6 +983,7 @@ class Wpait_Admin_List {
 					'edit_url'    => (string) get_edit_post_link( $post_id, 'raw' ),
 					'view_url'    => $view_url,
 					'thumbnail'   => $this->post_thumbnail_url( $post_id ),
+					'snippet'     => $this->post_snippet( $post_id ),
 					'hidden'      => '' !== $this->get_overview_meta( 'post', $post_id ),
 					'is_original' => true,
 					'taxonomy'    => '',
@@ -1031,6 +1032,7 @@ class Wpait_Admin_List {
 				'edit_url'    => (string) get_edit_term_link( $term_id ),
 				'view_url'    => is_wp_error( $link ) ? '' : (string) $link,
 				'thumbnail'   => null,
+				'snippet'     => $this->term_snippet( $term_obj ),
 				'hidden'      => '' !== $this->get_overview_meta( 'term', $term_id ),
 				'is_original' => true,
 				'taxonomy'    => $term_obj->taxonomy,
@@ -1106,6 +1108,7 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 				'view_url'   => $view_url,
 				'thumbnail'  => $this->post_thumbnail_url( $post_id ),
+				'snippet'    => $this->post_snippet( $post_id ),
 				'hidden'     => false,
 				'is_original' => $this->store->is_original( 'post', $post_id ),
 				'taxonomy'   => '',
@@ -1144,6 +1147,7 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_term_link( $term->term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
 				'thumbnail'  => null,
+				'snippet'    => $this->term_snippet( $term ),
 				'hidden'     => false,
 				'is_original' => $this->store->is_original( 'term', (int) $term->term_id ),
 				'taxonomy'   => $term->taxonomy,
@@ -1198,6 +1202,7 @@ class Wpait_Admin_List {
 					'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 					'view_url'   => $view_url,
 					'thumbnail'  => $this->post_thumbnail_url( $post_id ),
+					'snippet'    => $this->post_snippet( $post_id ),
 					'hidden'     => false,
 					'is_original' => false,
 					'taxonomy'   => '',
@@ -1242,6 +1247,7 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_term_link( $term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
 				'thumbnail'  => null,
+				'snippet'    => $this->term_snippet( $term_obj ),
 				'hidden'     => false,
 				'is_original' => false,
 				'taxonomy'   => $term_obj->taxonomy,
@@ -1249,6 +1255,68 @@ class Wpait_Admin_List {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Words kept in the content-derived snippet fallback. Small enough that the
+	 * 1–2 line clamp in the Overview rarely shows a hard mid-word cut.
+	 */
+	const SNIPPET_WORDS = 30;
+
+	/**
+	 * A short plain-text snippet for a post/page row: its excerpt when set,
+	 * otherwise a trimmed plain-text snippet derived from the content (blocks /
+	 * HTML / shortcodes stripped, truncated to {@see SNIPPET_WORDS} words). Empty
+	 * when neither yields text.
+	 *
+	 * @param int $post_id Post id.
+	 * @return string
+	 */
+	private function post_snippet( int $post_id ): string {
+		$excerpt = trim( (string) get_the_excerpt( $post_id ) );
+		if ( '' !== $excerpt ) {
+			return $this->normalize_snippet( $excerpt );
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return '';
+		}
+
+		$text = wp_strip_all_tags( strip_shortcodes( (string) $post->post_content ) );
+		$text = trim( $text );
+		if ( '' === $text ) {
+			return '';
+		}
+
+		return $this->normalize_snippet( wp_trim_words( $text, self::SNIPPET_WORDS, '…' ) );
+	}
+
+	/**
+	 * Normalises a snippet for display as a plain-text node: decodes HTML entities
+	 * (so e.g. a texturized excerpt's `&#8217;` renders as a real apostrophe rather
+	 * than literal entity text) and collapses runs of whitespace to single spaces.
+	 *
+	 * @param string $text Raw snippet.
+	 * @return string
+	 */
+	private function normalize_snippet( string $text ): string {
+		$text = html_entity_decode( $text, ENT_QUOTES, 'UTF-8' );
+		$text = preg_replace( '/\s+/u', ' ', $text );
+		return trim( (string) $text );
+	}
+
+	/**
+	 * A short plain-text snippet for a term (category/tag) row: its description,
+	 * stripped of HTML and trimmed. Empty when the term has no description.
+	 *
+	 * @param WP_Term $term Term object.
+	 * @return string
+	 */
+	private function term_snippet( WP_Term $term ): string {
+		$text = wp_strip_all_tags( (string) $term->description );
+		$text = trim( $text );
+		return '' === $text ? '' : $this->normalize_snippet( $text );
 	}
 
 	/**
