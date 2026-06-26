@@ -52,6 +52,10 @@
 		this.notice = '';
 		this.busy = '';
 		this.confirm = null;
+		// Deferred language/original choices (#106): null = no pending change, so the
+		// saved value is shown until the user edits and clicks Update.
+		this.pendingLanguage = null;
+		this.pendingOriginal = null;
 		this.load();
 	}
 
@@ -123,33 +127,45 @@
 			return;
 		}
 
-		var currentLang = this.data.language || '';
-		var translations = this.data.translations || {};
+		// Saved state (drives the translations list + #104 Translate gating, which act
+		// on the persisted language/original).
+		var savedLang = this.data.language || '';
 		var isOriginal = !! this.data.is_original;
+		var translations = this.data.translations || {};
 		// A grouped term's own language is fixed: changing it would drop its slot
 		// from the group (and mislabel it). Lock the selector once the term has
 		// sibling translations; the server enforces this too.
 		var hasSiblings = Object.keys( translations ).length > 0;
 
+		// Edited (dirty-aware) state: the language + original changes are deferred to
+		// the term form's Update button (#106), staged in hidden fields and applied
+		// server-side on edited_{taxonomy} — not written over REST on change.
+		var effectiveLang = null !== this.pendingLanguage ? this.pendingLanguage : savedLang;
+		var effectiveOriginal = null !== this.pendingOriginal ? this.pendingOriginal : isOriginal;
+		var pendingChange =
+			( null !== this.pendingLanguage && this.pendingLanguage !== savedLang ) ||
+			( null !== this.pendingOriginal && this.pendingOriginal !== isOriginal );
+
 		// Language selector. The placeholder is only offered while the term has no
-		// language yet — set-language cannot clear one, so it is not selectable.
+		// language yet — clearing a language is an Overview action (#103), not here.
 		var select = el( 'select', {} );
-		if ( ! currentLang ) {
+		if ( ! effectiveLang ) {
 			select.appendChild( el( 'option', { value: '', text: __( '— Not set —', 'wp-ai-translate' ) } ) );
 		}
 		( cfg.languages || [] ).forEach( function ( l ) {
 			var opt = el( 'option', { value: l.code, text: l.native ? l.name + ' (' + l.native + ')' : l.name } );
-			if ( l.code === currentLang ) {
+			if ( l.code === effectiveLang ) {
 				opt.setAttribute( 'selected', 'selected' );
 			}
 			select.appendChild( opt );
 		} );
-		select.disabled = 'lang' === this.busy || hasSiblings;
+		select.disabled = hasSiblings;
 		select.addEventListener( 'change', function () {
 			if ( ! select.value ) {
 				return;
 			}
-			self.act( 'set-language', { object_id: cfg.termId, code: select.value, type: 'term' }, 'lang' );
+			self.pendingLanguage = select.value;
+			self.render();
 		} );
 
 		var langRow = el( 'p', {}, [
@@ -164,33 +180,38 @@
 			);
 		}
 
-		// "Mark as original" toggle. Disabled until the term has a language, since the
-		// server refuses to mark an item with no language as an original.
+		// "Mark as original" toggle. Disabled until the term has a language (the server
+		// refuses to mark a language-less item as original).
 		var originalCheckbox = document.createElement( 'input' );
 		originalCheckbox.type = 'checkbox';
-		originalCheckbox.checked = !! this.data.is_original;
-		originalCheckbox.disabled = 'original' === this.busy || ! currentLang;
+		originalCheckbox.checked = effectiveOriginal;
+		originalCheckbox.disabled = ! effectiveLang;
 		originalCheckbox.addEventListener( 'change', function () {
-			self.act(
-				'overview-original',
-				{ object_id: cfg.termId, type: 'term', is_original: originalCheckbox.checked },
-				'original',
-				{ reload: true, successMsg: originalCheckbox.checked
-					? __( 'Marked as the translation original.', 'wp-ai-translate' )
-					: __( 'No longer marked as an original.', 'wp-ai-translate' ) }
-			);
+			self.pendingOriginal = originalCheckbox.checked;
+			self.render();
 		} );
 		var originalLabel = el( 'label', {}, [ originalCheckbox, document.createTextNode( ' ' + __( 'Mark as original', 'wp-ai-translate' ) ) ] );
 		mount.appendChild( el( 'p', {}, [ originalLabel ] ) );
 		mount.appendChild(
-			el( 'p', { 'class': 'description', text: currentLang
+			el( 'p', { 'class': 'description', text: effectiveLang
 				? __( 'Only originals can be translated into other languages.', 'wp-ai-translate' )
 				: __( 'Set the language of this term above before marking it as an original.', 'wp-ai-translate' ) } )
 		);
 
+		// Hidden fields submitted with the term's Update button; the server applies
+		// them through the store on edited_{taxonomy} (#106).
+		mount.appendChild( el( 'input', { type: 'hidden', name: 'wpait_editor_language', value: effectiveLang } ) );
+		mount.appendChild( el( 'input', { type: 'hidden', name: 'wpait_editor_is_original', value: effectiveOriginal ? '1' : '0' } ) );
+
+		if ( pendingChange ) {
+			mount.appendChild(
+				el( 'p', { 'class': 'description', text: __( 'Unsaved changes — click Update to apply the language/original change.', 'wp-ai-translate' ) } )
+			);
+		}
+
 		// With no language yet, show a single prompt instead of one disabled Translate
 		// row (with duplicated help) per language.
-		if ( ! currentLang ) {
+		if ( ! savedLang ) {
 			mount.appendChild(
 				el( 'div', { 'class': 'notice notice-info inline' }, [
 					el( 'p', { text: __( 'Set the language of this term above to generate translations.', 'wp-ai-translate' ) } ),
@@ -212,7 +233,7 @@
 
 		// Per-language actions.
 		( cfg.languages || [] ).forEach( function ( l ) {
-			if ( l.code === currentLang ) {
+			if ( l.code === savedLang ) {
 				return;
 			}
 			var existing = translations[ l.code ];

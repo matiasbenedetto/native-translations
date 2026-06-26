@@ -111,7 +111,7 @@ final class Wpait_Plugin {
 		$this->translator = new Wpait_Translator( $this->store, $this->languages );
 		$this->queue      = new Wpait_Queue( $this->store, $this->languages, $this->translator );
 		$this->rest       = new Wpait_Rest( $this->store, $this->languages, $this->translator, $this->queue );
-		$this->editor     = new Wpait_Editor( $this->languages );
+		$this->editor     = new Wpait_Editor( $this->languages, $this->store );
 		$this->admin_list = new Wpait_Admin_List( $this->store, $this->languages );
 		$this->frontend   = new Wpait_Frontend( $this->store, $this->languages );
 		$this->locale     = new Wpait_Locale( $this->store, $this->languages );

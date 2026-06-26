@@ -1,21 +1,27 @@
 /**
  * AI Translate — block editor sidebar panel.
  *
- * A thin client over the wp-ai-translate/v1 REST endpoints: shows the current
- * post's language, lets the author set it, and manages its translations —
- * Translate / Recreate (with confirmation) / View / Edit / Unlink / Delete — with
- * success feedback.
+ * Shows the current post's language and original flag — edited through the
+ * editor's native dirty state and saved on Update (#106) — and manages its
+ * translations (Translate / Recreate / View / Edit / Unlink / Delete) over the
+ * wp-ai-translate/v1 REST endpoints, with success feedback.
  */
 
 import { registerPlugin } from '@wordpress/plugins';
 import { PluginDocumentSettingPanel } from '@wordpress/editor';
 import { useSelect } from '@wordpress/data';
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useEntityProp } from '@wordpress/core-data';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
 import { buildLanguageOptions, hasSiblings } from './language-options';
+
+// Post meta keys (kept in sync with Wpait_Editor): the original flag (the store's
+// own meta) and the staging field the language picker writes into (#106).
+const META_IS_ORIGINAL = '_wpait_is_original';
+const META_EDITOR_LANGUAGE = '_wpait_editor_language';
 
 const cfg = window.wpaitEditor || {
 	namespace: 'wp-ai-translate/v1',
@@ -34,14 +40,25 @@ const STATUS_LABELS = {
 };
 
 const TranslationsPanel = () => {
-	const { postId, postType, isNew } = useSelect( ( select ) => {
+	const { postId, postType, isNew, isSaving } = useSelect( ( select ) => {
 		const editor = select( 'core/editor' );
 		return {
 			postId: editor.getCurrentPostId(),
 			postType: editor.getCurrentPostType(),
 			isNew: editor.isEditedPostNew(),
+			// A real (non-autosave) save in flight; the load-on-completion effect
+			// below refetches the saved-state view once it finishes (#106).
+			isSaving: editor.isSavingPost() && ! editor.isAutosavingPost(),
 		};
 	}, [] );
+
+	// Language + original are edited through native post meta so they join the
+	// editor's dirty state and persist on Save/Update (#106). The original flag is
+	// the store's own meta; the language picker stages its choice in a separate
+	// field that the server consumes + clears on save.
+	const [ meta, setMeta ] = useEntityProp( 'postType', postType, 'meta' );
+	const isOriginalPending = !! ( meta && meta[ META_IS_ORIGINAL ] );
+	const stagedLanguage = ( meta && meta[ META_EDITOR_LANGUAGE ] ) || '';
 
 	const [ data, setData ] = useState( null );
 	const [ loading, setLoading ] = useState( false );
@@ -69,6 +86,17 @@ const TranslationsPanel = () => {
 		load();
 	}, [ load ] );
 
+	// After a save settles, the server has applied (and cleared) the staged
+	// language and reconciled the original flag — refetch the saved-state view so
+	// the translations list + Translate gating reflect it.
+	const wasSaving = useRef( false );
+	useEffect( () => {
+		if ( wasSaving.current && ! isSaving ) {
+			load();
+		}
+		wasSaving.current = isSaving;
+	}, [ isSaving, load ] );
+
 	const request = ( path, body, key, opts = {} ) => {
 		setBusy( key );
 		setError( '' );
@@ -89,20 +117,18 @@ const TranslationsPanel = () => {
 			.finally( () => setBusy( '' ) );
 	};
 
+	// Stage the chosen language into post meta (marks the post dirty; applied on
+	// Save — #106) rather than writing immediately over REST.
 	const setLanguage = ( code ) => {
 		if ( ! code ) {
 			return;
 		}
-		return request( 'set-language', { object_id: postId, code, type: 'post' }, 'lang' );
+		setMeta( { ...meta, [ META_EDITOR_LANGUAGE ]: code } );
 	};
 
+	// Toggle the original flag through native meta (dirty + save on Update — #106).
 	const setOriginal = ( isOriginal ) =>
-		request( 'overview-original', { object_id: postId, type: 'post', is_original: isOriginal }, 'original', {
-			reload: true,
-			successMsg: isOriginal
-				? __( 'Marked as the translation original.', 'wp-ai-translate' )
-				: __( 'No longer marked as an original.', 'wp-ai-translate' ),
-		} );
+		setMeta( { ...meta, [ META_IS_ORIGINAL ]: isOriginal } );
 
 	const translate = ( name, code ) =>
 		request( 'translate', { source_id: postId, target_code: code, type: 'post' }, code, {
@@ -135,10 +161,19 @@ const TranslationsPanel = () => {
 		return null;
 	}
 
-	const currentLang = data ? data.language : '';
+	// Saved state (from REST): drives the translations list + the #104 Translate
+	// gating, since translating acts on the persisted language/original.
+	const savedLang = data ? data.language : '';
+	const savedIsOriginal = data ? !! data.is_original : false;
 	const translations = data ? data.translations : {};
-	const isOriginal = data ? !! data.is_original : false;
 	const siblingsExist = hasSiblings( translations );
+
+	// Edited (dirty-aware) state shown in the controls: the staged language wins
+	// over the saved one until it is saved + consumed server-side (#106).
+	const currentLang = stagedLanguage || savedLang;
+	const isOriginal = savedIsOriginal;
+	const hasPendingChange =
+		( !! stagedLanguage && stagedLanguage !== savedLang ) || isOriginalPending !== savedIsOriginal;
 
 	const languageOptions = buildLanguageOptions(
 		cfg.languages,
@@ -180,7 +215,7 @@ const TranslationsPanel = () => {
 						label={ __( 'Language of this content', 'wp-ai-translate' ) }
 						value={ currentLang || '' }
 						options={ languageOptions }
-						disabled={ loading || busy === 'lang' || siblingsExist }
+						disabled={ loading || siblingsExist }
 						onChange={ setLanguage }
 						__nextHasNoMarginBottom
 					/>
@@ -201,11 +236,16 @@ const TranslationsPanel = () => {
 								? __( 'Only originals can be translated into other languages.', 'wp-ai-translate' )
 								: __( 'Set a language above before marking this content as an original.', 'wp-ai-translate' )
 						}
-						checked={ !! ( data && data.is_original ) }
-						disabled={ loading || busy === 'original' || ! currentLang }
+						checked={ isOriginalPending }
+						disabled={ loading || ! currentLang }
 						onChange={ setOriginal }
 						__nextHasNoMarginBottom
 					/>
+					{ hasPendingChange && (
+						<p className="description" style={ { margin: '4px 0 0' } }>
+							{ __( 'Unsaved changes — save or update this content to apply.', 'wp-ai-translate' ) }
+						</p>
+					) }
 				</div>
 			</PanelRow>
 

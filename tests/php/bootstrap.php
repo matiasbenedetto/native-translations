@@ -1269,3 +1269,4 @@ require_once __DIR__ . '/../../wp-ai-translate/includes/class-rest.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-frontend.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-locale.php';
 require_once __DIR__ . '/../../wp-ai-translate/includes/class-admin-list.php';
+require_once __DIR__ . '/../../wp-ai-translate/includes/class-editor.php';
