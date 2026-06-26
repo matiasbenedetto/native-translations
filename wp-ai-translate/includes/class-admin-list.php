@@ -55,7 +55,7 @@ class Wpait_Admin_List {
 	private string $overview_hook = '';
 
 	/**
-	 * Meta flag marking an item as hidden from the Overview's missing list.
+	 * Meta flag marking an item as hidden from the Overview's curated lists.
 	 */
 	const HIDE_META = '_wpait_exclude_from_overview';
 
@@ -628,75 +628,7 @@ class Wpait_Admin_List {
 	 * ------------------------------------------------------------------- */
 
 	/**
-	 * Builds the type-tagged "missing translations" rows across posts and terms:
-	 * each `[ type, id, missing[], taxonomy? ]`. Posts and terms share an id space
-	 * (S5), so rows are never keyed by bare id. Sets {@see $scan_truncated} via the
-	 * underlying bounded scans (N6).
-	 *
-	 * @param string[] $codes       Enabled language codes.
-	 * @param bool     $show_hidden Include items the admin has hidden from the list.
-	 * @return array<int,array<string,mixed>>
-	 */
-	private function missing_rows( array $codes, bool $show_hidden = false ): array {
-		if ( count( $codes ) <= 1 ) {
-			return array();
-		}
-
-		$default = (string) ( Wpait_Admin_Settings::get_settings()['default_language'] ?? '' );
-
-		$rows = array();
-		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
-			foreach ( $this->untranslated_map( $post_type ) as $post_id => $present ) {
-				$missing = array_diff( $codes, $present );
-				if ( empty( $missing )
-					|| $this->is_translated_copy( 'post', (int) $post_id, $default )
-					|| $this->skip_in_overview( 'post', (int) $post_id, $show_hidden ) ) {
-					continue;
-				}
-				$rows[] = array( 'type' => 'post', 'id' => (int) $post_id, 'missing' => $missing );
-			}
-		}
-		foreach ( self::TERM_TAXONOMIES as $taxonomy ) {
-			foreach ( $this->untranslated_term_map( $taxonomy ) as $term_id => $present ) {
-				$missing = array_diff( $codes, $present );
-				if ( empty( $missing )
-					|| $this->is_translated_copy( 'term', (int) $term_id, $default )
-					|| $this->skip_in_overview( 'term', (int) $term_id, $show_hidden ) ) {
-					continue;
-				}
-				$rows[] = array( 'type' => 'term', 'id' => (int) $term_id, 'missing' => $missing, 'taxonomy' => $taxonomy );
-			}
-		}
-
-		return $rows;
-	}
-
-	/**
-	 * Whether an item is a translated copy that must be excluded from the "missing
-	 * translations" view (#85): we only want to translate *from* originals, never
-	 * from a translation. An item counts as a valid source — and so is kept — when
-	 * it has no language (an unmarked original candidate) or it is in the site's
-	 * default (source) language. A member in any other language is itself a
-	 * translation and is excluded.
-	 *
-	 * Falls back to keeping everything when no default language is configured, since
-	 * originals cannot be told apart from translations without one.
-	 *
-	 * @param string $type    'post' | 'term'.
-	 * @param int    $id      Object id.
-	 * @param string $default The configured default language code ('' if none).
-	 * @return bool
-	 */
-	private function is_translated_copy( string $type, int $id, string $default ): bool {
-		if ( '' === $default ) {
-			return false;
-		}
-		$own = $this->store->get_language( $type, $id );
-		return '' !== $own && $own !== $default;
-	}
-
-	/**
-	 * Whether an item should be left out of the missing-translations list: it has
+	 * Whether an item should be left out of the Overview's curated list: it has
 	 * been hidden by the admin, or it is default WordPress content the admin almost
 	 * certainly doesn't intend to translate (Sample Page / Privacy Policy / the
 	 * default Uncategorized category) and has not been edited. Edited defaults are
@@ -863,7 +795,7 @@ class Wpait_Admin_List {
 					return current_user_can( 'manage_options' );
 				},
 				'args'                => array(
-					'view'        => array( 'type' => 'string', 'default' => 'missing', 'sanitize_callback' => 'sanitize_key' ),
+					'view'        => array( 'type' => 'string', 'default' => 'originals', 'sanitize_callback' => 'sanitize_key' ),
 					'page'        => array( 'type' => 'integer', 'default' => 1, 'sanitize_callback' => 'absint' ),
 					'per_page'    => array( 'type' => 'integer', 'default' => self::PER_PAGE, 'sanitize_callback' => 'absint' ),
 					'orderby'     => array( 'type' => 'string', 'default' => 'title', 'enum' => array( 'title', 'type' ), 'sanitize_callback' => 'sanitize_key' ),
@@ -907,7 +839,7 @@ class Wpait_Admin_List {
 		$languages = $this->enabled_languages();
 		$codes     = wp_list_pluck( $languages, 'code' );
 
-		$view        = (string) ( $args['view'] ?? 'missing' );
+		$view        = (string) ( $args['view'] ?? 'originals' );
 		$page        = max( 1, (int) ( $args['page'] ?? 1 ) );
 		$per_page    = max( 1, (int) ( $args['per_page'] ?? self::PER_PAGE ) );
 		$orderby     = in_array( ( $args['orderby'] ?? 'title' ), array( 'title', 'type' ), true ) ? $args['orderby'] : 'title';
@@ -926,7 +858,9 @@ class Wpait_Admin_List {
 		} elseif ( $is_unmarked ) {
 			$rows = $this->unmarked_overview_rows();
 		} else {
-			$rows = $this->missing_overview_rows( $codes, $languages, $show_hidden );
+			// Default view: "Originals" (#92) — items with a language set AND
+			// explicitly marked as original.
+			$rows = $this->originals_overview_rows( $codes, $languages, $show_hidden );
 		}
 
 		// Search filter (title match, case-insensitive).
@@ -979,7 +913,7 @@ class Wpait_Admin_List {
 			'ai_ok'         => Wpait_Translator::can_generate_text(),
 			'scan_truncated' => $this->scan_truncated,
 			'counts'        => array(
-				'missing'     => $this->missing_count( $codes, $show_hidden ),
+				'originals'   => count( $this->originals_overview_rows( $codes, $languages, $show_hidden ) ),
 				'unmarked'    => count( $this->unmarked_overview_rows() ),
 				'by_language' => $by_language,
 			),
@@ -987,62 +921,136 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Builds the "missing translations" rows shaped for the REST/DataViews payload.
+	 * Builds the "Originals" rows (#92): posts/pages and categories/tags that have a
+	 * language set AND have been explicitly marked as original — the items the site
+	 * translates *from*. Unlike the old "missing translations" view, this is driven
+	 * by the explicit {@see Wpait_Translation_Store::META_IS_ORIGINAL} marker rather
+	 * than inferred from the default language, and a fully-translated original is
+	 * still listed (its `missing` chips are simply empty). Bounded by MAX_SCAN (N6);
+	 * admin-hidden / default-noise items are filtered unless `$show_hidden`.
 	 *
 	 * @param string[]                       $codes       Enabled language codes.
 	 * @param array<int,array<string,mixed>> $languages   Enabled language rows.
 	 * @param bool                           $show_hidden Include admin-hidden items.
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function missing_overview_rows( array $codes, array $languages, bool $show_hidden ): array {
+	private function originals_overview_rows( array $codes, array $languages, bool $show_hidden ): array {
 		$name_by_code = wp_list_pluck( $languages, 'name', 'code' );
 		$out          = array();
 
-		foreach ( $this->missing_rows( $codes, $show_hidden ) as $row ) {
-			$type = (string) $row['type'];
-			$id   = (int) $row['id'];
-
-			if ( 'term' === $type ) {
-				$term  = get_term( $id );
-				$title = $term instanceof WP_Term ? $term->name : '';
-				$tax   = $term instanceof WP_Term ? $term->taxonomy : 'term';
-				$edit  = get_edit_term_link( $id );
-				$link  = get_term_link( $id );
-				$view_url = is_wp_error( $link ) ? '' : (string) $link;
-				$own   = $this->store->get_language( 'term', $id );
-			} else {
-				$title    = get_the_title( $id );
-				$tax      = '';
-				$edit     = get_edit_post_link( $id, 'raw' );
-				$post     = get_post( $id );
-				$view_url = ( $post instanceof WP_Post && 'publish' === $post->post_status ) ? (string) get_permalink( $id ) : (string) get_preview_post_link( $id );
-				$own      = $this->store->get_language( 'post', $id );
+		foreach ( Wpait_Languages::OBJECT_TYPES as $post_type ) {
+			$ids = get_posts(
+				array(
+					'post_type'              => $post_type,
+					'post_status'            => 'any',
+					'fields'                 => 'ids',
+					'posts_per_page'         => self::MAX_SCAN,
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => true,
+					'update_post_term_cache' => true,
+					'ignore_sticky_posts'    => true,
+				)
+			);
+			if ( count( $ids ) >= self::MAX_SCAN ) {
+				$this->scan_truncated = true;
 			}
-
-			$missing = array();
-			foreach ( $row['missing'] as $miss_code ) {
-				$missing[] = array(
-					'code' => $miss_code,
-					'name' => isset( $name_by_code[ $miss_code ] ) ? (string) $name_by_code[ $miss_code ] : $miss_code,
+			foreach ( $ids as $post_id ) {
+				$post_id = (int) $post_id;
+				$own     = $this->store->get_language( 'post', $post_id );
+				if ( '' === $own || ! $this->store->is_original( 'post', $post_id ) ) {
+					continue;
+				}
+				if ( $this->skip_in_overview( 'post', $post_id, $show_hidden ) ) {
+					continue;
+				}
+				$post     = get_post( $post_id );
+				$view_url = ( $post instanceof WP_Post && 'publish' === $post->post_status ) ? (string) get_permalink( $post_id ) : (string) get_preview_post_link( $post_id );
+				$out[]    = array(
+					'key'         => 'post:' . $post_id,
+					'type'        => 'post',
+					'id'          => $post_id,
+					'title'       => get_the_title( $post_id ) ?: __( '(no title)', 'wp-ai-translate' ),
+					'type_label'  => $this->type_label( 'post', '', $post_id ),
+					'language'    => array( 'code' => $own, 'name' => $this->languages->name( $own ) ),
+					'missing'     => $this->missing_chips_for( 'post', $post_id, $codes, $name_by_code ),
+					'edit_url'    => (string) get_edit_post_link( $post_id, 'raw' ),
+					'view_url'    => $view_url,
+					'hidden'      => '' !== $this->get_overview_meta( 'post', $post_id ),
+					'is_original' => true,
+					'taxonomy'    => '',
 				);
 			}
+		}
 
+		$this->in_term_filter = true;
+		$terms                = get_terms(
+			array(
+				'taxonomy'               => self::TERM_TAXONOMIES,
+				'hide_empty'             => false,
+				'number'                 => self::MAX_SCAN,
+				'update_term_meta_cache' => true,
+			)
+		);
+		$this->in_term_filter = false;
+		if ( is_wp_error( $terms ) ) {
+			$terms = array();
+		}
+		if ( count( $terms ) >= self::MAX_SCAN ) {
+			$this->scan_truncated = true;
+		}
+		foreach ( $terms as $term ) {
+			$term_id = (int) ( is_object( $term ) ? $term->term_id : $term );
+			$own     = $this->store->get_language( 'term', $term_id );
+			if ( '' === $own || ! $this->store->is_original( 'term', $term_id ) ) {
+				continue;
+			}
+			if ( $this->skip_in_overview( 'term', $term_id, $show_hidden ) ) {
+				continue;
+			}
+			$term_obj = get_term( $term_id );
+			if ( ! $term_obj instanceof WP_Term ) {
+				continue;
+			}
+			$link  = get_term_link( $term_id );
 			$out[] = array(
-				'key'        => $type . ':' . $id,
-				'type'       => $type,
-				'id'         => $id,
-				'title'      => '' !== $title ? $title : __( '(no title)', 'wp-ai-translate' ),
-				'type_label' => $this->type_label( $type, $tax, $id ),
-				'language'   => '' !== $own ? array( 'code' => $own, 'name' => $this->languages->name( $own ) ) : null,
-				'missing'    => $missing,
-				'edit_url'   => $edit ? (string) $edit : '',
-				'view_url'   => $view_url,
-				'hidden'     => '' !== $this->get_overview_meta( $type, $id ),
-				'taxonomy'   => $tax,
+				'key'         => 'term:' . $term_id,
+				'type'        => 'term',
+				'id'          => $term_id,
+				'title'       => $term_obj->name,
+				'type_label'  => $this->type_label( 'term', $term_obj->taxonomy, $term_id ),
+				'language'    => array( 'code' => $own, 'name' => $this->languages->name( $own ) ),
+				'missing'     => $this->missing_chips_for( 'term', $term_id, $codes, $name_by_code ),
+				'edit_url'    => (string) get_edit_term_link( $term_id ),
+				'view_url'    => is_wp_error( $link ) ? '' : (string) $link,
+				'hidden'      => '' !== $this->get_overview_meta( 'term', $term_id ),
+				'is_original' => true,
+				'taxonomy'    => $term_obj->taxonomy,
 			);
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Builds the `[{code,name}]` "missing" chips for an item: the enabled languages
+	 * the item's translation group does not yet cover.
+	 *
+	 * @param string                $type         'post' | 'term'.
+	 * @param int                   $id           Object id.
+	 * @param string[]              $codes        Enabled language codes.
+	 * @param array<string,string>  $name_by_code Map of code → display name.
+	 * @return array<int,array<string,string>>
+	 */
+	private function missing_chips_for( string $type, int $id, array $codes, array $name_by_code ): array {
+		$present = 'term' === $type ? $this->present_term_codes( $id ) : $this->present_codes( $id );
+		$missing = array();
+		foreach ( array_diff( $codes, $present ) as $miss_code ) {
+			$missing[] = array(
+				'code' => $miss_code,
+				'name' => isset( $name_by_code[ $miss_code ] ) ? (string) $name_by_code[ $miss_code ] : $miss_code,
+			);
+		}
+		return array_values( $missing );
 	}
 
 	/**
@@ -1089,6 +1097,7 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 				'view_url'   => $view_url,
 				'hidden'     => false,
+				'is_original' => $this->store->is_original( 'post', $post_id ),
 				'taxonomy'   => '',
 			);
 		}
@@ -1125,6 +1134,7 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_term_link( $term->term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
 				'hidden'     => false,
+				'is_original' => $this->store->is_original( 'term', (int) $term->term_id ),
 				'taxonomy'   => $term->taxonomy,
 			);
 		}
@@ -1177,6 +1187,7 @@ class Wpait_Admin_List {
 					'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 					'view_url'   => $view_url,
 					'hidden'     => false,
+					'is_original' => false,
 					'taxonomy'   => '',
 				);
 			}
@@ -1219,22 +1230,12 @@ class Wpait_Admin_List {
 				'edit_url'   => (string) get_edit_term_link( $term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
 				'hidden'     => false,
+				'is_original' => false,
 				'taxonomy'   => $term_obj->taxonomy,
 			);
 		}
 
 		return $out;
-	}
-
-	/**
-	 * Count of items missing at least one translation, honouring the hide filter.
-	 *
-	 * @param string[] $codes       Enabled language codes.
-	 * @param bool     $show_hidden Include admin-hidden items.
-	 * @return int
-	 */
-	private function missing_count( array $codes, bool $show_hidden ): int {
-		return count( $this->missing_rows( $codes, $show_hidden ) );
 	}
 
 	/**
@@ -1379,8 +1380,8 @@ class Wpait_Admin_List {
 	}
 
 	/**
-	 * Renders the Overview page: missing-translations list (default) or a
-	 * by-language list, both paginated.
+	 * Renders the Overview page: the Originals list (default), the Unmarked list, or
+	 * a by-language list, all paginated.
 	 *
 	 * @return void
 	 */

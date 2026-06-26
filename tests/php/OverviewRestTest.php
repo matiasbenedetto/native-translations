@@ -48,11 +48,20 @@ final class OverviewRestTest extends TestCase {
 		}
 	}
 
+	/** Marks a seeded post/term as a translation original (#92). */
+	private function mark_original( int $id, string $type = 'post' ): void {
+		if ( 'term' === $type ) {
+			Wpait_Test_State::$term_meta[ $id ][ Wpait_Translation_Store::META_IS_ORIGINAL ] = '1';
+		} else {
+			Wpait_Test_State::$post_meta[ $id ][ Wpait_Translation_Store::META_IS_ORIGINAL ] = '1';
+		}
+	}
+
 	private function payload( array $args = array() ): array {
 		$request = new WP_REST_Request(
 			array_merge(
 				array(
-					'view'        => 'missing',
+					'view'        => 'originals',
 					'page'        => 1,
 					'per_page'    => 20,
 					'orderby'     => 'title',
@@ -89,18 +98,18 @@ final class OverviewRestTest extends TestCase {
 			$this->assertArrayHasKey( $key, $data, "missing key: $key" );
 		}
 		$this->assertIsArray( $data['rows'] );
-		$this->assertArrayHasKey( 'missing', $data['counts'] );
+		$this->assertArrayHasKey( 'originals', $data['counts'] );
 		$this->assertArrayHasKey( 'by_language', $data['counts'] );
 		// Languages echoed as {code,name}.
 		$this->assertSame( 'en', $data['languages'][0]['code'] );
 		$this->assertSame( 'English', $data['languages'][0]['name'] );
 	}
 
-	public function test_missing_view_lists_untranslated_with_chips_and_key(): void {
-		// post 10 (en) + 11 (es) complete; post 20 only English → missing Spanish.
-		$this->seed_post( 10, 'en', 'g1' );
-		$this->seed_post( 11, 'es', 'g1' );
+	public function test_originals_view_lists_marked_originals_with_chips_and_key(): void {
+		// post 20: English, marked original, no translation group → enabled langs are
+		// en + es, so it is still missing Spanish (rendered as a chip).
 		$this->seed_post( 20, 'en', '', 'post', 'Lonely English' );
+		$this->mark_original( 20 );
 
 		$data = $this->payload();
 
@@ -114,50 +123,69 @@ final class OverviewRestTest extends TestCase {
 		$this->assertSame( 'Lonely English', $row['title'] );
 		$this->assertSame( 'Post', $row['type_label'] );
 		$this->assertSame( 'en', $row['language']['code'] );
-		// Missing renders as [{code,name}] chips.
+		$this->assertTrue( $row['is_original'] );
+		// Missing renders as [{code,name}] chips: this original still lacks Spanish.
 		$this->assertSame( 'es', $row['missing'][0]['code'] );
 		$this->assertSame( 'Spanish', $row['missing'][0]['name'] );
 		$this->assertFalse( $row['hidden'] );
 		$this->assertArrayHasKey( 'edit_url', $row );
-		$this->assertSame( 1, $data['counts']['missing'] );
+		$this->assertSame( 1, $data['counts']['originals'] );
 	}
 
-	public function test_missing_view_excludes_translated_copies_keeping_originals(): void {
-		// Default (source) language is English; en/es/fr enabled. The missing view
-		// should only offer originals (default language) and unmarked items as
-		// translation sources — never a translated copy (#85).
-		Wpait_Languages::flush_index();
-		Wpait_Test_State::$options['wpait_settings'] = array(
-			'default_language' => 'en',
-			'languages'        => array(
-				array( 'code' => 'en', 'name' => 'English', 'enabled' => true ),
-				array( 'code' => 'es', 'name' => 'Spanish', 'enabled' => true ),
-				array( 'code' => 'fr', 'name' => 'French', 'enabled' => true ),
-			),
-		);
+	public function test_originals_view_lists_only_language_set_and_marked_items(): void {
+		// 10: language set AND marked original → listed.
+		$this->seed_post( 10, 'en', '', 'post', 'Marked original' );
+		$this->mark_original( 10 );
+		// 11: language set but NOT marked → excluded.
+		$this->seed_post( 11, 'es', '', 'post', 'Language only' );
+		// 12: marked but NO language → excluded (and can never be marked via the UI).
+		$this->seed_post( 12, '', '', 'post', 'Marked no language' );
+		$this->mark_original( 12 );
+		// 13: neither → excluded.
+		$this->seed_post( 13, '', '', 'post', 'Plain' );
 
-		// Group g1: en original (10) + its es translation (11). Both lack fr.
-		$this->seed_post( 10, 'en', 'g1', 'post', 'Original' );
-		$this->seed_post( 11, 'es', 'g1', 'post', 'Traduccion' );
-		// Unmarked item (no language) — an original candidate, kept.
-		$this->seed_post( 20, '', '', 'post', 'Unmarked' );
-		// Standalone non-default-language item — a copy, excluded.
-		$this->seed_post( 30, 'es', '', 'post', 'Standalone ES' );
-
-		$data = $this->payload( array( 'view' => 'missing' ) );
+		$data = $this->payload();
 		$ids  = array_map( static fn ( $r ) => $r['id'], $data['rows'] );
 		sort( $ids );
 
-		$this->assertContains( 10, $ids, 'the en original (missing fr) should be listed' );
-		$this->assertContains( 20, $ids, 'the unmarked item should be listed' );
-		$this->assertNotContains( 11, $ids, 'the es translation must not be listed' );
-		$this->assertNotContains( 30, $ids, 'a non-default-language copy must not be listed' );
-		$this->assertSame( count( $data['rows'] ), $data['counts']['missing'], 'count matches the filtered list' );
+		$this->assertSame( array( 10 ), $ids, 'only the language-set, marked-original item appears' );
+		$this->assertSame( 1, $data['counts']['originals'] );
+	}
+
+	public function test_originals_view_includes_terms_marked_original(): void {
+		// Term path: a category with a language set and marked original is listed.
+		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'Noticias' );
+		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'es';
+		$this->mark_original( 50, 'term' );
+
+		$data = $this->payload();
+		$keys = wp_list_pluck( $data['rows'], 'key' );
+
+		$this->assertContains( 'term:50', $keys );
+		$row = $data['rows'][ array_search( 'term:50', $keys, true ) ];
+		$this->assertTrue( $row['is_original'] );
+		$this->assertSame( 'es', $row['language']['code'] );
+	}
+
+	public function test_originals_count_zero_when_nothing_marked(): void {
+		// Backs the React empty-state default-to-Unmarked: with content present but
+		// nothing marked original, the Originals view is empty and the count is 0,
+		// while Unmarked still has rows to fall back to (#92).
+		$this->seed_post( 10, 'en', '', 'post', 'Has language, not marked' );
+		$this->seed_post( 20, '', '', 'post', 'Unmarked candidate' );
+
+		$data = $this->payload();
+		$this->assertSame( 0, $data['total'] );
+		$this->assertSame( array(), $data['rows'] );
+		$this->assertSame( 0, $data['counts']['originals'] );
+		$this->assertGreaterThan( 0, $data['counts']['unmarked'], 'there is an Unmarked item to default to' );
 	}
 
 	public function test_search_filters_rows_by_title(): void {
 		$this->seed_post( 20, 'en', '', 'post', 'Alpha' );
+		$this->mark_original( 20 );
 		$this->seed_post( 21, 'en', '', 'post', 'Beta' );
+		$this->mark_original( 21 );
 
 		$all = $this->payload();
 		$this->assertSame( 2, $all['total'] );
@@ -170,6 +198,7 @@ final class OverviewRestTest extends TestCase {
 	public function test_pagination_reports_total_pages_and_slices(): void {
 		for ( $i = 1; $i <= 5; $i++ ) {
 			$this->seed_post( 100 + $i, 'en', '', 'post', sprintf( 'Item %02d', $i ) );
+			$this->mark_original( 100 + $i );
 		}
 		$data = $this->payload( array( 'per_page' => 2 ) );
 

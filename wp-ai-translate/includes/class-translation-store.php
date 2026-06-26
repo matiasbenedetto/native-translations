@@ -29,6 +29,15 @@ class Wpait_Translation_Store {
 	const META_LANGUAGE = '_wpait_language';
 
 	/**
+	 * "Marked as original" flag meta key (post meta and term meta). An item is an
+	 * explicit translation source only when this flag is set (#92). Stored as the
+	 * string '1' when set, absent otherwise. Replaces the old "infer the original
+	 * from the default language" heuristic. May only be set on an item that already
+	 * has a language assigned.
+	 */
+	const META_IS_ORIGINAL = '_wpait_is_original';
+
+	/**
 	 * Object cache group.
 	 */
 	const CACHE_GROUP = 'wpait';
@@ -154,6 +163,69 @@ class Wpait_Translation_Store {
 		}
 
 		$this->bust_group_cache( $object_type, $group );
+
+		return true;
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Original flag (#92)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Whether an object has been explicitly marked as a translation original.
+	 *
+	 * @param string $object_type 'post' | 'term'.
+	 * @param int    $object_id   Object id.
+	 * @return bool
+	 */
+	public function is_original( string $object_type, int $object_id ): bool {
+		$this->assert_type( $object_type );
+
+		$value = 'term' === $object_type
+			? get_term_meta( $object_id, self::META_IS_ORIGINAL, true )
+			: get_post_meta( $object_id, self::META_IS_ORIGINAL, true );
+
+		return '' !== (string) $value;
+	}
+
+	/**
+	 * Marks (or unmarks) an object as a translation original.
+	 *
+	 * Marking is only permitted once the object has a language assigned: an
+	 * "original" is the source an item is translated *from*, which is meaningless
+	 * without a language (#92). Unmarking is always allowed.
+	 *
+	 * @param string $object_type 'post' | 'term'.
+	 * @param int    $object_id   Object id.
+	 * @param bool   $is_original Whether to mark (true) or unmark (false).
+	 * @return true|WP_Error True on success.
+	 */
+	public function set_original( string $object_type, int $object_id, bool $is_original ) {
+		$this->assert_type( $object_type );
+
+		if ( $is_original ) {
+			if ( '' === $this->get_language( $object_type, $object_id ) ) {
+				return new WP_Error(
+					'wpait_no_language',
+					__( 'Set a language for this item before marking it as an original.', 'wp-ai-translate' ),
+					array( 'status' => 409 )
+				);
+			}
+
+			if ( 'term' === $object_type ) {
+				update_term_meta( $object_id, self::META_IS_ORIGINAL, '1' );
+			} else {
+				update_post_meta( $object_id, self::META_IS_ORIGINAL, '1' );
+			}
+
+			return true;
+		}
+
+		if ( 'term' === $object_type ) {
+			delete_term_meta( $object_id, self::META_IS_ORIGINAL );
+		} else {
+			delete_post_meta( $object_id, self::META_IS_ORIGINAL );
+		}
 
 		return true;
 	}

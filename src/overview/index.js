@@ -2,10 +2,11 @@
  * AI Translate — Overview page, rebuilt on @wordpress/dataviews (#54).
  *
  * A controlled DataViews table backed by the REST endpoint
- * `GET wp-ai-translate/v1/overview`. A top-level view switch (Missing vs each
- * enabled language) drives the `view` query param; pagination, sorting and search
- * are server-side. Per-row + bulk actions (Translate to <lang>, Hide/Unhide,
- * Edit, View) are the foundation for the bulk-translate work in #55/#56.
+ * `GET wp-ai-translate/v1/overview`. A top-level view switch (Originals, Unmarked,
+ * or each enabled language) drives the `view` query param; pagination, sorting and
+ * search are server-side. Per-row + bulk actions (Translate to <lang>, Hide/Unhide,
+ * Mark/Unmark as original, Edit, View) are the foundation for the bulk-translate
+ * work in #55/#56.
  */
 
 import { createRoot } from '@wordpress/element';
@@ -36,7 +37,7 @@ const DEFAULT_VIEW = {
 	search: '',
 	filters: [],
 	titleField: 'title',
-	fields: [ 'type_label', 'missing' ],
+	fields: [ 'type_label', 'language', 'missing' ],
 	layout: {},
 };
 
@@ -80,12 +81,12 @@ function MissingChips( { item } ) {
  * @return {JSX.Element} App.
  */
 function Overview() {
-	// 'missing' or a language code.
-	const [ activeView, setActiveView ] = useState( 'missing' );
+	// 'originals', 'unmarked', or a language code.
+	const [ activeView, setActiveView ] = useState( 'originals' );
 	const [ view, setView ] = useState( DEFAULT_VIEW );
 	const [ data, setData ] = useState( [] );
 	const [ paginationInfo, setPaginationInfo ] = useState( { totalItems: 0, totalPages: 1 } );
-	const [ counts, setCounts ] = useState( { missing: 0, unmarked: 0, by_language: {} } );
+	const [ counts, setCounts ] = useState( { originals: 0, unmarked: 0, by_language: {} } );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ aiOk, setAiOk ] = useState( cfg.aiOk );
@@ -104,8 +105,12 @@ function Overview() {
 	const showQueueRef = useRef( false );
 
 	const languages = cfg.languages || [];
+	const isOriginals = activeView === 'originals';
 	const isUnmarked = activeView === 'unmarked';
-	const isLang = activeView !== 'missing' && ! isUnmarked;
+	const isLang = ! isOriginals && ! isUnmarked;
+	// One-shot guard so the "default to Unmarked when there are 0 originals" rule
+	// only fires on the very first load, never overriding later navigation (#92).
+	const didInitialDefault = useRef( false );
 
 	const fetchData = useCallback( () => {
 		setIsLoading( true );
@@ -122,8 +127,19 @@ function Overview() {
 			.then( ( res ) => {
 				setData( res.rows || [] );
 				setPaginationInfo( { totalItems: res.total || 0, totalPages: res.total_pages || 1 } );
-				setCounts( res.counts || { missing: 0, unmarked: 0, by_language: {} } );
+				const nextCounts = res.counts || { originals: 0, unmarked: 0, by_language: {} };
+				setCounts( nextCounts );
 				setAiOk( !! res.ai_ok );
+				// On first load, if nothing is marked as original, fall back to the
+				// Unmarked view so the page doesn't open on an empty list (#92).
+				if ( ! didInitialDefault.current ) {
+					didInitialDefault.current = true;
+					if ( activeView === 'originals' && ( nextCounts.originals || 0 ) === 0 ) {
+						setActiveView( 'unmarked' );
+						setView( { ...DEFAULT_VIEW, fields: [ 'type_label', 'language' ] } );
+						setSelection( [] );
+					}
+				}
 			} )
 			.catch( ( e ) => setError( e.message || __( 'Could not load the overview.', 'wp-ai-translate' ) ) )
 			.finally( () => setIsLoading( false ) );
@@ -273,10 +289,12 @@ function Overview() {
 			return;
 		}
 		setActiveView( next );
-		// Reset paging/search/sort when switching views; show the right field.
+		// Reset paging/search/sort when switching views; show the right fields. The
+		// Originals view shows both the source language and the still-missing
+		// translations; other views show just the language.
 		setView( {
 			...DEFAULT_VIEW,
-			fields: next === 'missing' ? [ 'type_label', 'missing' ] : [ 'type_label', 'language' ],
+			fields: next === 'originals' ? [ 'type_label', 'language', 'missing' ] : [ 'type_label', 'language' ],
 		} );
 		setSelection( [] );
 	};
@@ -313,7 +331,7 @@ function Overview() {
 			},
 		];
 
-		if ( isLang || isUnmarked ) {
+		if ( isOriginals || isLang || isUnmarked ) {
 			base.push( {
 				id: 'language',
 				label: __( 'Language', 'wp-ai-translate' ),
@@ -322,7 +340,9 @@ function Overview() {
 				getValue: ( { item } ) => ( item.language ? item.language.name : '' ),
 				render: ( { item } ) => <span>{ item.language ? item.language.name : '—' }</span>,
 			} );
-		} else {
+		}
+
+		if ( isOriginals ) {
 			base.push( {
 				id: 'missing',
 				label: __( 'Missing', 'wp-ai-translate' ),
@@ -334,7 +354,7 @@ function Overview() {
 		}
 
 		return base;
-	}, [ isLang, isUnmarked ] );
+	}, [ isOriginals, isLang, isUnmarked ] );
 
 	const runBulk = useCallback(
 		( items, code, name ) => {
@@ -568,10 +588,44 @@ function Overview() {
 			callback: ( items, { onActionPerformed } ) => setHidden( items, false, onActionPerformed ),
 		} );
 
+		// Mark / unmark as original (#92). Marking is only offered for items that
+		// already have a language set; the server rejects it otherwise.
+		const setOriginal = ( items, isOriginal, onActionPerformed ) =>
+			Promise.allSettled(
+				items.map( ( it ) =>
+					apiFetch( {
+						path: `/${ cfg.namespace }/overview-original`,
+						method: 'POST',
+						data: { object_id: it.id, type: it.type, is_original: isOriginal },
+					} )
+				)
+			).then( () => {
+				fetchData();
+				if ( onActionPerformed ) {
+					onActionPerformed( items );
+				}
+			} );
+
+		list.push( {
+			id: 'mark-original',
+			label: __( 'Mark as original', 'wp-ai-translate' ),
+			supportsBulk: true,
+			isEligible: ( item ) => !! item.language && ! item.is_original,
+			callback: ( items, { onActionPerformed } ) => setOriginal( items, true, onActionPerformed ),
+		} );
+
+		list.push( {
+			id: 'unmark-original',
+			label: __( 'Unmark as original', 'wp-ai-translate' ),
+			supportsBulk: true,
+			isEligible: ( item ) => !! item.is_original,
+			callback: ( items, { onActionPerformed } ) => setOriginal( items, false, onActionPerformed ),
+		} );
+
 		return list;
 	}, [ languages, aiOk, isLang, runBulk, runSetLanguage, runDetect, fetchData ] );
 
-	const missingCount = counts.missing || 0;
+	const originalsCount = counts.originals || 0;
 	const unmarkedCount = counts.unmarked || 0;
 
 	return (
@@ -696,13 +750,13 @@ function Overview() {
 			<Flex justify="flex-start" gap={ 2 } wrap style={ { margin: '12px 0' } } className="wpait-ov-tabs">
 				<FlexItem>
 					<Button
-						variant={ activeView === 'missing' ? 'primary' : 'secondary' }
-						onClick={ () => switchView( 'missing' ) }
+						variant={ activeView === 'originals' ? 'primary' : 'secondary' }
+						onClick={ () => switchView( 'originals' ) }
 					>
 						{ sprintf(
-							/* translators: %d: number of items missing translations. */
-							__( 'Missing translations (%d)', 'wp-ai-translate' ),
-							missingCount
+							/* translators: %d: number of items marked as originals. */
+							__( 'Originals (%d)', 'wp-ai-translate' ),
+							originalsCount
 						) }
 					</Button>
 				</FlexItem>
