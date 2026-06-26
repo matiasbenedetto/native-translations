@@ -1049,6 +1049,7 @@ class Wpait_Rest {
 			'object_id'    => $object_id,
 			'type'         => $type,
 			'language'     => $language,
+			'is_original'  => $this->store->is_original( $type, $object_id ),
 			'translations' => $translations,
 		);
 	}

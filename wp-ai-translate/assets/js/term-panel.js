@@ -163,6 +163,30 @@
 			);
 		}
 
+		// "Mark as original" toggle. Disabled until the term has a language, since the
+		// server refuses to mark an item with no language as an original.
+		var originalCheckbox = document.createElement( 'input' );
+		originalCheckbox.type = 'checkbox';
+		originalCheckbox.checked = !! this.data.is_original;
+		originalCheckbox.disabled = 'original' === this.busy || ! currentLang;
+		originalCheckbox.addEventListener( 'change', function () {
+			self.act(
+				'overview-original',
+				{ object_id: cfg.termId, type: 'term', is_original: originalCheckbox.checked },
+				'original',
+				{ reload: true, successMsg: originalCheckbox.checked
+					? __( 'Marked as the translation original.', 'wp-ai-translate' )
+					: __( 'No longer marked as an original.', 'wp-ai-translate' ) }
+			);
+		} );
+		var originalLabel = el( 'label', {}, [ originalCheckbox, document.createTextNode( ' ' + __( 'Mark as original', 'wp-ai-translate' ) ) ] );
+		mount.appendChild( el( 'p', {}, [ originalLabel ] ) );
+		mount.appendChild(
+			el( 'p', { 'class': 'description', text: currentLang
+				? __( 'Only originals can be translated into other languages.', 'wp-ai-translate' )
+				: __( 'Set the language of this term above before marking it as an original.', 'wp-ai-translate' ) } )
+		);
+
 		// With no language yet, show a single prompt instead of one disabled Translate
 		// row (with duplicated help) per language.
 		if ( ! currentLang ) {

@@ -206,6 +206,31 @@ final class RestTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * payload() — editor context exposes is_original (#105)
+	 * ------------------------------------------------------------------ */
+
+	public function test_payload_exposes_is_original_false_by_default(): void {
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		$data = $this->invoke_private( 'payload', 'post', 5 );
+		$this->assertArrayHasKey( 'is_original', $data );
+		$this->assertFalse( $data['is_original'] );
+	}
+
+	public function test_payload_reflects_marked_original(): void {
+		Wpait_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpait_Test_State::$post_meta[5]['_wpait_is_original'] = '1';
+		$data = $this->invoke_private( 'payload', 'post', 5 );
+		$this->assertTrue( $data['is_original'] );
+	}
+
+	public function test_payload_exposes_is_original_for_terms(): void {
+		Wpait_Test_State::$terms[7] = array( 'term_id' => 7, 'taxonomy' => 'category' );
+		Wpait_Test_State::$term_meta[7]['_wpait_is_original'] = '1';
+		$data = $this->invoke_private( 'payload', 'term', 7 );
+		$this->assertTrue( $data['is_original'] );
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * /enqueue (#55) — per-item permission skipping, target validation, shape
 	 * ------------------------------------------------------------------ */
 
