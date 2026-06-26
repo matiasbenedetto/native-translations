@@ -167,6 +167,31 @@ final class OverviewRestTest extends TestCase {
 		$this->assertSame( 'es', $row['language']['code'] );
 	}
 
+	public function test_rows_include_featured_image_thumbnail_url_or_null( ): void {
+		// post 20: marked original WITH a featured image → thumbnail is a URL.
+		$this->seed_post( 20, 'en', '', 'post', 'With image' );
+		$this->mark_original( 20 );
+		Wpait_Test_State::$post_meta[20]['_thumbnail_id'] = '777';
+		// post 21: marked original with NO featured image → thumbnail is null.
+		$this->seed_post( 21, 'en', '', 'post', 'No image' );
+		$this->mark_original( 21 );
+		// term 50: terms never have a featured image → thumbnail is null.
+		Wpait_Test_State::$terms[50] = array( 'term_id' => 50, 'taxonomy' => 'category', 'name' => 'News' );
+		Wpait_Test_State::$term_meta[50][ Wpait_Translation_Store::META_LANGUAGE ] = 'en';
+		$this->mark_original( 50, 'term' );
+
+		$data    = $this->payload();
+		$by_key  = array();
+		foreach ( $data['rows'] as $row ) {
+			$this->assertArrayHasKey( 'thumbnail', $row, 'every row carries a thumbnail key' );
+			$by_key[ $row['key'] ] = $row;
+		}
+
+		$this->assertSame( 'https://example.test/wp-content/uploads/thumb-777.png', $by_key['post:20']['thumbnail'] );
+		$this->assertNull( $by_key['post:21']['thumbnail'] );
+		$this->assertNull( $by_key['term:50']['thumbnail'] );
+	}
+
 	public function test_originals_count_zero_when_nothing_marked(): void {
 		// Backs the React empty-state default-to-Unmarked: with content present but
 		// nothing marked original, the Originals view is empty and the count is 0,
