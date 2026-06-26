@@ -459,7 +459,8 @@ final class QueueTest extends TestCase {
 
 		$result = $this->queue->cancel_job( 301 );
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'wpait_unknown_action', $result->get_error_code() );
+		// Distinct code from the not-found (404) case so clients can disambiguate.
+		$this->assertSame( 'wpait_foreign_action', $result->get_error_code() );
 		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
 	}
 
@@ -492,5 +493,56 @@ final class QueueTest extends TestCase {
 	public function test_cancel_all_empty_queue_returns_zero(): void {
 		$this->assertSame( 0, $this->queue->cancel_all() );
 		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+	}
+
+	/**
+	 * A backlog larger than one batch must be fully cleared in a single call: with a
+	 * batch size of 2 and 5 pending actions, cancel_all() paginates (cancelled
+	 * actions leave the set, so each query returns the next batch) until none remain.
+	 */
+	public function test_cancel_all_paginates_until_backlog_cleared(): void {
+		Wpait_Test_State::$filters['wpait_cancel_batch_size'] = 2;
+		$expected = array();
+		for ( $i = 401; $i <= 405; $i++ ) {
+			Wpait_Test_State::$as_actions[ $i ] = array(
+				'hook'   => Wpait_Queue::HOOK,
+				'args'   => array( array( 'type' => 'post', 'id' => $i, 'target' => 'es' ) ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			);
+			$expected[] = $i;
+		}
+
+		$cancelled = $this->queue->cancel_all();
+
+		$this->assertSame( 5, $cancelled );
+		$this->assertEqualsCanonicalizing( $expected, Wpait_Test_State::$as_cancelled );
+		$this->assertSame( array(), Wpait_Test_State::$as_actions );
+	}
+
+	/**
+	 * Infinite-loop guard: a batch made entirely of un-cancellable (foreign-hook)
+	 * actions must stop the loop rather than re-fetch the same set forever.
+	 */
+	public function test_cancel_all_stops_when_batch_cancels_nothing(): void {
+		Wpait_Test_State::$filters['wpait_cancel_batch_size'] = 2;
+		Wpait_Test_State::$as_actions = array(
+			501 => array(
+				'hook'   => 'some_other_plugin_hook',
+				'args'   => array( array() ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			),
+			502 => array(
+				'hook'   => 'some_other_plugin_hook',
+				'args'   => array( array() ),
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			),
+		);
+
+		$cancelled = $this->queue->cancel_all();
+
+		$this->assertSame( 0, $cancelled );
+		$this->assertSame( array(), Wpait_Test_State::$as_cancelled );
+		// Foreign actions are left untouched (still present, not cancelled).
+		$this->assertArrayHasKey( 501, Wpait_Test_State::$as_actions );
 	}
 }

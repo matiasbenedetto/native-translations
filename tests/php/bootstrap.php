@@ -1191,7 +1191,12 @@ if ( ! class_exists( 'ActionScheduler_Store' ) ) {
 						$ids[] = $id;
 					}
 				}
-				return array_map( 'intval', $ids );
+				$ids = array_map( 'intval', $ids );
+				// Honour per_page/offset so pagination (e.g. cancel_all batching) is exercised.
+				if ( isset( $args['per_page'] ) && (int) $args['per_page'] > 0 ) {
+					$ids = array_slice( $ids, (int) ( $args['offset'] ?? 0 ), (int) $args['per_page'] );
+				}
+				return $ids;
 			}
 			return (int) ( Wpait_Test_State::$as_counts[ $status ] ?? 0 );
 		}

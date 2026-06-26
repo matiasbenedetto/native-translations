@@ -85,6 +85,9 @@ function StateBadge( { state } ) {
 		running: { bg: '#cce5ff', fg: '#004085', label: __( 'Running', 'wp-ai-translate' ) },
 		pending: { bg: '#f0f0f1', fg: '#3c434a', label: __( 'Pending', 'wp-ai-translate' ) },
 		failed: { bg: '#f8d7da', fg: '#842029', label: __( 'Failed', 'wp-ai-translate' ) },
+		// 'completed' is unreachable today (Action Scheduler prunes completed actions,
+		// so they never appear in the queue list) — kept as a forward-looking mapping
+		// in case completed jobs are ever surfaced.
 		completed: { bg: '#d4edda', fg: '#155724', label: __( 'Completed', 'wp-ai-translate' ) },
 	};
 	const s = map[ state ] || map.pending;
