@@ -982,6 +982,7 @@ class Wpait_Admin_List {
 					'missing'     => $this->missing_chips_for( 'post', $post_id, $codes, $name_by_code ),
 					'edit_url'    => (string) get_edit_post_link( $post_id, 'raw' ),
 					'view_url'    => $view_url,
+					'thumbnail'   => $this->post_thumbnail_url( $post_id ),
 					'hidden'      => '' !== $this->get_overview_meta( 'post', $post_id ),
 					'is_original' => true,
 					'taxonomy'    => '',
@@ -1029,6 +1030,7 @@ class Wpait_Admin_List {
 				'missing'     => $this->missing_chips_for( 'term', $term_id, $codes, $name_by_code ),
 				'edit_url'    => (string) get_edit_term_link( $term_id ),
 				'view_url'    => is_wp_error( $link ) ? '' : (string) $link,
+				'thumbnail'   => null,
 				'hidden'      => '' !== $this->get_overview_meta( 'term', $term_id ),
 				'is_original' => true,
 				'taxonomy'    => $term_obj->taxonomy,
@@ -1103,6 +1105,7 @@ class Wpait_Admin_List {
 				'missing'    => array(),
 				'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 				'view_url'   => $view_url,
+				'thumbnail'  => $this->post_thumbnail_url( $post_id ),
 				'hidden'     => false,
 				'is_original' => $this->store->is_original( 'post', $post_id ),
 				'taxonomy'   => '',
@@ -1140,6 +1143,7 @@ class Wpait_Admin_List {
 				'missing'    => array(),
 				'edit_url'   => (string) get_edit_term_link( $term->term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
+				'thumbnail'  => null,
 				'hidden'     => false,
 				'is_original' => $this->store->is_original( 'term', (int) $term->term_id ),
 				'taxonomy'   => $term->taxonomy,
@@ -1193,6 +1197,7 @@ class Wpait_Admin_List {
 					'missing'    => array(),
 					'edit_url'   => (string) get_edit_post_link( $post_id, 'raw' ),
 					'view_url'   => $view_url,
+					'thumbnail'  => $this->post_thumbnail_url( $post_id ),
 					'hidden'     => false,
 					'is_original' => false,
 					'taxonomy'   => '',
@@ -1236,6 +1241,7 @@ class Wpait_Admin_List {
 				'missing'    => array(),
 				'edit_url'   => (string) get_edit_term_link( $term_id ),
 				'view_url'   => is_wp_error( $link ) ? '' : (string) $link,
+				'thumbnail'  => null,
 				'hidden'     => false,
 				'is_original' => false,
 				'taxonomy'   => $term_obj->taxonomy,
@@ -1243,6 +1249,27 @@ class Wpait_Admin_List {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Featured-image thumbnail URL for a post, or null when the post has no
+	 * featured image. Terms never have a featured image, so callers pass null
+	 * directly. Uses the WordPress 'thumbnail' image size, which the Overview
+	 * DataView renders as a fixed-size square.
+	 *
+	 * @param int $post_id Post id.
+	 * @return string|null Thumbnail URL, or null when there is no featured image.
+	 */
+	private function post_thumbnail_url( int $post_id ): ?string {
+		$thumb_id = get_post_thumbnail_id( $post_id );
+		if ( ! $thumb_id ) {
+			return null;
+		}
+		$src = wp_get_attachment_image_src( (int) $thumb_id, 'thumbnail' );
+		if ( ! is_array( $src ) || empty( $src[0] ) ) {
+			return null;
+		}
+		return (string) $src[0];
 	}
 
 	/**

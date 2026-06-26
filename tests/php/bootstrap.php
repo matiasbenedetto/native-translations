@@ -1057,6 +1057,24 @@ function get_preview_post_link( $id = 0 ) {
 	return isset( Wpait_Test_State::$posts[ $id ] ) ? 'https://example.test/?p=' . $id . '&preview=true' : '';
 }
 
+/**
+ * Featured-image stubs the Overview thumbnail field (#94) reads. A post "has" a
+ * featured image when its `_thumbnail_id` post meta is set; the src is derived
+ * from that attachment id so a test can assert a concrete URL.
+ */
+function get_post_thumbnail_id( $post = null ) {
+	$id = (int) ( $post instanceof WP_Post ? $post->ID : $post );
+	return (int) ( Wpait_Test_State::$post_meta[ $id ]['_thumbnail_id'] ?? 0 );
+}
+
+function wp_get_attachment_image_src( $attachment_id, $size = 'thumbnail', $icon = false ) {
+	$attachment_id = (int) $attachment_id;
+	if ( ! $attachment_id ) {
+		return false;
+	}
+	return array( 'https://example.test/wp-content/uploads/thumb-' . $attachment_id . '.png', 150, 150, true );
+}
+
 function wp_reset_postdata(): void {}
 
 /* -------------------------------------------------------------------------

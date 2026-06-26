@@ -37,9 +37,55 @@ const DEFAULT_VIEW = {
 	search: '',
 	filters: [],
 	titleField: 'title',
+	mediaField: 'thumbnail',
 	fields: [ 'type_label', 'language', 'missing' ],
 	layout: {},
 };
+
+// Side length (px) of the square featured-image thumbnail / placeholder rendered
+// in the Overview. A single constant keeps the real <img> and the gray
+// placeholder identical so table rows stay aligned.
+const THUMB_SIZE = 40;
+
+/**
+ * Renders a fixed-size square for a row's featured image: the image when the
+ * entity has one, otherwise a gray placeholder of identical dimensions so rows
+ * stay aligned. Terms (categories/tags) never have a featured image.
+ *
+ * @param {Object} props      Props.
+ * @param {Object} props.item Row.
+ * @return {JSX.Element} Square thumbnail or placeholder.
+ */
+function Thumbnail( { item } ) {
+	const box = {
+		width: `${ THUMB_SIZE }px`,
+		height: `${ THUMB_SIZE }px`,
+		borderRadius: '2px',
+		flexShrink: 0,
+	};
+	if ( item.thumbnail ) {
+		return (
+			<img
+				src={ item.thumbnail }
+				alt={ sprintf(
+					/* translators: %s: entity title. */
+					__( 'Featured image for %s', 'wp-ai-translate' ),
+					item.title
+				) }
+				width={ THUMB_SIZE }
+				height={ THUMB_SIZE }
+				loading="lazy"
+				style={ { ...box, objectFit: 'cover', display: 'block' } }
+			/>
+		);
+	}
+	return (
+		<div
+			aria-hidden="true"
+			style={ { ...box, backgroundColor: '#e0e0e0' } }
+		/>
+	);
+}
 
 /**
  * Renders the missing-language names as small chips.
@@ -301,6 +347,15 @@ function Overview() {
 
 	const fields = useMemo( () => {
 		const base = [
+			{
+				id: 'thumbnail',
+				label: __( 'Image', 'wp-ai-translate' ),
+				enableSorting: false,
+				enableHiding: false,
+				enableGlobalSearch: false,
+				getValue: ( { item } ) => item.thumbnail || '',
+				render: ( { item } ) => <Thumbnail item={ item } />,
+			},
 			{
 				id: 'title',
 				label: __( 'Title', 'wp-ai-translate' ),
