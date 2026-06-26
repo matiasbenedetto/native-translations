@@ -67,6 +67,7 @@ try {
 	$cat_id = (int) $cat['term_id'];
 	$created_terms[] = array( $cat_id, 'category' );
 	$store->set_language( 'term', $cat_id, 'en' );
+	$store->set_original( 'term', $cat_id, true ); // #104: only originals can be translated.
 	$cat_es = $trans->translate_term( $cat_id, 'es' );
 	if ( ! is_wp_error( $cat_es ) ) {
 		$created_terms[] = array( (int) $cat_es, 'category' );
@@ -83,6 +84,7 @@ try {
 	);
 	$created_posts[] = $src_id;
 	$store->set_language( 'post', $src_id, 'en' );
+	$store->set_original( 'post', $src_id, true ); // #104: only originals can be translated.
 	wp_set_object_terms( $src_id, array( $cat_id ), 'category', false );
 
 	// THE translation call (real GLM-5.2 generation).

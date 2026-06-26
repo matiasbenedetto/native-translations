@@ -125,6 +125,7 @@
 
 		var currentLang = this.data.language || '';
 		var translations = this.data.translations || {};
+		var isOriginal = !! this.data.is_original;
 		// A grouped term's own language is fixed: changing it would drop its slot
 		// from the group (and mislabel it). Lock the selector once the term has
 		// sibling translations; the server enforces this too.
@@ -196,6 +197,17 @@
 				] )
 			);
 			return;
+		}
+
+		// Translations can only be created from an original (#104). Surface a single
+		// notice and disable the per-language Translate buttons when this term is not
+		// marked original; existing translations remain manageable.
+		if ( ! isOriginal ) {
+			mount.appendChild(
+				el( 'div', { 'class': 'notice notice-info inline' }, [
+					el( 'p', { text: __( 'Only originals can be translated. Mark this term as original above to create translations from it.', 'wp-ai-translate' ) } ),
+				] )
+			);
 		}
 
 		// Per-language actions.
@@ -283,7 +295,7 @@
 					'class': 'button button-primary',
 					text: working ? __( 'Working…', 'wp-ai-translate' ) : __( 'Translate', 'wp-ai-translate' ),
 				} );
-				translateBtn.disabled = working || ! cfg.aiAvailable;
+				translateBtn.disabled = working || ! cfg.aiAvailable || ! isOriginal;
 				translateBtn.addEventListener( 'click', function () {
 					self.act( 'translate', { source_id: cfg.termId, target_code: l.code, type: 'term' }, l.code );
 				} );

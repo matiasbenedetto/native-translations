@@ -1337,6 +1337,20 @@ class Wpait_Translator {
 			);
 		}
 
+		// #104: a translation may only be created *from* an item explicitly marked as
+		// an original (#92). Translating a translated copy (or an unmarked item) would
+		// produce a translation-of-a-translation and degrade quality, so refuse it
+		// here — the single source of truth for both editor clients, the term panel,
+		// and any future Overview action. (Recreate uses pick_source_sibling(), not
+		// this guard, so regenerating an existing translation is unaffected.)
+		if ( ! $this->store->is_original( $object_type, $source_id ) ) {
+			return new WP_Error(
+				'wpait_source_not_original',
+				__( 'Translations can only be created from an original. Mark this item as original first.', 'wp-ai-translate' ),
+				array( 'status' => 409 )
+			);
+		}
+
 		$from_code = $this->store->get_language( $object_type, $source_id );
 		if ( '' === $from_code ) {
 			$settings  = Wpait_Admin_Settings::get_settings();
