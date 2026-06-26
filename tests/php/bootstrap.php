@@ -713,7 +713,9 @@ function wp_strip_all_tags( $text, $remove_breaks = false ) {
 }
 
 function strip_shortcodes( $content ) {
-	return (string) $content;
+	// Approximate core: drop [shortcode ...] / [/shortcode] tokens. Enough for the
+	// units that assert shortcodes are removed from snippets/translatable content.
+	return (string) preg_replace( '/\[\/?[^\]]+\]/', '', (string) $content );
 }
 
 /**
@@ -1076,6 +1078,29 @@ function wp_get_attachment_image_src( $attachment_id, $size = 'thumbnail', $icon
 }
 
 function wp_reset_postdata(): void {}
+
+/**
+ * Excerpt/snippet stubs the Overview snippet field (#95) reads. get_the_excerpt()
+ * returns the post's raw excerpt (empty when unset) so a test can exercise both
+ * the excerpt path and the content-fallback path; wp_trim_words() mirrors core's
+ * word-count truncation with an ellipsis tail.
+ */
+function get_the_excerpt( $post = 0 ) {
+	$id = (int) ( $post instanceof WP_Post ? $post->ID : $post );
+	return (string) ( Wpait_Test_State::$posts[ $id ]['post_excerpt'] ?? '' );
+}
+
+function wp_trim_words( $text, $num_words = 55, $more = null ) {
+	if ( null === $more ) {
+		$more = '…';
+	}
+	$words = preg_split( '/[\n\r\t ]+/', trim( (string) $text ), -1, PREG_SPLIT_NO_EMPTY );
+	if ( count( $words ) > (int) $num_words ) {
+		$words = array_slice( $words, 0, (int) $num_words );
+		return implode( ' ', $words ) . $more;
+	}
+	return implode( ' ', $words );
+}
 
 /* -------------------------------------------------------------------------
  * Action Scheduler stubs (#55 queue). The queue unit only touches three AS
