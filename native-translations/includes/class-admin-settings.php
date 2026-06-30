@@ -473,111 +473,143 @@ class Wpnt_Admin_Settings {
 	 * @return array<string,mixed>
 	 */
 	public function sanitize( $input ): array {
-		$old      = self::get_settings();
-		$settings = self::defaults();
+		$input = is_array( $input ) ? $input : array();
+		$old   = self::get_settings();
+
+		$settings                 = array_merge( self::defaults(), $old );
+		$settings['instructions'] = array_merge( self::defaults()['instructions'], $old['instructions'] ?? array() );
+
+		$section = isset( $input['_section'] ) ? sanitize_key( (string) $input['_section'] ) : 'all';
+		$is_all  = '' === $section || 'all' === $section;
 
 		// --- Languages ---
-		$languages       = array();
-		$invalid_locales = array();
-		$old_by_code     = array();
-		$old_languages   = isset( $old['languages'] ) && is_array( $old['languages'] ) ? $old['languages'] : array();
-		foreach ( $old_languages as $old_row ) {
-			if ( ! is_array( $old_row ) ) {
-				continue;
+		if ( $is_all || 'languages' === $section ) {
+			$languages       = array();
+			$invalid_locales = array();
+			$old_by_code     = array();
+			$old_languages   = isset( $old['languages'] ) && is_array( $old['languages'] ) ? $old['languages'] : array();
+			foreach ( $old_languages as $old_row ) {
+				if ( ! is_array( $old_row ) ) {
+					continue;
+				}
+				$normalized = self::normalize_language_row( $old_row );
+				if ( '' !== $normalized['code'] ) {
+					$old_by_code[ $normalized['code'] ] = $normalized;
+				}
 			}
-			$normalized = self::normalize_language_row( $old_row );
-			if ( '' !== $normalized['code'] ) {
-				$old_by_code[ $normalized['code'] ] = $normalized;
-			}
-		}
-		$seen_locales = array();
-		$rows         = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
-		foreach ( $rows as $row ) {
-			if ( ! is_array( $row ) ) {
-				continue;
-			}
-			$code   = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
-			$locale = isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '';
+			$seen_locales = array();
+			$rows         = isset( $input['languages'] ) && is_array( $input['languages'] ) ? $input['languages'] : array();
+			foreach ( $rows as $row ) {
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+				$code   = isset( $row['code'] ) ? sanitize_key( $row['code'] ) : '';
+				$locale = isset( $row['locale'] ) ? sanitize_text_field( $row['locale'] ) : '';
 
-			if ( '' !== $code && isset( $old_by_code[ $code ] ) ) {
-				$language            = $old_by_code[ $code ];
-				$language['enabled'] = ! empty( $row['enabled'] );
-			} else {
-				$entry = '' !== $locale ? self::catalog_entry_for_locale( $locale ) : null;
-				if ( $entry ) {
-					$language = self::language_from_catalog_entry( $entry );
-				} elseif ( '' !== $code ) {
-					$language = self::normalize_language_row( $row );
-					if ( ! self::is_valid_locale( $language['locale'] ) ) {
-						$invalid_locales[] = $code;
-					}
+				if ( '' !== $code && isset( $old_by_code[ $code ] ) ) {
+					$language            = $old_by_code[ $code ];
+					$language['enabled'] = ! empty( $row['enabled'] );
 				} else {
-					continue;
+					$entry = '' !== $locale ? self::catalog_entry_for_locale( $locale ) : null;
+					if ( $entry ) {
+						$language = self::language_from_catalog_entry( $entry );
+					} elseif ( '' !== $code ) {
+						$language = self::normalize_language_row( $row );
+						if ( ! self::is_valid_locale( $language['locale'] ) ) {
+							$invalid_locales[] = $code;
+						}
+					} else {
+						continue;
+					}
 				}
+
+				if ( '' !== $language['locale'] ) {
+					if ( isset( $seen_locales[ $language['locale'] ] ) ) {
+						continue;
+					}
+					$seen_locales[ $language['locale'] ] = true;
+				}
+
+				$languages[ $language['code'] ] = $language;
+			}
+			$languages = array_values( $languages );
+
+			// Warn (don't discard) on malformed locales so the admin can correct them
+			// without losing what they typed.
+			if ( ! empty( $invalid_locales ) && ! self::$reconcile_notified ) {
+				add_settings_error(
+					self::OPTION,
+					'wpnt_invalid_locale',
+					sprintf(
+						/* translators: %s: comma-separated language codes. */
+						__( 'These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them.', 'native-translations' ),
+						implode( ', ', $invalid_locales )
+					),
+					'warning'
+				);
 			}
 
-			if ( '' !== $language['locale'] ) {
-				if ( isset( $seen_locales[ $language['locale'] ] ) ) {
-					continue;
-				}
-				$seen_locales[ $language['locale'] ] = true;
+			// --- Reconcile terms (creates/updates terms, blocks unsafe deletes). ---
+			// register_setting's sanitize callback can fire more than once per
+			// request; reconcile() is idempotent, but guard the admin notices so
+			// they are not queued twice.
+			$result                = $this->languages->reconcile( $languages, $old['languages'] );
+			$settings['languages'] = $result['languages'];
+			if ( ! self::$reconcile_notified ) {
+				$this->add_reconcile_notices( $result['report'] );
+				self::$reconcile_notified = true;
 			}
 
-			$languages[ $language['code'] ] = $language;
-		}
-		$languages = array_values( $languages );
-
-		// Warn (don't discard) on malformed locales so the admin can correct them
-		// without losing what they typed.
-		if ( ! empty( $invalid_locales ) && ! self::$reconcile_notified ) {
-			add_settings_error(
-				self::OPTION,
-				'wpnt_invalid_locale',
-				sprintf(
-					/* translators: %s: comma-separated language codes. */
-					__( 'These languages have a locale that is not in WordPress’s expected format (e.g. es_ES): %s. They were saved as entered — please correct them.', 'native-translations' ),
-					implode( ', ', $invalid_locales )
-				),
-				'warning'
-			);
+			if ( ! $is_all ) {
+				$codes   = wp_list_pluck( $settings['languages'], 'code' );
+				$default = (string) $settings['default_language'];
+				$settings['default_language'] = in_array( $default, $codes, true ) ? $default : ( $codes[0] ?? '' );
+			}
 		}
 
-		// --- Reconcile terms (creates/updates terms, blocks unsafe deletes). ---
-		// register_setting's sanitize callback can fire more than once per
-		// request; reconcile() is idempotent, but guard the admin notices so
-		// they are not queued twice.
-		$result                = $this->languages->reconcile( $languages, $old['languages'] );
-		$settings['languages'] = $result['languages'];
-		if ( ! self::$reconcile_notified ) {
-			$this->add_reconcile_notices( $result['report'] );
-			self::$reconcile_notified = true;
-		}
+		$codes = wp_list_pluck( $settings['languages'], 'code' );
 
 		// --- Default language (must be one of the configured codes). ---
-		$codes   = wp_list_pluck( $settings['languages'], 'code' );
-		$default = isset( $input['default_language'] ) ? sanitize_key( $input['default_language'] ) : '';
-		$settings['default_language'] = in_array( $default, $codes, true ) ? $default : ( $codes[0] ?? '' );
+		if ( $is_all || 'default_language' === $section ) {
+			$default = isset( $input['default_language'] ) ? sanitize_key( $input['default_language'] ) : '';
+			if ( in_array( $default, $codes, true ) ) {
+				$settings['default_language'] = $default;
+			} else {
+				$fallback = ! $is_all && in_array( (string) $old['default_language'], $codes, true )
+					? (string) $old['default_language']
+					: ( $codes[0] ?? '' );
+				$settings['default_language'] = $fallback;
+			}
+		}
 
 		// --- Preferred AI model (a typed selection; '' = connector default). Kept as
 		// entered so a valid pinned id isn't lost if it's absent from a stale list. ---
-		$settings['model'] = isset( $input['model'] ) ? sanitize_text_field( wp_unslash( $input['model'] ) ) : '';
+		if ( $is_all || 'model' === $section ) {
+			$settings['model'] = isset( $input['model'] ) ? sanitize_text_field( wp_unslash( $input['model'] ) ) : '';
+		}
 
 		// --- Instructions ---
-		$instructions = isset( $input['instructions'] ) && is_array( $input['instructions'] ) ? $input['instructions'] : array();
-		$settings['instructions']['global'] = isset( $instructions['global'] ) ? sanitize_textarea_field( $instructions['global'] ) : '';
-		$settings['instructions']['post']   = isset( $instructions['post'] ) ? sanitize_textarea_field( $instructions['post'] ) : '';
-		$settings['instructions']['term']   = isset( $instructions['term'] ) ? sanitize_textarea_field( $instructions['term'] ) : '';
+		if ( $is_all || 'instructions' === $section ) {
+			$instructions = isset( $input['instructions'] ) && is_array( $input['instructions'] ) ? $input['instructions'] : array();
+			$base         = $is_all ? self::defaults()['instructions'] : $settings['instructions'];
+			$base['global'] = isset( $instructions['global'] ) ? sanitize_textarea_field( $instructions['global'] ) : (string) $base['global'];
+			$base['post']   = isset( $instructions['post'] ) ? sanitize_textarea_field( $instructions['post'] ) : (string) $base['post'];
+			$base['term']   = isset( $instructions['term'] ) ? sanitize_textarea_field( $instructions['term'] ) : (string) $base['term'];
 
-		$per_language = array();
-		if ( isset( $instructions['per_language'] ) && is_array( $instructions['per_language'] ) ) {
-			foreach ( $instructions['per_language'] as $code => $text ) {
-				$code = sanitize_key( $code );
-				if ( in_array( $code, $codes, true ) ) {
-					$per_language[ $code ] = sanitize_textarea_field( $text );
+			if ( isset( $instructions['per_language'] ) && is_array( $instructions['per_language'] ) ) {
+				$per_language = array();
+				foreach ( $instructions['per_language'] as $code => $text ) {
+					$code = sanitize_key( $code );
+					if ( in_array( $code, $codes, true ) ) {
+						$per_language[ $code ] = sanitize_textarea_field( $text );
+					}
 				}
+				$base['per_language'] = $per_language;
+			} elseif ( $is_all ) {
+				$base['per_language'] = array();
 			}
+			$settings['instructions'] = $base;
 		}
-		$settings['instructions']['per_language'] = $per_language;
 
 		return $settings;
 	}
@@ -698,8 +730,9 @@ class Wpnt_Admin_Settings {
 				</p>
 			</div>
 
-			<form method="post" action="options.php">
+			<form method="post" action="options.php" class="wpnt-settings-form">
 				<?php settings_fields( 'wpnt_settings_group' ); ?>
+				<input type="hidden" name="<?php echo esc_attr( $option . '[_section]' ); ?>" value="languages" />
 
 				<div class="wpnt-card">
 					<h2><?php esc_html_e( 'Languages', 'native-translations' ); ?></h2>
@@ -802,10 +835,15 @@ class Wpnt_Admin_Settings {
 							</p>
 						</div>
 					<?php endif; ?>
+					<?php submit_button( __( 'Save languages', 'native-translations' ), 'primary', 'wpnt_save_languages' ); ?>
 					</div>
+			</form>
 
 				<?php $this->render_language_packs_card( $languages ); ?>
 
+			<form method="post" action="options.php" class="wpnt-settings-form">
+				<?php settings_fields( 'wpnt_settings_group' ); ?>
+				<input type="hidden" name="<?php echo esc_attr( $option . '[_section]' ); ?>" value="default_language" />
 				<div class="wpnt-card">
 				<h2><?php esc_html_e( 'Default language', 'native-translations' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'The site’s primary language — used as the source when no other is given.', 'native-translations' ); ?></p>
@@ -817,8 +855,13 @@ class Wpnt_Admin_Settings {
 						</option>
 					<?php endforeach; ?>
 				</select>
+				<?php submit_button( __( 'Save default language', 'native-translations' ), 'primary', 'wpnt_save_default_language' ); ?>
 				</div>
+			</form>
 
+			<form method="post" action="options.php" class="wpnt-settings-form">
+				<?php settings_fields( 'wpnt_settings_group' ); ?>
+				<input type="hidden" name="<?php echo esc_attr( $option . '[_section]' ); ?>" value="model" />
 				<div class="wpnt-card">
 				<h2><?php esc_html_e( 'AI model', 'native-translations' ); ?></h2>
 				<?php
@@ -864,8 +907,13 @@ class Wpnt_Admin_Settings {
 				<?php elseif ( ! $ai_usable ) : ?>
 					<p class="description"><?php esc_html_e( 'Connect an AI provider (see status above) to choose a model.', 'native-translations' ); ?></p>
 				<?php endif; ?>
+				<?php submit_button( __( 'Save AI model', 'native-translations' ), 'primary', 'wpnt_save_model' ); ?>
 				</div>
+			</form>
 
+			<form method="post" action="options.php" class="wpnt-settings-form">
+				<?php settings_fields( 'wpnt_settings_group' ); ?>
+				<input type="hidden" name="<?php echo esc_attr( $option . '[_section]' ); ?>" value="instructions" />
 				<div class="wpnt-card">
 				<h2><?php esc_html_e( 'Translation instructions', 'native-translations' ); ?></h2>
 				<p class="description">
@@ -909,9 +957,8 @@ class Wpnt_Admin_Settings {
 						<?php endforeach; ?>
 					</table>
 				<?php endif; ?>
+				<?php submit_button( __( 'Save translation instructions', 'native-translations' ), 'primary', 'wpnt_save_instructions' ); ?>
 				</div>
-
-				<?php submit_button(); ?>
 			</form>
 		</div>
 		<script>

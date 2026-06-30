@@ -10,6 +10,10 @@
 	max-width: 860px;
 }
 
+.wpnt-settings-form {
+	margin: 0;
+}
+
 /* Section cards: white box, subtle border, even padding + spacing. */
 .wpnt-settings .wpnt-card {
 	background: #fff;
