@@ -667,9 +667,17 @@ class Wpnt_Rest {
 	 * results:[{ id, type, status }] }` with status from {@see Wpnt_Queue::enqueue_detection()}.
 	 *
 	 * @param WP_REST_Request $request Request.
-	 * @return WP_REST_Response
+	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_enqueue_detection( WP_REST_Request $request ) {
+		if ( empty( $this->languages->enabled() ) ) {
+			return new WP_Error(
+				'wpnt_no_detection_languages',
+				__( 'Configure at least one enabled language before detecting languages.', 'native-translations' ),
+				array( 'status' => 400 )
+			);
+		}
+
 		$items   = (array) $request->get_param( 'items' );
 		$queued  = 0;
 		$skipped = 0;

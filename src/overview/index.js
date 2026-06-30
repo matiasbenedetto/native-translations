@@ -189,6 +189,7 @@ function Overview() {
 	const showQueueRef = useRef( false );
 
 	const languages = cfg.languages || [];
+	const hasLanguages = languages.length > 0;
 	const isOriginals = activeView === 'originals';
 	const isUnmarked = activeView === 'unmarked';
 	const isLang = ! isOriginals && ! isUnmarked;
@@ -727,20 +728,23 @@ function Overview() {
 				} ),
 		} );
 
-		// AI "Detect language (AI)" for unmarked items (#56).
-		list.push( {
-			id: 'detect-language',
-			label: __( 'Detect language (AI)', 'native-translations' ),
-			supportsBulk: true,
-			disabled: ! aiOk,
-			isEligible: ( item ) => ! item.language && aiOk,
-			callback: ( items, { onActionPerformed } ) =>
-				runDetect( items ).then( () => {
-					if ( onActionPerformed ) {
-						onActionPerformed( items );
-					}
-				} ),
-		} );
+		// AI "Detect language (AI)" for unmarked items (#56). Detection needs at
+		// least one configured target language; with none, omit the action entirely.
+		if ( hasLanguages ) {
+			list.push( {
+				id: 'detect-language',
+				label: __( 'Detect language (AI)', 'native-translations' ),
+				supportsBulk: true,
+				disabled: ! aiOk,
+				isEligible: ( item ) => ! item.language && aiOk,
+				callback: ( items, { onActionPerformed } ) =>
+					runDetect( items ).then( () => {
+						if ( onActionPerformed ) {
+							onActionPerformed( items );
+						}
+					} ),
+			} );
+		}
 
 		// Per-language Translate actions (foundation for #55/#56 bulk translate).
 		languages.forEach( ( lang ) => {
@@ -873,7 +877,7 @@ function Overview() {
 		} );
 
 		return list;
-	}, [ languages, aiOk, isLang, runBulk, runSetLanguage, runChangeLanguage, runClearLanguage, runDetect, fetchData ] );
+	}, [ languages, hasLanguages, aiOk, isLang, runBulk, runSetLanguage, runChangeLanguage, runClearLanguage, runDetect, fetchData ] );
 
 	const originalsCount = counts.originals || 0;
 	const unmarkedCount = counts.unmarked || 0;
@@ -912,6 +916,19 @@ function Overview() {
 						</>
 					) : (
 						__( 'AI translation is unavailable, so Translate actions are disabled.', 'native-translations' )
+					) }
+				</Notice>
+			) }
+
+			{ ! hasLanguages && (
+				<Notice status="warning" isDismissible={ false }>
+					{ cfg.settingsUrl ? (
+						<>
+							{ __( 'Configure at least one language before detecting content languages.', 'native-translations' ) }{ ' ' }
+							<a href={ cfg.settingsUrl }>{ __( 'Open language settings.', 'native-translations' ) }</a>
+						</>
+					) : (
+						__( 'Configure at least one language before detecting content languages.', 'native-translations' )
 					) }
 				</Notice>
 			) }

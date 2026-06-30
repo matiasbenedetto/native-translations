@@ -397,6 +397,26 @@ final class RestTest extends TestCase {
 		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
 	}
 
+	public function test_enqueue_detection_rejects_when_no_enabled_languages(): void {
+		Wpnt_Test_State::$options['wpnt_settings'] = array(
+			'languages' => array(
+				array( 'code' => 'en', 'name' => 'English', 'enabled' => false ),
+			),
+		);
+		Wpnt_Languages::flush_index();
+		Wpnt_Test_State::$posts[5] = array( 'ID' => 5, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:5'] = true;
+
+		$result = $this->rest->handle_enqueue_detection(
+			$this->request( array( 'items' => array( array( 'id' => 5, 'type' => 'post' ) ) ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_no_detection_languages', $result->get_error_code() );
+		$this->assertSame( 400, $result->get_error_data()['status'] );
+		$this->assertSame( array(), Wpnt_Test_State::$as_enqueued );
+	}
+
 	public function test_queue_status_handler_returns_counts(): void {
 		Wpnt_Test_State::$as_counts = array(
 			ActionScheduler_Store::STATUS_PENDING => 3,
