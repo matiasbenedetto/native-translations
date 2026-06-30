@@ -1,7 +1,7 @@
 /**
  * Unit tests for the Translations panel's pure helpers.
  */
-import { buildLanguageOptions, hasSiblings } from './language-options';
+import { buildLanguageOptions, hasSiblings, visibleTranslationLanguages } from './language-options';
 
 const LANGS = [
 	{ code: 'en', name: 'English', native: 'English' },
@@ -40,5 +40,20 @@ describe( 'hasSiblings', () => {
 	it( 'is false for an empty or missing map', () => {
 		expect( hasSiblings( {} ) ).toBe( false );
 		expect( hasSiblings( undefined ) ).toBe( false );
+	} );
+} );
+
+describe( 'visibleTranslationLanguages', () => {
+	it( 'shows all non-current language rows for originals', () => {
+		expect( visibleTranslationLanguages( LANGS, 'en', {}, true ).map( ( l ) => l.code ) ).toEqual( [ 'es', 'xx' ] );
+	} );
+
+	it( 'shows only existing linked translations for non-originals', () => {
+		const translations = { es: { id: 12 } };
+		expect( visibleTranslationLanguages( LANGS, 'en', translations, false ).map( ( l ) => l.code ) ).toEqual( [ 'es' ] );
+	} );
+
+	it( 'shows no missing-language rows for non-originals without siblings', () => {
+		expect( visibleTranslationLanguages( LANGS, 'en', {}, false ) ).toEqual( [] );
 	} );
 } );

@@ -237,6 +237,9 @@
 				return;
 			}
 			var existing = translations[ l.code ];
+			if ( ! existing && ! isOriginal ) {
+				return;
+			}
 			var working = self.busy === l.code || self.busy === 'unlink-' + l.code || self.busy === 'del-' + l.code;
 			var row = el( 'p', {}, [ el( 'strong', { text: l.name + ' ' } ) ] );
 
