@@ -16,7 +16,7 @@ import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice } from 
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
-import { buildLanguageOptions, hasSiblings } from './language-options';
+import { buildLanguageOptions, hasSiblings, visibleTranslationLanguages } from './language-options';
 
 // Post meta keys (kept in sync with Wpnt_Editor): the original flag (the store's
 // own meta) and the staging field the language picker writes into (#106).
@@ -180,6 +180,12 @@ const TranslationsPanel = () => {
 		currentLang,
 		__( '— Not set —', 'native-translations' )
 	);
+	const translationLanguages = visibleTranslationLanguages(
+		cfg.languages,
+		currentLang,
+		translations,
+		isOriginal
+	);
 
 	const isConfirming = ( action, code ) => confirm && confirm.action === action && confirm.code === code;
 
@@ -262,8 +268,7 @@ const TranslationsPanel = () => {
 						{ __( 'Only originals can be translated. Turn on “Mark as original” above to create translations from this content.', 'native-translations' ) }
 					</Notice>
 				) }
-				{ cfg.languages
-					.filter( ( l ) => l.code !== currentLang )
+				{ translationLanguages
 					.map( ( l ) => {
 						const existing = translations[ l.code ];
 						const working = busy === l.code || busy === 'unlink-' + l.code || busy === 'del-' + l.code;

@@ -30,3 +30,24 @@ export function buildLanguageOptions( languages, currentLang, notSetLabel ) {
 export function hasSiblings( translations ) {
 	return Object.keys( translations || {} ).length > 0;
 }
+
+/**
+ * Languages whose rows should be rendered in the Translations panel.
+ *
+ * Non-original content may still show existing linked translations for management,
+ * but it should not render missing-language creation actions.
+ *
+ * @param {Array<{code:string}>} languages     Configured languages.
+ * @param {string}                currentLang   Current language code.
+ * @param {Object}                translations  Map of language code → translation info.
+ * @param {boolean}               isOriginal    Whether the saved object is original.
+ * @return {Array<{code:string}>} Languages to render.
+ */
+export function visibleTranslationLanguages( languages, currentLang, translations, isOriginal ) {
+	return ( languages || [] ).filter( ( language ) => {
+		if ( language.code === currentLang ) {
+			return false;
+		}
+		return isOriginal || !! ( translations || {} )[ language.code ];
+	} );
+}
