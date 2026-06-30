@@ -52,6 +52,10 @@
 		this.notice = '';
 		this.busy = '';
 		this.confirm = null;
+		this.linkOpen = false;
+		this.linkSearch = '';
+		this.linkCandidates = [];
+		this.linkLoading = false;
 		// Deferred language/original choices (#106): null = no pending change, so the
 		// saved value is shown until the user edits and clicks Update.
 		this.pendingLanguage = null;
@@ -96,6 +100,46 @@
 			} )
 			.catch( function ( e ) {
 				self.error = ( e && e.message ) || __( 'Request failed.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.busy = '';
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.searchLinkCandidates = function () {
+		var self = this;
+		self.linkLoading = true;
+		self.error = '';
+		self.render();
+		request(
+			'link-candidates?object_id=' + encodeURIComponent( cfg.termId ) +
+				'&type=term&search=' + encodeURIComponent( self.linkSearch )
+		)
+			.then( function ( res ) {
+				self.linkCandidates = res.candidates || [];
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Could not search originals.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.linkLoading = false;
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.recommendOriginal = function () {
+		var self = this;
+		self.busy = 'ai-link';
+		self.error = '';
+		self.notice = '';
+		self.render();
+		request( 'recommend-original', { object_id: cfg.termId, type: 'term' } )
+			.then( function ( res ) {
+				self.confirm = { action: 'link-existing', candidate: res.candidate, reason: res.reason, ai: true };
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Could not recommend an original.', 'native-translations' );
 			} )
 			.finally( function () {
 				self.busy = '';
@@ -208,6 +252,105 @@
 				el( 'p', { 'class': 'description', text: __( 'Unsaved changes — click Update to apply the language/original change.', 'native-translations' ) } )
 			);
 		}
+
+		var linkWrap = el( 'div', { 'class': 'wpnt-link-existing' } );
+		var manualBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Link existing translation', 'native-translations' ) } );
+		manualBtn.disabled = ! savedLang;
+		manualBtn.addEventListener( 'click', function () {
+			self.linkOpen = ! self.linkOpen;
+			if ( self.linkOpen && ! self.linkCandidates.length ) {
+				self.searchLinkCandidates();
+			} else {
+				self.render();
+			}
+		} );
+		var aiBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: self.busy === 'ai-link' ? __( 'Working…', 'native-translations' ) : __( 'Link to original with AI', 'native-translations' ) } );
+		aiBtn.disabled = ! savedLang || ! cfg.aiAvailable || self.busy === 'ai-link';
+		aiBtn.addEventListener( 'click', function () {
+			self.recommendOriginal();
+		} );
+		linkWrap.appendChild( manualBtn );
+		linkWrap.appendChild( document.createTextNode( ' ' ) );
+		linkWrap.appendChild( aiBtn );
+		if ( ! savedLang ) {
+			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Save a language for this term before linking an existing translation.', 'native-translations' ) } ) );
+		} else if ( ! cfg.aiAvailable ) {
+			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Configure an AI provider to get an original recommendation.', 'native-translations' ) } ) );
+		}
+
+		if ( self.confirm && 'link-existing' === self.confirm.action ) {
+			var c = self.confirm.candidate || {};
+			var confirmBox = el( 'div', { 'class': 'wpnt-link-confirm' } );
+			confirmBox.appendChild( el( 'p', { 'class': 'description', text: self.confirm.ai && self.confirm.reason
+				? sprintf( __( 'AI recommendation: %s', 'native-translations' ), self.confirm.reason )
+				: __( 'Link this term to the selected original?', 'native-translations' ) } ) );
+			confirmBox.appendChild( el( 'p', { text: ( c.label || '' ) + ( c.language_label ? ' — ' + c.language_label : '' ) } ) );
+			if ( hasSiblings ) {
+				confirmBox.appendChild( el( 'p', { 'class': 'description', text: __( 'This term is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) } ) );
+			}
+			var confirmBtn = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Confirm link', 'native-translations' ) } );
+			confirmBtn.disabled = self.busy === 'link-existing';
+			confirmBtn.addEventListener( 'click', function () {
+				self.act( 'link-existing', { object_id: cfg.termId, original_id: c.id, type: 'term' }, 'link-existing', { reload: true, successMsg: __( 'Existing translation linked.', 'native-translations' ) } );
+			} );
+			var cancelLink = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'native-translations' ) } );
+			cancelLink.addEventListener( 'click', function () { self.confirm = null; self.render(); } );
+			confirmBox.appendChild( confirmBtn );
+			confirmBox.appendChild( cancelLink );
+			linkWrap.appendChild( confirmBox );
+		}
+
+		if ( self.linkOpen ) {
+			var searchBox = el( 'div', { 'class': 'wpnt-link-search' } );
+			var searchLabel = el( 'label', { text: __( 'Search originals', 'native-translations' ) + ' ' } );
+			var searchInput = document.createElement( 'input' );
+			searchInput.type = 'search';
+			searchInput.value = self.linkSearch;
+			searchInput.addEventListener( 'input', function () {
+				self.linkSearch = searchInput.value;
+			} );
+			searchLabel.appendChild( searchInput );
+			var searchBtn = el( 'button', { 'type': 'button', 'class': 'button', text: self.linkLoading ? __( 'Searching…', 'native-translations' ) : __( 'Search', 'native-translations' ) } );
+			searchBtn.disabled = self.linkLoading;
+			searchBtn.addEventListener( 'click', function () {
+				self.linkSearch = searchInput.value;
+				self.searchLinkCandidates();
+			} );
+			searchBox.appendChild( searchLabel );
+			searchBox.appendChild( document.createTextNode( ' ' ) );
+			searchBox.appendChild( searchBtn );
+			if ( self.linkLoading ) {
+				searchBox.appendChild( el( 'p', { 'class': 'description', text: __( 'Searching originals…', 'native-translations' ) } ) );
+			} else if ( ! self.linkCandidates.length ) {
+				searchBox.appendChild( el( 'p', { 'class': 'description', text: __( 'No compatible originals found.', 'native-translations' ) } ) );
+			} else {
+				self.linkCandidates.forEach( function ( candidate ) {
+					var canLink = !! candidate.language && !! candidate.is_original;
+					var row = el( 'p', { 'class': 'wpnt-link-candidate' } );
+					row.appendChild( el( 'strong', { text: candidate.label || '' } ) );
+					row.appendChild( document.createTextNode( ' — ' ) );
+					row.appendChild( el( 'span', { 'class': 'description', text: [
+						candidate.kind,
+						candidate.language_label || __( 'No language', 'native-translations' ),
+						candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
+						candidate.group_languages && candidate.group_languages.length
+							? sprintf( __( 'Group: %s', 'native-translations' ), candidate.group_languages.join( ', ' ) )
+							: __( 'No group yet', 'native-translations' ),
+					].join( ' · ' ) } ) );
+					row.appendChild( document.createTextNode( ' ' ) );
+					var linkBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Link', 'native-translations' ) } );
+					linkBtn.disabled = ! canLink;
+					linkBtn.addEventListener( 'click', function () {
+						self.confirm = { action: 'link-existing', candidate: candidate };
+						self.render();
+					} );
+					row.appendChild( linkBtn );
+					searchBox.appendChild( row );
+				} );
+			}
+			linkWrap.appendChild( searchBox );
+		}
+		mount.appendChild( linkWrap );
 
 		// With no language yet, show a single prompt instead of one disabled Translate
 		// row (with duplicated help) per language.

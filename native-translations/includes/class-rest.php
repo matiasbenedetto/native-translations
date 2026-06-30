@@ -281,6 +281,54 @@ class Wpnt_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/link-candidates',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_link_candidates' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+					'search'    => array(
+						'type'              => 'string',
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/link-existing',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_link_existing' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id'   => $id_arg,
+					'original_id' => $id_arg,
+					'type'        => $type_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/recommend-original',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_recommend_original' ),
+				'permission_callback' => array( $this, 'permission_edit_target' ),
+				'args'                => array(
+					'object_id' => $id_arg,
+					'type'      => $type_arg,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/set-language',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -846,6 +894,107 @@ class Wpnt_Rest {
 	}
 
 	/**
+	 * `GET /link-candidates` — finds compatible existing originals an item can be
+	 * linked to manually.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_link_candidates( WP_REST_Request $request ) {
+		$type      = (string) $request->get_param( 'type' );
+		$object_id = (int) $request->get_param( 'object_id' );
+		$search    = (string) $request->get_param( 'search' );
+
+		$candidates = $this->link_candidates( $type, $object_id, $search, 12 );
+		if ( is_wp_error( $candidates ) ) {
+			return $candidates;
+		}
+
+		return rest_ensure_response( array( 'candidates' => $candidates ) );
+	}
+
+	/**
+	 * `POST /link-existing` — links the current item into an existing original's
+	 * translation group after explicit admin confirmation.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_link_existing( WP_REST_Request $request ) {
+		$type        = (string) $request->get_param( 'type' );
+		$object_id   = (int) $request->get_param( 'object_id' );
+		$original_id = (int) $request->get_param( 'original_id' );
+
+		$valid = $this->validate_link_target( $type, $object_id, $original_id );
+		if ( is_wp_error( $valid ) ) {
+			return $valid;
+		}
+
+		$result = $this->store->link_translation( $type, $original_id, $object_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return rest_ensure_response( $this->payload( $type, $object_id ) );
+	}
+
+	/**
+	 * `POST /recommend-original` — asks AI to pick the most likely compatible
+	 * original from the same post type/taxonomy. The result is only a recommendation;
+	 * the admin must still confirm with `/link-existing`.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_recommend_original( WP_REST_Request $request ) {
+		$type      = (string) $request->get_param( 'type' );
+		$object_id = (int) $request->get_param( 'object_id' );
+
+		$candidates = $this->link_candidates( $type, $object_id, '', 20 );
+		if ( is_wp_error( $candidates ) ) {
+			return $candidates;
+		}
+		$candidates = array_values(
+			array_filter(
+				$candidates,
+				static function ( $candidate ) {
+					return ! empty( $candidate['is_original'] ) && ! empty( $candidate['language'] );
+				}
+			)
+		);
+		if ( empty( $candidates ) ) {
+			return new WP_Error(
+				'wpnt_no_link_candidates',
+				__( 'No compatible originals with a language were found.', 'native-translations' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		$recommendation = $this->translator->recommend_original( $type, $object_id, $candidates );
+		if ( is_wp_error( $recommendation ) ) {
+			return $recommendation;
+		}
+
+		$recommended_id = (int) ( $recommendation['id'] ?? 0 );
+		foreach ( $candidates as $candidate ) {
+			if ( (int) $candidate['id'] === $recommended_id ) {
+				return rest_ensure_response(
+					array(
+						'candidate' => $candidate,
+						'reason'    => (string) ( $recommendation['reason'] ?? '' ),
+					)
+				);
+			}
+		}
+
+		return new WP_Error(
+			'wpnt_ai_link_failed',
+			__( 'The AI did not return a compatible original.', 'native-translations' ),
+			array( 'status' => 422 )
+		);
+	}
+
+	/**
 	 * `POST /set-language` — assigns the object's own language.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1049,6 +1198,260 @@ class Wpnt_Rest {
 	/* ---------------------------------------------------------------------
 	 * Helpers
 	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Returns compatible link candidates for an object, sorted with likely originals
+	 * first.
+	 *
+	 * @param string $type      'post' | 'term'.
+	 * @param int    $object_id Current object id.
+	 * @param string $search    Search text.
+	 * @param int    $limit     Max candidates.
+	 * @return array<int,array<string,mixed>>|WP_Error
+	 */
+	private function link_candidates( string $type, int $object_id, string $search, int $limit = 12 ) {
+		$ids = 'term' === $type
+			? $this->term_link_candidate_ids( $object_id, $search, $limit )
+			: $this->post_link_candidate_ids( $object_id, $search, $limit );
+
+		if ( is_wp_error( $ids ) ) {
+			return $ids;
+		}
+
+		$candidates = array();
+		foreach ( $ids as $id ) {
+			$id = (int) $id;
+			if ( $id <= 0 || $id === $object_id ) {
+				continue;
+			}
+			if ( is_wp_error( $this->can_edit_target( $type, $id ) ) ) {
+				continue;
+			}
+			$candidate = $this->describe_link_candidate( $type, $id );
+			if ( $candidate ) {
+				$candidates[] = $candidate;
+			}
+		}
+
+		usort(
+			$candidates,
+			static function ( $a, $b ) {
+				$score_a = ( empty( $a['is_original'] ) ? 2 : 0 ) + ( empty( $a['language'] ) ? 1 : 0 );
+				$score_b = ( empty( $b['is_original'] ) ? 2 : 0 ) + ( empty( $b['language'] ) ? 1 : 0 );
+				if ( $score_a !== $score_b ) {
+					return $score_a <=> $score_b;
+				}
+				return strcasecmp( (string) $a['label'], (string) $b['label'] );
+			}
+		);
+
+		return $candidates;
+	}
+
+	/**
+	 * Candidate ids for post/page linking.
+	 *
+	 * @param int    $object_id Current post id.
+	 * @param string $search    Search text.
+	 * @param int    $limit     Max candidates.
+	 * @return int[]|WP_Error
+	 */
+	private function post_link_candidate_ids( int $object_id, string $search, int $limit ) {
+		$post = get_post( $object_id );
+		if ( ! $post instanceof WP_Post ) {
+			return $this->not_found();
+		}
+
+		$ids = get_posts(
+			array(
+				'post_type'        => $post->post_type,
+				'post_status'      => 'any',
+				'posts_per_page'   => $limit,
+				's'                => $search,
+				'exclude'          => array( $object_id ),
+				'orderby'          => 'title',
+				'order'            => 'ASC',
+				'fields'           => 'ids',
+				'suppress_filters' => false,
+			)
+		);
+
+		return array_map( 'intval', (array) $ids );
+	}
+
+	/**
+	 * Candidate ids for category/tag linking.
+	 *
+	 * @param int    $object_id Current term id.
+	 * @param string $search    Search text.
+	 * @param int    $limit     Max candidates.
+	 * @return int[]|WP_Error
+	 */
+	private function term_link_candidate_ids( int $object_id, string $search, int $limit ) {
+		$term = get_term( $object_id );
+		if ( ! $term instanceof WP_Term ) {
+			return $this->not_found();
+		}
+
+		$ids = get_terms(
+			array(
+				'taxonomy'   => $term->taxonomy,
+				'hide_empty' => false,
+				'number'     => $limit,
+				'search'     => $search,
+				'exclude'    => array( $object_id ),
+				'fields'     => 'ids',
+			)
+		);
+		if ( is_wp_error( $ids ) ) {
+			return $ids;
+		}
+
+		return array_map( 'intval', (array) $ids );
+	}
+
+	/**
+	 * Describes a candidate for the editor clients.
+	 *
+	 * @param string $type 'post' | 'term'.
+	 * @param int    $id   Candidate id.
+	 * @return array<string,mixed>|null
+	 */
+	private function describe_link_candidate( string $type, int $id ): ?array {
+		if ( 'term' === $type ) {
+			$term = get_term( $id );
+			if ( ! $term instanceof WP_Term ) {
+				return null;
+			}
+			$kind = 'category' === $term->taxonomy
+				? __( 'Category', 'native-translations' )
+				: __( 'Tag', 'native-translations' );
+			$label = $term->name;
+		} else {
+			$post = get_post( $id );
+			if ( ! $post instanceof WP_Post ) {
+				return null;
+			}
+			$kind  = 'page' === $post->post_type ? __( 'Page', 'native-translations' ) : __( 'Post', 'native-translations' );
+			$label = get_the_title( $post );
+		}
+
+		$language        = $this->store->get_language( $type, $id );
+		$group_languages = array_keys( $this->store->get_translations( $type, $id, array( 'include_self' => true ) ) );
+
+		return array(
+			'id'              => $id,
+			'label'           => $label,
+			'kind'            => $kind,
+			'language'        => $language,
+			'language_label'  => '' !== $language ? $this->languages->name( $language ) : '',
+			'is_original'     => $this->store->is_original( $type, $id ),
+			'group_languages' => $group_languages,
+		);
+	}
+
+	/**
+	 * Validates a requested link before the current item is moved into the original's
+	 * group.
+	 *
+	 * @param string $type        'post' | 'term'.
+	 * @param int    $object_id   Current object id.
+	 * @param int    $original_id Selected original id.
+	 * @return true|WP_Error
+	 */
+	private function validate_link_target( string $type, int $object_id, int $original_id ) {
+		if ( $object_id === $original_id ) {
+			return new WP_Error(
+				'wpnt_self_link',
+				__( 'Choose a different item to link as the original.', 'native-translations' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$can_edit_original = $this->can_edit_target( $type, $original_id );
+		if ( is_wp_error( $can_edit_original ) ) {
+			return $can_edit_original;
+		}
+
+		$compatible = $this->validate_link_compatibility( $type, $object_id, $original_id );
+		if ( is_wp_error( $compatible ) ) {
+			return $compatible;
+		}
+
+		$current_language  = $this->store->get_language( $type, $object_id );
+		$original_language = $this->store->get_language( $type, $original_id );
+		if ( '' === $current_language ) {
+			return new WP_Error(
+				'wpnt_current_language_required',
+				__( 'Set a language for this item before linking it to an original.', 'native-translations' ),
+				array( 'status' => 409 )
+			);
+		}
+		if ( '' === $original_language ) {
+			return new WP_Error(
+				'wpnt_original_language_required',
+				__( 'The selected original must have a language assigned.', 'native-translations' ),
+				array( 'status' => 409 )
+			);
+		}
+		if ( $current_language === $original_language ) {
+			return new WP_Error(
+				'wpnt_same_language',
+				__( 'A translation group cannot contain two items in the same language.', 'native-translations' ),
+				array( 'status' => 409 )
+			);
+		}
+		if ( ! $this->store->is_original( $type, $original_id ) ) {
+			return new WP_Error(
+				'wpnt_original_required',
+				__( 'The selected item must be marked as original before translations can be linked to it.', 'native-translations' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validates post type / taxonomy compatibility for link targets.
+	 *
+	 * @param string $type        'post' | 'term'.
+	 * @param int    $object_id   Current object id.
+	 * @param int    $original_id Selected original id.
+	 * @return true|WP_Error
+	 */
+	private function validate_link_compatibility( string $type, int $object_id, int $original_id ) {
+		if ( 'term' === $type ) {
+			$current  = get_term( $object_id );
+			$original = get_term( $original_id );
+			if ( ! $current instanceof WP_Term || ! $original instanceof WP_Term ) {
+				return $this->not_found();
+			}
+			if ( $current->taxonomy !== $original->taxonomy ) {
+				return new WP_Error(
+					'wpnt_incompatible_link',
+					__( 'Only terms in the same taxonomy can be linked as translations.', 'native-translations' ),
+					array( 'status' => 400 )
+				);
+			}
+			return true;
+		}
+
+		$current  = get_post( $object_id );
+		$original = get_post( $original_id );
+		if ( ! $current instanceof WP_Post || ! $original instanceof WP_Post ) {
+			return $this->not_found();
+		}
+		if ( $current->post_type !== $original->post_type ) {
+			return new WP_Error(
+				'wpnt_incompatible_link',
+				__( 'Only posts of the same type can be linked as translations.', 'native-translations' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		return true;
+	}
 
 	/**
 	 * Validates a language code against the configured, enabled languages.

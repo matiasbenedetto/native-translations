@@ -231,6 +231,141 @@ final class RestTest extends TestCase {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * /link-existing (#116) — manually link existing content into a group
+	 * ------------------------------------------------------------------ */
+
+	public function test_link_existing_post_to_original_group(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post', 'post_title' => 'English original' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post', 'post_title' => 'Spanish translation' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		Wpnt_Test_State::$caps['edit_post:11'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+		$store->set_language( 'post', 11, 'es' );
+
+		$response = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 11, $data['object_id'] );
+		$this->assertSame( 10, $data['translations']['en']['id'] );
+		$this->assertSame( $store->get_group( 'post', 10 ), $store->get_group( 'post', 11 ) );
+	}
+
+	public function test_link_candidates_skip_uneditable_targets(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post', 'post_title' => 'Spanish translation' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post', 'post_title' => 'Hidden original' );
+		Wpnt_Test_State::$posts[12] = array( 'ID' => 12, 'post_type' => 'post', 'post_title' => 'Visible original' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		Wpnt_Test_State::$caps['edit_post:11'] = false;
+		Wpnt_Test_State::$caps['edit_post:12'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'es' );
+		$store->set_language( 'post', 11, 'en' );
+		$store->set_original( 'post', 11, true );
+		$store->set_language( 'post', 12, 'en' );
+		$store->set_original( 'post', 12, true );
+
+		$response = $this->rest->handle_link_candidates(
+			$this->request( array( 'type' => 'post', 'object_id' => 10 ) )
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( array( 12 ), array_column( $data['candidates'], 'id' ) );
+	}
+
+	public function test_link_existing_term_to_original_group(): void {
+		Wpnt_Test_State::$terms[20] = array( 'term_id' => 20, 'taxonomy' => 'category', 'name' => 'English category' );
+		Wpnt_Test_State::$terms[21] = array( 'term_id' => 21, 'taxonomy' => 'category', 'name' => 'Spanish category' );
+		Wpnt_Test_State::$caps['edit_term:20'] = true;
+		Wpnt_Test_State::$caps['edit_term:21'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'term', 20, 'en' );
+		$store->set_original( 'term', 20, true );
+		$store->set_language( 'term', 21, 'es' );
+
+		$response = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'term', 'object_id' => 21, 'original_id' => 20 ) )
+		);
+
+		$data = $response->get_data();
+		$this->assertSame( 20, $data['translations']['en']['id'] );
+		$this->assertSame( $store->get_group( 'term', 20 ), $store->get_group( 'term', 21 ) );
+	}
+
+	public function test_link_existing_rejects_target_that_is_not_original(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_language( 'post', 11, 'es' );
+
+		$result = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_original_required', $result->get_error_code() );
+	}
+
+	public function test_link_existing_rejects_current_item_without_language(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+
+		$result = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_current_language_required', $result->get_error_code() );
+	}
+
+	public function test_link_existing_rejects_incompatible_post_types(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'page' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+		$store->set_language( 'post', 11, 'es' );
+
+		$result = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_incompatible_link', $result->get_error_code() );
+	}
+
+	public function test_link_existing_rejects_duplicate_language_in_group(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[12] = array( 'ID' => 12, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+		$store->set_language( 'post', 12, 'es' );
+		$store->link_translation( 'post', 10, 12 );
+		$store->set_language( 'post', 11, 'es' );
+
+		$result = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_language_exists', $result->get_error_code() );
+		$this->assertSame( 409, $result->get_error_data()['status'] );
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * /enqueue (#55) — per-item permission skipping, target validation, shape
 	 * ------------------------------------------------------------------ */
 

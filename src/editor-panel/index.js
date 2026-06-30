@@ -12,7 +12,7 @@ import { PluginDocumentSettingPanel } from '@wordpress/editor';
 import { useSelect } from '@wordpress/data';
 import { useEntityProp } from '@wordpress/core-data';
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
-import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice } from '@wordpress/components';
+import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice, TextControl } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
@@ -67,6 +67,10 @@ const TranslationsPanel = () => {
 	const [ notice, setNotice ] = useState( '' );
 	// Pending confirmation: { action: 'recreate'|'delete', id, code }.
 	const [ confirm, setConfirm ] = useState( null );
+	const [ linkOpen, setLinkOpen ] = useState( false );
+	const [ linkSearch, setLinkSearch ] = useState( '' );
+	const [ linkCandidates, setLinkCandidates ] = useState( [] );
+	const [ linkLoading, setLinkLoading ] = useState( false );
 
 	const load = useCallback( () => {
 		if ( ! postId ) {
@@ -156,6 +160,41 @@ const TranslationsPanel = () => {
 			successMsg: sprintf( __( '%s translation moved to Trash.', 'native-translations' ), name ),
 		} );
 
+	const searchLinkCandidates = () => {
+		setLinkLoading( true );
+		setError( '' );
+		apiFetch( {
+			path: addQueryArgs( `/${ cfg.namespace }/link-candidates`, {
+				object_id: postId,
+				type: 'post',
+				search: linkSearch,
+			} ),
+		} )
+			.then( ( res ) => setLinkCandidates( res.candidates || [] ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not search originals.', 'native-translations' ) ) )
+			.finally( () => setLinkLoading( false ) );
+	};
+
+	const recommendOriginal = () => {
+		setBusy( 'ai-link' );
+		setError( '' );
+		setNotice( '' );
+		apiFetch( {
+			path: `/${ cfg.namespace }/recommend-original`,
+			method: 'POST',
+			data: { object_id: postId, type: 'post' },
+		} )
+			.then( ( res ) => setConfirm( { action: 'link-existing', candidate: res.candidate, reason: res.reason, ai: true } ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not recommend an original.', 'native-translations' ) ) )
+			.finally( () => setBusy( '' ) );
+	};
+
+	const linkExisting = ( candidate ) =>
+		request( 'link-existing', { object_id: postId, original_id: candidate.id, type: 'post' }, 'link-existing', {
+			reload: true,
+			successMsg: __( 'Existing translation linked.', 'native-translations' ),
+		} );
+
 	// Only post/page screens enqueue this script, but guard defensively.
 	if ( ! postId || ( postType !== 'post' && postType !== 'page' ) ) {
 		return null;
@@ -188,6 +227,8 @@ const TranslationsPanel = () => {
 	);
 
 	const isConfirming = ( action, code ) => confirm && confirm.action === action && confirm.code === code;
+	const linkConfirm = confirm && confirm.action === 'link-existing' ? confirm : null;
+	const linkActionsDisabled = ! savedLang || isNew;
 
 	return (
 		<PluginDocumentSettingPanel name="wpnt-translations" title={ __( 'Translations', 'native-translations' ) } icon="translation">
@@ -254,6 +295,129 @@ const TranslationsPanel = () => {
 					) }
 				</div>
 			</PanelRow>
+
+			{ data && (
+				<PanelRow>
+					<div style={ { width: '100%' } }>
+						<div style={ { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } }>
+							<Button
+								variant="secondary"
+								isSmall
+								disabled={ linkActionsDisabled }
+								onClick={ () => {
+									const next = ! linkOpen;
+									setLinkOpen( next );
+									if ( next && ! linkCandidates.length ) {
+										searchLinkCandidates();
+									}
+								} }
+							>
+								{ __( 'Link existing translation', 'native-translations' ) }
+							</Button>
+							<Button
+								variant="secondary"
+								isSmall
+								isBusy={ busy === 'ai-link' }
+								disabled={ linkActionsDisabled || ! cfg.aiAvailable || busy === 'ai-link' }
+								onClick={ recommendOriginal }
+							>
+								{ __( 'Link to original with AI', 'native-translations' ) }
+							</Button>
+						</div>
+						{ ! savedLang && (
+							<p className="description" style={ { margin: '4px 0 0' } }>
+								{ __( 'Save a language for this content before linking an existing translation.', 'native-translations' ) }
+							</p>
+						) }
+						{ savedLang && ! cfg.aiAvailable && (
+							<p className="description" style={ { margin: '4px 0 0' } }>
+								{ __( 'Configure an AI provider to get an original recommendation.', 'native-translations' ) }
+							</p>
+						) }
+
+						{ linkConfirm && (
+							<div style={ { marginTop: '10px' } }>
+								<p className="description" style={ { margin: '0 0 6px' } }>
+									{ linkConfirm.ai && linkConfirm.reason
+										? sprintf(
+											/* translators: %s: AI recommendation reason. */
+											__( 'AI recommendation: %s', 'native-translations' ),
+											linkConfirm.reason
+										)
+										: __( 'Link this item to the selected original?', 'native-translations' ) }
+								</p>
+								<p style={ { margin: '0 0 6px' } }>
+									<strong>{ linkConfirm.candidate.label }</strong>{ ' ' }
+									<span className="description">
+										{ linkConfirm.candidate.language_label || linkConfirm.candidate.language }
+									</span>
+								</p>
+								{ siblingsExist && (
+									<p className="description" style={ { margin: '0 0 6px' } }>
+										{ __( 'This content is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) }
+									</p>
+								) }
+								<Button variant="primary" isSmall isBusy={ busy === 'link-existing' } onClick={ () => linkExisting( linkConfirm.candidate ) }>
+									{ __( 'Confirm link', 'native-translations' ) }
+								</Button>{ ' ' }
+								<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
+									{ __( 'Cancel', 'native-translations' ) }
+								</Button>
+							</div>
+						) }
+
+						{ linkOpen && (
+							<div style={ { marginTop: '10px' } }>
+								<TextControl
+									label={ __( 'Search originals', 'native-translations' ) }
+									value={ linkSearch }
+									onChange={ setLinkSearch }
+									__nextHasNoMarginBottom
+								/>
+								<Button variant="secondary" isSmall isBusy={ linkLoading } onClick={ searchLinkCandidates } style={ { marginTop: '6px' } }>
+									{ __( 'Search', 'native-translations' ) }
+								</Button>
+								<div style={ { marginTop: '8px' } }>
+									{ linkLoading && <Spinner /> }
+									{ ! linkLoading && linkCandidates.length === 0 && (
+										<p className="description">{ __( 'No compatible originals found.', 'native-translations' ) }</p>
+									) }
+									{ ! linkLoading && linkCandidates.map( ( candidate ) => {
+										const canLink = !! candidate.language && !! candidate.is_original;
+										return (
+											<div key={ candidate.id } style={ { borderTop: '1px solid #dcdcde', paddingTop: '8px', marginTop: '8px' } }>
+												<strong>{ candidate.label }</strong>
+												<p className="description" style={ { margin: '2px 0 6px' } }>
+													{ [
+														candidate.kind,
+														candidate.language_label || __( 'No language', 'native-translations' ),
+														candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
+														candidate.group_languages?.length
+															? sprintf(
+																/* translators: %s: comma-separated language codes. */
+																__( 'Group: %s', 'native-translations' ),
+																candidate.group_languages.join( ', ' )
+															)
+															: __( 'No group yet', 'native-translations' ),
+													].join( ' · ' ) }
+												</p>
+												<Button
+													variant="secondary"
+													isSmall
+													disabled={ ! canLink }
+													onClick={ () => setConfirm( { action: 'link-existing', candidate } ) }
+												>
+													{ __( 'Link', 'native-translations' ) }
+												</Button>
+											</div>
+										);
+									} ) }
+								</div>
+							</div>
+						) }
+					</div>
+				</PanelRow>
+			) }
 
 			{ loading && ! data ? (
 				<PanelRow><Spinner /></PanelRow>
