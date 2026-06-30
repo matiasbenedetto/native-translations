@@ -24,6 +24,10 @@
 				node.textContent = props[ key ];
 			} else if ( 'onClick' === key ) {
 				node.addEventListener( 'click', props[ key ] );
+			} else if ( 'style' === key && 'object' === typeof props[ key ] ) {
+				Object.keys( props[ key ] ).forEach( function ( styleKey ) {
+					node.style[ styleKey ] = props[ key ][ styleKey ];
+				} );
 			} else {
 				node.setAttribute( key, props[ key ] );
 			}
@@ -43,6 +47,17 @@
 			opts.data = body;
 		}
 		return apiFetch( opts );
+	}
+
+	function candidateMeta( candidate ) {
+		return [
+			candidate.kind,
+			candidate.language_label || __( 'No language', 'native-translations' ),
+			candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
+			candidate.group_languages && candidate.group_languages.length
+				? sprintf( __( 'Group: %s', 'native-translations' ), candidate.group_languages.join( ', ' ) )
+				: __( 'No group yet', 'native-translations' ),
+		].filter( Boolean ).join( ' · ' );
 	}
 
 	function TermPanel( mount ) {
@@ -111,6 +126,7 @@
 		var self = this;
 		self.linkLoading = true;
 		self.error = '';
+		self.confirm = null;
 		self.render();
 		request(
 			'link-candidates?object_id=' + encodeURIComponent( cfg.termId ) +
@@ -133,6 +149,7 @@
 		self.busy = 'ai-link';
 		self.error = '';
 		self.notice = '';
+		self.linkOpen = true;
 		self.render();
 		request( 'recommend-original', { object_id: cfg.termId, type: 'term' } )
 			.then( function ( res ) {
@@ -140,6 +157,31 @@
 			} )
 			.catch( function ( e ) {
 				self.error = ( e && e.message ) || __( 'Could not recommend an original.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.busy = '';
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.linkExisting = function ( candidate ) {
+		var self = this;
+		self.busy = 'link-existing';
+		self.error = '';
+		self.notice = '';
+		self.render();
+		request( 'link-existing', { object_id: cfg.termId, original_id: candidate.id, type: 'term' } )
+			.then( function ( res ) {
+				self.data = res;
+				self.pendingOriginal = false;
+				self.confirm = null;
+				self.linkOpen = false;
+				self.linkSearch = '';
+				self.linkCandidates = [];
+				self.notice = __( 'Existing translation linked.', 'native-translations' );
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Request failed.', 'native-translations' );
 			} )
 			.finally( function () {
 				self.busy = '';
@@ -253,61 +295,69 @@
 			);
 		}
 
-		var linkWrap = el( 'div', { 'class': 'wpnt-link-existing' } );
-		var manualBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Link existing translation', 'native-translations' ) } );
-		manualBtn.disabled = ! savedLang;
+		var linkActionsDisabled = ! savedLang || pendingChange;
+		var linkWrap = el( 'div', { 'class': 'wpnt-link-existing', style: { borderTop: '1px solid #dcdcde', paddingTop: '12px', marginTop: '12px' } } );
+		var linkHeader = el( 'div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } }, [
+			el( 'strong', { text: __( 'Link existing translation', 'native-translations' ) } ),
+		] );
+		var manualBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: self.linkOpen ? __( 'Close', 'native-translations' ) : __( 'Search originals', 'native-translations' ) } );
+		manualBtn.disabled = linkActionsDisabled;
 		manualBtn.addEventListener( 'click', function () {
 			self.linkOpen = ! self.linkOpen;
+			self.confirm = null;
 			if ( self.linkOpen && ! self.linkCandidates.length ) {
 				self.searchLinkCandidates();
 			} else {
 				self.render();
 			}
 		} );
-		var aiBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: self.busy === 'ai-link' ? __( 'Working…', 'native-translations' ) : __( 'Link to original with AI', 'native-translations' ) } );
-		aiBtn.disabled = ! savedLang || ! cfg.aiAvailable || self.busy === 'ai-link';
-		aiBtn.addEventListener( 'click', function () {
-			self.recommendOriginal();
-		} );
-		linkWrap.appendChild( manualBtn );
-		linkWrap.appendChild( document.createTextNode( ' ' ) );
-		linkWrap.appendChild( aiBtn );
+		linkHeader.appendChild( manualBtn );
+		linkWrap.appendChild( linkHeader );
 		if ( ! savedLang ) {
 			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Save a language for this term before linking an existing translation.', 'native-translations' ) } ) );
-		} else if ( ! cfg.aiAvailable ) {
-			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Configure an AI provider to get an original recommendation.', 'native-translations' ) } ) );
+		} else if ( pendingChange ) {
+			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Save pending language/original changes before linking.', 'native-translations' ) } ) );
 		}
 
-		if ( self.confirm && 'link-existing' === self.confirm.action ) {
+		if ( self.linkOpen && ! linkActionsDisabled && self.confirm && 'link-existing' === self.confirm.action ) {
 			var c = self.confirm.candidate || {};
-			var confirmBox = el( 'div', { 'class': 'wpnt-link-confirm' } );
-			confirmBox.appendChild( el( 'p', { 'class': 'description', text: self.confirm.ai && self.confirm.reason
-				? sprintf( __( 'AI recommendation: %s', 'native-translations' ), self.confirm.reason )
-				: __( 'Link this term to the selected original?', 'native-translations' ) } ) );
-			confirmBox.appendChild( el( 'p', { text: ( c.label || '' ) + ( c.language_label ? ' — ' + c.language_label : '' ) } ) );
+			var confirmBox = el( 'div', { 'class': 'wpnt-link-confirm', style: { borderLeft: '3px solid #2271b1', background: '#f6f7f7', padding: '8px 10px', marginTop: '10px' } } );
+			confirmBox.appendChild( el( 'p', { style: { margin: '0 0 4px' } }, [ el( 'strong', { text: c.label || '' } ) ] ) );
+			confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: candidateMeta( c ) } ) );
+			if ( self.confirm.ai && self.confirm.reason ) {
+				confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: sprintf( __( 'AI recommendation: %s', 'native-translations' ), self.confirm.reason ) } ) );
+			}
 			if ( hasSiblings ) {
-				confirmBox.appendChild( el( 'p', { 'class': 'description', text: __( 'This term is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) } ) );
+				confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: __( 'This term is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) } ) );
 			}
 			var confirmBtn = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Confirm link', 'native-translations' ) } );
 			confirmBtn.disabled = self.busy === 'link-existing';
 			confirmBtn.addEventListener( 'click', function () {
-				self.act( 'link-existing', { object_id: cfg.termId, original_id: c.id, type: 'term' }, 'link-existing', { reload: true, successMsg: __( 'Existing translation linked.', 'native-translations' ) } );
+				self.linkExisting( c );
 			} );
-			var cancelLink = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Cancel', 'native-translations' ) } );
+			var cancelLink = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Back', 'native-translations' ) } );
 			cancelLink.addEventListener( 'click', function () { self.confirm = null; self.render(); } );
 			confirmBox.appendChild( confirmBtn );
 			confirmBox.appendChild( cancelLink );
 			linkWrap.appendChild( confirmBox );
 		}
 
-		if ( self.linkOpen ) {
-			var searchBox = el( 'div', { 'class': 'wpnt-link-search' } );
-			var searchLabel = el( 'label', { text: __( 'Search originals', 'native-translations' ) + ' ' } );
+		if ( self.linkOpen && ! linkActionsDisabled && ! ( self.confirm && 'link-existing' === self.confirm.action ) ) {
+			var searchBox = el( 'div', { 'class': 'wpnt-link-search', style: { marginTop: '10px' } } );
+			var searchRow = el( 'div', { style: { display: 'flex', alignItems: 'flex-end', gap: '8px', flexWrap: 'wrap' } } );
+			var searchLabel = el( 'label', { text: __( 'Original', 'native-translations' ) + ' ' } );
 			var searchInput = document.createElement( 'input' );
 			searchInput.type = 'search';
 			searchInput.value = self.linkSearch;
+			searchInput.style.maxWidth = '220px';
 			searchInput.addEventListener( 'input', function () {
 				self.linkSearch = searchInput.value;
+			} );
+			searchInput.addEventListener( 'keydown', function ( event ) {
+				if ( 'Enter' === event.key ) {
+					self.linkSearch = searchInput.value;
+					self.searchLinkCandidates();
+				}
 			} );
 			searchLabel.appendChild( searchInput );
 			var searchBtn = el( 'button', { 'type': 'button', 'class': 'button', text: self.linkLoading ? __( 'Searching…', 'native-translations' ) : __( 'Search', 'native-translations' ) } );
@@ -316,9 +366,17 @@
 				self.linkSearch = searchInput.value;
 				self.searchLinkCandidates();
 			} );
-			searchBox.appendChild( searchLabel );
-			searchBox.appendChild( document.createTextNode( ' ' ) );
-			searchBox.appendChild( searchBtn );
+			searchRow.appendChild( searchLabel );
+			searchRow.appendChild( searchBtn );
+			if ( cfg.aiAvailable ) {
+				var aiBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: self.busy === 'ai-link' ? __( 'Working…', 'native-translations' ) : __( 'Suggest with AI', 'native-translations' ) } );
+				aiBtn.disabled = self.busy === 'ai-link';
+				aiBtn.addEventListener( 'click', function () {
+					self.recommendOriginal();
+				} );
+				searchRow.appendChild( aiBtn );
+			}
+			searchBox.appendChild( searchRow );
 			if ( self.linkLoading ) {
 				searchBox.appendChild( el( 'p', { 'class': 'description', text: __( 'Searching originals…', 'native-translations' ) } ) );
 			} else if ( ! self.linkCandidates.length ) {
@@ -326,24 +384,18 @@
 			} else {
 				self.linkCandidates.forEach( function ( candidate ) {
 					var canLink = !! candidate.language && !! candidate.is_original;
-					var row = el( 'p', { 'class': 'wpnt-link-candidate' } );
-					row.appendChild( el( 'strong', { text: candidate.label || '' } ) );
-					row.appendChild( document.createTextNode( ' — ' ) );
-					row.appendChild( el( 'span', { 'class': 'description', text: [
-						candidate.kind,
-						candidate.language_label || __( 'No language', 'native-translations' ),
-						candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
-						candidate.group_languages && candidate.group_languages.length
-							? sprintf( __( 'Group: %s', 'native-translations' ), candidate.group_languages.join( ', ' ) )
-							: __( 'No group yet', 'native-translations' ),
-					].join( ' · ' ) } ) );
-					row.appendChild( document.createTextNode( ' ' ) );
-					var linkBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Link', 'native-translations' ) } );
+					var row = el( 'div', { 'class': 'wpnt-link-candidate', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', borderTop: '1px solid #dcdcde', paddingTop: '8px', marginTop: '8px' } } );
+					var rowText = el( 'div', {}, [
+						el( 'strong', { text: candidate.label || '' } ),
+						el( 'p', { 'class': 'description', style: { margin: '2px 0 0' }, text: candidateMeta( candidate ) } ),
+					] );
+					var linkBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Select', 'native-translations' ) } );
 					linkBtn.disabled = ! canLink;
 					linkBtn.addEventListener( 'click', function () {
 						self.confirm = { action: 'link-existing', candidate: candidate };
 						self.render();
 					} );
+					row.appendChild( rowText );
 					row.appendChild( linkBtn );
 					searchBox.appendChild( row );
 				} );
