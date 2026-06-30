@@ -165,6 +165,29 @@ final class AdminSettingsTest extends TestCase {
 		return new Wpnt_Admin_Settings( new Wpnt_Languages() );
 	}
 
+	/** Seeds a complete settings option for partial-save merge tests. */
+	private function seed_full_settings(): array {
+		$settings = array(
+			'languages'        => array(
+				array( 'code' => 'en', 'locale' => 'en_US', 'name' => 'English', 'native' => 'English', 'flag' => 'us', 'enabled' => true ),
+				array( 'code' => 'es', 'locale' => 'es_ES', 'name' => 'Spanish', 'native' => 'Español', 'flag' => 'es', 'enabled' => true ),
+			),
+			'default_language' => 'es',
+			'model'            => 'openai/gpt-5-mini',
+			'instructions'     => array(
+				'global'       => 'Global guidance',
+				'post'         => 'Post guidance',
+				'term'         => 'Term guidance',
+				'per_language' => array(
+					'es' => 'Spanish guidance',
+				),
+			),
+		);
+		Wpnt_Test_State::$options['wpnt_settings'] = $settings;
+		Wpnt_Languages::flush_index();
+		return $settings;
+	}
+
 	public function test_sanitize_drops_blank_code_rows_and_defaults_name_to_code(): void {
 		$out = $this->sanitizer()->sanitize(
 			array(
@@ -303,5 +326,81 @@ final class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'Custom native', $lang['native'] );
 		$this->assertSame( 'zz', $lang['flag'] );
 		$this->assertTrue( $lang['enabled'] );
+	}
+
+	public function test_model_section_save_preserves_other_settings(): void {
+		$old = $this->seed_full_settings();
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'_section' => 'model',
+				'model'    => 'anthropic/claude-opus-4.8',
+			)
+		);
+
+		$this->assertSame( 'anthropic/claude-opus-4.8', $out['model'] );
+		$this->assertSame( $old['languages'], $out['languages'] );
+		$this->assertSame( $old['default_language'], $out['default_language'] );
+		$this->assertSame( $old['instructions'], $out['instructions'] );
+	}
+
+	public function test_instructions_section_save_preserves_other_settings(): void {
+		$old = $this->seed_full_settings();
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'_section'     => 'instructions',
+				'instructions' => array(
+					'global'       => 'Updated global',
+					'post'         => 'Updated posts',
+					'term'         => 'Updated terms',
+					'per_language' => array(
+						'es' => 'Updated Spanish',
+					),
+				),
+			)
+		);
+
+		$this->assertSame( $old['languages'], $out['languages'] );
+		$this->assertSame( $old['default_language'], $out['default_language'] );
+		$this->assertSame( $old['model'], $out['model'] );
+		$this->assertSame( 'Updated global', $out['instructions']['global'] );
+		$this->assertSame( 'Updated posts', $out['instructions']['post'] );
+		$this->assertSame( 'Updated terms', $out['instructions']['term'] );
+		$this->assertSame( array( 'es' => 'Updated Spanish' ), $out['instructions']['per_language'] );
+	}
+
+	public function test_default_language_section_save_preserves_other_settings(): void {
+		$old = $this->seed_full_settings();
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'_section'         => 'default_language',
+				'default_language' => 'en',
+			)
+		);
+
+		$this->assertSame( 'en', $out['default_language'] );
+		$this->assertSame( $old['languages'], $out['languages'] );
+		$this->assertSame( $old['model'], $out['model'] );
+		$this->assertSame( $old['instructions'], $out['instructions'] );
+	}
+
+	public function test_languages_section_save_preserves_model_and_instructions(): void {
+		$old = $this->seed_full_settings();
+
+		$out = $this->sanitizer()->sanitize(
+			array(
+				'_section' => 'languages',
+				'languages' => array(
+					array( 'code' => 'en', 'enabled' => '1' ),
+				),
+			)
+		);
+
+		$this->assertSame( array( 'en' ), wp_list_pluck( $out['languages'], 'code' ) );
+		$this->assertSame( 'en', $out['default_language'], 'default falls back when the old default language is removed' );
+		$this->assertSame( $old['model'], $out['model'] );
+		$this->assertSame( $old['instructions'], $out['instructions'] );
 	}
 }
