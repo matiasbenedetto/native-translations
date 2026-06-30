@@ -935,6 +935,10 @@ class Wpnt_Rest {
 			return $result;
 		}
 
+		// The linked item is now a translation within the original's group, so it must
+		// not also carry the original flag (which would create a two-original group).
+		$this->store->set_original( $type, $object_id, false );
+
 		return rest_ensure_response( $this->payload( $type, $object_id ) );
 	}
 
@@ -1405,6 +1409,20 @@ class Wpnt_Rest {
 			return new WP_Error(
 				'wpnt_original_required',
 				__( 'The selected item must be marked as original before translations can be linked to it.', 'native-translations' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		// Linking makes this item a translation inside the original's group. If it is
+		// itself an original that already heads a group, moving it would orphan its own
+		// translations and leave two originals in the target group — require unlinking
+		// those first. (A standalone original with no translations is fine; its
+		// original flag is cleared on link.)
+		if ( $this->store->is_original( $type, $object_id )
+			&& ! empty( $this->store->get_translations( $type, $object_id, array( 'include_self' => false ) ) ) ) {
+			return new WP_Error(
+				'wpnt_original_has_translations',
+				__( 'This item is an original with its own translations. Unlink them before linking it as a translation of another original.', 'native-translations' ),
 				array( 'status' => 409 )
 			);
 		}

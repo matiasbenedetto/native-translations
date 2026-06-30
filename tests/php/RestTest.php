@@ -344,6 +344,55 @@ final class RestTest extends TestCase {
 		$this->assertSame( 'wpnt_incompatible_link', $result->get_error_code() );
 	}
 
+	public function test_link_existing_rejects_current_item_that_is_original_with_translations(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[12] = array( 'ID' => 12, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		$store = new Wpnt_Translation_Store();
+		// Target original (en) the admin wants to link into.
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+		// Current item is itself a fr original that already has its own de translation.
+		$store->set_language( 'post', 11, 'fr' );
+		$store->set_original( 'post', 11, true );
+		Wpnt_Test_State::$posts[13] = array( 'ID' => 13, 'post_type' => 'post' );
+		$store->set_language( 'post', 13, 'de' );
+		$store->link_translation( 'post', 11, 13 );
+
+		$result = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'wpnt_original_has_translations', $result->get_error_code() );
+		// The item must stay put: still original, still heading its own group.
+		$this->assertTrue( $store->is_original( 'post', 11 ) );
+		$this->assertSame( $store->get_group( 'post', 11 ), $store->get_group( 'post', 13 ) );
+	}
+
+	public function test_link_existing_clears_original_flag_on_linked_item(): void {
+		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
+		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
+		Wpnt_Test_State::$caps['edit_post:10'] = true;
+		Wpnt_Test_State::$caps['edit_post:11'] = true;
+		$store = new Wpnt_Translation_Store();
+		$store->set_language( 'post', 10, 'en' );
+		$store->set_original( 'post', 10, true );
+		// A standalone original with no translations of its own — allowed, but it
+		// becomes a translation, so its original flag must be cleared.
+		$store->set_language( 'post', 11, 'es' );
+		$store->set_original( 'post', 11, true );
+
+		$response = $this->rest->handle_link_existing(
+			$this->request( array( 'type' => 'post', 'object_id' => 11, 'original_id' => 10 ) )
+		);
+
+		$this->assertNotInstanceOf( WP_Error::class, $response );
+		$this->assertFalse( $store->is_original( 'post', 11 ) );
+		$this->assertSame( $store->get_group( 'post', 10 ), $store->get_group( 'post', 11 ) );
+	}
+
 	public function test_link_existing_rejects_duplicate_language_in_group(): void {
 		Wpnt_Test_State::$posts[10] = array( 'ID' => 10, 'post_type' => 'post' );
 		Wpnt_Test_State::$posts[11] = array( 'ID' => 11, 'post_type' => 'post' );
