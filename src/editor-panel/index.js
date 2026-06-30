@@ -12,7 +12,7 @@ import { PluginDocumentSettingPanel } from '@wordpress/editor';
 import { useSelect } from '@wordpress/data';
 import { useEntityProp } from '@wordpress/core-data';
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
-import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice } from '@wordpress/components';
+import { PanelRow, SelectControl, ToggleControl, Button, Spinner, Notice, TextControl } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __, sprintf } from '@wordpress/i18n';
@@ -38,6 +38,57 @@ const STATUS_LABELS = {
 	private: __( 'Private', 'native-translations' ),
 	trash: __( 'Trash', 'native-translations' ),
 };
+
+const SECTION_STYLE = {
+	width: '100%',
+	borderTop: '1px solid #dcdcde',
+	paddingTop: '12px',
+};
+
+const SECTION_HEADER_STYLE = {
+	display: 'flex',
+	alignItems: 'center',
+	justifyContent: 'space-between',
+	gap: '8px',
+};
+
+const ACTION_ROW_STYLE = {
+	display: 'flex',
+	alignItems: 'flex-end',
+	gap: '8px',
+	marginTop: '10px',
+	flexWrap: 'wrap',
+};
+
+const CANDIDATE_ROW_STYLE = {
+	display: 'flex',
+	alignItems: 'flex-start',
+	justifyContent: 'space-between',
+	gap: '8px',
+	borderTop: '1px solid #dcdcde',
+	paddingTop: '8px',
+	marginTop: '8px',
+};
+
+const CONFIRM_BOX_STYLE = {
+	borderLeft: '3px solid #2271b1',
+	background: '#f6f7f7',
+	padding: '8px 10px',
+	marginTop: '10px',
+};
+
+const describeCandidateMeta = ( candidate ) => [
+	candidate.kind,
+	candidate.language_label || __( 'No language', 'native-translations' ),
+	candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
+	candidate.group_languages?.length
+		? sprintf(
+			/* translators: %s: comma-separated language codes. */
+			__( 'Group: %s', 'native-translations' ),
+			candidate.group_languages.join( ', ' )
+		)
+		: __( 'No group yet', 'native-translations' ),
+].filter( Boolean ).join( ' · ' );
 
 const TranslationsPanel = () => {
 	const { postId, postType, isNew, isSaving } = useSelect( ( select ) => {
@@ -67,6 +118,10 @@ const TranslationsPanel = () => {
 	const [ notice, setNotice ] = useState( '' );
 	// Pending confirmation: { action: 'recreate'|'delete', id, code }.
 	const [ confirm, setConfirm ] = useState( null );
+	const [ linkOpen, setLinkOpen ] = useState( false );
+	const [ linkSearch, setLinkSearch ] = useState( '' );
+	const [ linkCandidates, setLinkCandidates ] = useState( [] );
+	const [ linkLoading, setLinkLoading ] = useState( false );
 
 	const load = useCallback( () => {
 		if ( ! postId ) {
@@ -156,6 +211,59 @@ const TranslationsPanel = () => {
 			successMsg: sprintf( __( '%s translation moved to Trash.', 'native-translations' ), name ),
 		} );
 
+	const searchLinkCandidates = () => {
+		setLinkLoading( true );
+		setError( '' );
+		setConfirm( null );
+		apiFetch( {
+			path: addQueryArgs( `/${ cfg.namespace }/link-candidates`, {
+				object_id: postId,
+				type: 'post',
+				search: linkSearch,
+			} ),
+		} )
+			.then( ( res ) => setLinkCandidates( res.candidates || [] ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not search originals.', 'native-translations' ) ) )
+			.finally( () => setLinkLoading( false ) );
+	};
+
+	const recommendOriginal = () => {
+		setBusy( 'ai-link' );
+		setError( '' );
+		setNotice( '' );
+		setLinkOpen( true );
+		apiFetch( {
+			path: `/${ cfg.namespace }/recommend-original`,
+			method: 'POST',
+			data: { object_id: postId, type: 'post' },
+		} )
+			.then( ( res ) => setConfirm( { action: 'link-existing', candidate: res.candidate, reason: res.reason, ai: true } ) )
+			.catch( ( e ) => setError( e.message || __( 'Could not recommend an original.', 'native-translations' ) ) )
+			.finally( () => setBusy( '' ) );
+	};
+
+	const linkExisting = ( candidate ) => {
+		setBusy( 'link-existing' );
+		setError( '' );
+		setNotice( '' );
+		return apiFetch( {
+			path: `/${ cfg.namespace }/link-existing`,
+			method: 'POST',
+			data: { object_id: postId, original_id: candidate.id, type: 'post' },
+		} )
+			.then( ( res ) => {
+				setData( res );
+				setMeta( { ...( meta || {} ), [ META_IS_ORIGINAL ]: false } );
+				setConfirm( null );
+				setLinkOpen( false );
+				setLinkCandidates( [] );
+				setLinkSearch( '' );
+				setNotice( __( 'Existing translation linked.', 'native-translations' ) );
+			} )
+			.catch( ( e ) => setError( e.message || __( 'Request failed.', 'native-translations' ) ) )
+			.finally( () => setBusy( '' ) );
+	};
+
 	// Only post/page screens enqueue this script, but guard defensively.
 	if ( ! postId || ( postType !== 'post' && postType !== 'page' ) ) {
 		return null;
@@ -188,6 +296,8 @@ const TranslationsPanel = () => {
 	);
 
 	const isConfirming = ( action, code ) => confirm && confirm.action === action && confirm.code === code;
+	const linkConfirm = confirm && confirm.action === 'link-existing' ? confirm : null;
+	const linkActionsDisabled = ! savedLang || isNew || hasPendingChange;
 
 	return (
 		<PluginDocumentSettingPanel name="wpnt-translations" title={ __( 'Translations', 'native-translations' ) } icon="translation">
@@ -254,6 +364,133 @@ const TranslationsPanel = () => {
 					) }
 				</div>
 			</PanelRow>
+
+			{ data && (
+				<PanelRow>
+					<div style={ SECTION_STYLE }>
+						<div style={ SECTION_HEADER_STYLE }>
+							<strong>{ __( 'Link existing translation', 'native-translations' ) }</strong>
+							<Button
+								variant="tertiary"
+								isSmall
+								disabled={ linkActionsDisabled }
+								onClick={ () => {
+									const next = ! linkOpen;
+									setLinkOpen( next );
+									setConfirm( null );
+									if ( next && ! linkCandidates.length ) {
+										searchLinkCandidates();
+									}
+								} }
+							>
+								{ linkOpen ? __( 'Close', 'native-translations' ) : __( 'Search originals', 'native-translations' ) }
+							</Button>
+						</div>
+						{ ! savedLang && (
+							<p className="description" style={ { margin: '4px 0 0' } }>
+								{ __( 'Save a language for this content before linking an existing translation.', 'native-translations' ) }
+							</p>
+						) }
+						{ savedLang && hasPendingChange && (
+							<p className="description" style={ { margin: '4px 0 0' } }>
+								{ __( 'Save pending language/original changes before linking.', 'native-translations' ) }
+							</p>
+						) }
+
+						{ linkOpen && ! linkActionsDisabled && (
+							linkConfirm ? (
+								<div style={ CONFIRM_BOX_STYLE }>
+									<p style={ { margin: '0 0 4px' } }>
+										<strong>{ linkConfirm.candidate.label }</strong>
+									</p>
+									<p className="description" style={ { margin: '0 0 6px' } }>
+										{ describeCandidateMeta( linkConfirm.candidate ) }
+									</p>
+									{ linkConfirm.ai && linkConfirm.reason && (
+										<p className="description" style={ { margin: '0 0 6px' } }>
+											{ sprintf(
+												/* translators: %s: AI recommendation reason. */
+												__( 'AI recommendation: %s', 'native-translations' ),
+												linkConfirm.reason
+											) }
+										</p>
+									) }
+									{ siblingsExist && (
+										<p className="description" style={ { margin: '0 0 6px' } }>
+											{ __( 'This content is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) }
+										</p>
+									) }
+									<Button variant="primary" isSmall isBusy={ busy === 'link-existing' } onClick={ () => linkExisting( linkConfirm.candidate ) }>
+										{ __( 'Confirm link', 'native-translations' ) }
+									</Button>{ ' ' }
+									<Button variant="tertiary" isSmall onClick={ () => setConfirm( null ) }>
+										{ __( 'Back', 'native-translations' ) }
+									</Button>
+								</div>
+							) : (
+								<>
+									<div style={ ACTION_ROW_STYLE }>
+										<div style={ { flex: '1 1 auto', minWidth: 0 } }>
+											<TextControl
+												label={ __( 'Original', 'native-translations' ) }
+												value={ linkSearch }
+												onChange={ setLinkSearch }
+												onKeyDown={ ( event ) => {
+													if ( event.key === 'Enter' ) {
+														searchLinkCandidates();
+													}
+												} }
+												__nextHasNoMarginBottom
+											/>
+										</div>
+										<Button variant="secondary" isSmall isBusy={ linkLoading } onClick={ searchLinkCandidates }>
+											{ __( 'Search', 'native-translations' ) }
+										</Button>
+										{ cfg.aiAvailable && (
+											<Button
+												variant="tertiary"
+												isSmall
+												isBusy={ busy === 'ai-link' }
+												disabled={ busy === 'ai-link' }
+												onClick={ recommendOriginal }
+											>
+												{ __( 'Suggest with AI', 'native-translations' ) }
+											</Button>
+										) }
+									</div>
+									<div style={ { marginTop: '8px' } }>
+										{ linkLoading && <Spinner /> }
+										{ ! linkLoading && linkCandidates.length === 0 && (
+											<p className="description">{ __( 'No compatible originals found.', 'native-translations' ) }</p>
+										) }
+										{ ! linkLoading && linkCandidates.map( ( candidate ) => {
+											const canLink = !! candidate.language && !! candidate.is_original;
+											return (
+												<div key={ candidate.id } style={ CANDIDATE_ROW_STYLE }>
+													<div style={ { minWidth: 0 } }>
+														<strong>{ candidate.label }</strong>
+														<p className="description" style={ { margin: '2px 0 0' } }>
+															{ describeCandidateMeta( candidate ) }
+														</p>
+													</div>
+													<Button
+														variant="secondary"
+														isSmall
+														disabled={ ! canLink }
+														onClick={ () => setConfirm( { action: 'link-existing', candidate } ) }
+													>
+														{ __( 'Select', 'native-translations' ) }
+													</Button>
+												</div>
+											);
+										} ) }
+									</div>
+								</>
+							)
+						) }
+					</div>
+				</PanelRow>
+			) }
 
 			{ loading && ! data ? (
 				<PanelRow><Spinner /></PanelRow>

@@ -24,6 +24,10 @@
 				node.textContent = props[ key ];
 			} else if ( 'onClick' === key ) {
 				node.addEventListener( 'click', props[ key ] );
+			} else if ( 'style' === key && 'object' === typeof props[ key ] ) {
+				Object.keys( props[ key ] ).forEach( function ( styleKey ) {
+					node.style[ styleKey ] = props[ key ][ styleKey ];
+				} );
 			} else {
 				node.setAttribute( key, props[ key ] );
 			}
@@ -45,6 +49,17 @@
 		return apiFetch( opts );
 	}
 
+	function candidateMeta( candidate ) {
+		return [
+			candidate.kind,
+			candidate.language_label || __( 'No language', 'native-translations' ),
+			candidate.is_original ? __( 'Original', 'native-translations' ) : __( 'Not marked original', 'native-translations' ),
+			candidate.group_languages && candidate.group_languages.length
+				? sprintf( __( 'Group: %s', 'native-translations' ), candidate.group_languages.join( ', ' ) )
+				: __( 'No group yet', 'native-translations' ),
+		].filter( Boolean ).join( ' · ' );
+	}
+
 	function TermPanel( mount ) {
 		this.mount = mount;
 		this.data = null;
@@ -52,6 +67,10 @@
 		this.notice = '';
 		this.busy = '';
 		this.confirm = null;
+		this.linkOpen = false;
+		this.linkSearch = '';
+		this.linkCandidates = [];
+		this.linkLoading = false;
 		// Deferred language/original choices (#106): null = no pending change, so the
 		// saved value is shown until the user edits and clicks Update.
 		this.pendingLanguage = null;
@@ -93,6 +112,73 @@
 				if ( opts.successMsg ) {
 					self.notice = opts.successMsg;
 				}
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Request failed.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.busy = '';
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.searchLinkCandidates = function () {
+		var self = this;
+		self.linkLoading = true;
+		self.error = '';
+		self.confirm = null;
+		self.render();
+		request(
+			'link-candidates?object_id=' + encodeURIComponent( cfg.termId ) +
+				'&type=term&search=' + encodeURIComponent( self.linkSearch )
+		)
+			.then( function ( res ) {
+				self.linkCandidates = res.candidates || [];
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Could not search originals.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.linkLoading = false;
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.recommendOriginal = function () {
+		var self = this;
+		self.busy = 'ai-link';
+		self.error = '';
+		self.notice = '';
+		self.linkOpen = true;
+		self.render();
+		request( 'recommend-original', { object_id: cfg.termId, type: 'term' } )
+			.then( function ( res ) {
+				self.confirm = { action: 'link-existing', candidate: res.candidate, reason: res.reason, ai: true };
+			} )
+			.catch( function ( e ) {
+				self.error = ( e && e.message ) || __( 'Could not recommend an original.', 'native-translations' );
+			} )
+			.finally( function () {
+				self.busy = '';
+				self.render();
+			} );
+	};
+
+	TermPanel.prototype.linkExisting = function ( candidate ) {
+		var self = this;
+		self.busy = 'link-existing';
+		self.error = '';
+		self.notice = '';
+		self.render();
+		request( 'link-existing', { object_id: cfg.termId, original_id: candidate.id, type: 'term' } )
+			.then( function ( res ) {
+				self.data = res;
+				self.pendingOriginal = false;
+				self.confirm = null;
+				self.linkOpen = false;
+				self.linkSearch = '';
+				self.linkCandidates = [];
+				self.notice = __( 'Existing translation linked.', 'native-translations' );
 			} )
 			.catch( function ( e ) {
 				self.error = ( e && e.message ) || __( 'Request failed.', 'native-translations' );
@@ -208,6 +294,115 @@
 				el( 'p', { 'class': 'description', text: __( 'Unsaved changes — click Update to apply the language/original change.', 'native-translations' ) } )
 			);
 		}
+
+		var linkActionsDisabled = ! savedLang || pendingChange;
+		var linkWrap = el( 'div', { 'class': 'wpnt-link-existing', style: { borderTop: '1px solid #dcdcde', paddingTop: '12px', marginTop: '12px' } } );
+		var linkHeader = el( 'div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } }, [
+			el( 'strong', { text: __( 'Link existing translation', 'native-translations' ) } ),
+		] );
+		var manualBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: self.linkOpen ? __( 'Close', 'native-translations' ) : __( 'Search originals', 'native-translations' ) } );
+		manualBtn.disabled = linkActionsDisabled;
+		manualBtn.addEventListener( 'click', function () {
+			self.linkOpen = ! self.linkOpen;
+			self.confirm = null;
+			if ( self.linkOpen && ! self.linkCandidates.length ) {
+				self.searchLinkCandidates();
+			} else {
+				self.render();
+			}
+		} );
+		linkHeader.appendChild( manualBtn );
+		linkWrap.appendChild( linkHeader );
+		if ( ! savedLang ) {
+			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Save a language for this term before linking an existing translation.', 'native-translations' ) } ) );
+		} else if ( pendingChange ) {
+			linkWrap.appendChild( el( 'p', { 'class': 'description', text: __( 'Save pending language/original changes before linking.', 'native-translations' ) } ) );
+		}
+
+		if ( self.linkOpen && ! linkActionsDisabled && self.confirm && 'link-existing' === self.confirm.action ) {
+			var c = self.confirm.candidate || {};
+			var confirmBox = el( 'div', { 'class': 'wpnt-link-confirm', style: { borderLeft: '3px solid #2271b1', background: '#f6f7f7', padding: '8px 10px', marginTop: '10px' } } );
+			confirmBox.appendChild( el( 'p', { style: { margin: '0 0 4px' } }, [ el( 'strong', { text: c.label || '' } ) ] ) );
+			confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: candidateMeta( c ) } ) );
+			if ( self.confirm.ai && self.confirm.reason ) {
+				confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: sprintf( __( 'AI recommendation: %s', 'native-translations' ), self.confirm.reason ) } ) );
+			}
+			if ( hasSiblings ) {
+				confirmBox.appendChild( el( 'p', { 'class': 'description', style: { margin: '0 0 6px' }, text: __( 'This term is already in another translation group. Linking will move it to the selected original’s group.', 'native-translations' ) } ) );
+			}
+			var confirmBtn = el( 'button', { 'type': 'button', 'class': 'button button-primary', text: __( 'Confirm link', 'native-translations' ) } );
+			confirmBtn.disabled = self.busy === 'link-existing';
+			confirmBtn.addEventListener( 'click', function () {
+				self.linkExisting( c );
+			} );
+			var cancelLink = el( 'button', { 'type': 'button', 'class': 'button-link', text: ' ' + __( 'Back', 'native-translations' ) } );
+			cancelLink.addEventListener( 'click', function () { self.confirm = null; self.render(); } );
+			confirmBox.appendChild( confirmBtn );
+			confirmBox.appendChild( cancelLink );
+			linkWrap.appendChild( confirmBox );
+		}
+
+		if ( self.linkOpen && ! linkActionsDisabled && ! ( self.confirm && 'link-existing' === self.confirm.action ) ) {
+			var searchBox = el( 'div', { 'class': 'wpnt-link-search', style: { marginTop: '10px' } } );
+			var searchRow = el( 'div', { style: { display: 'flex', alignItems: 'flex-end', gap: '8px', flexWrap: 'wrap' } } );
+			var searchLabel = el( 'label', { text: __( 'Original', 'native-translations' ) + ' ' } );
+			var searchInput = document.createElement( 'input' );
+			searchInput.type = 'search';
+			searchInput.value = self.linkSearch;
+			searchInput.style.maxWidth = '220px';
+			searchInput.addEventListener( 'input', function () {
+				self.linkSearch = searchInput.value;
+			} );
+			searchInput.addEventListener( 'keydown', function ( event ) {
+				if ( 'Enter' === event.key ) {
+					self.linkSearch = searchInput.value;
+					self.searchLinkCandidates();
+				}
+			} );
+			searchLabel.appendChild( searchInput );
+			var searchBtn = el( 'button', { 'type': 'button', 'class': 'button', text: self.linkLoading ? __( 'Searching…', 'native-translations' ) : __( 'Search', 'native-translations' ) } );
+			searchBtn.disabled = self.linkLoading;
+			searchBtn.addEventListener( 'click', function () {
+				self.linkSearch = searchInput.value;
+				self.searchLinkCandidates();
+			} );
+			searchRow.appendChild( searchLabel );
+			searchRow.appendChild( searchBtn );
+			if ( cfg.aiAvailable ) {
+				var aiBtn = el( 'button', { 'type': 'button', 'class': 'button-link', text: self.busy === 'ai-link' ? __( 'Working…', 'native-translations' ) : __( 'Suggest with AI', 'native-translations' ) } );
+				aiBtn.disabled = self.busy === 'ai-link';
+				aiBtn.addEventListener( 'click', function () {
+					self.recommendOriginal();
+				} );
+				searchRow.appendChild( aiBtn );
+			}
+			searchBox.appendChild( searchRow );
+			if ( self.linkLoading ) {
+				searchBox.appendChild( el( 'p', { 'class': 'description', text: __( 'Searching originals…', 'native-translations' ) } ) );
+			} else if ( ! self.linkCandidates.length ) {
+				searchBox.appendChild( el( 'p', { 'class': 'description', text: __( 'No compatible originals found.', 'native-translations' ) } ) );
+			} else {
+				self.linkCandidates.forEach( function ( candidate ) {
+					var canLink = !! candidate.language && !! candidate.is_original;
+					var row = el( 'div', { 'class': 'wpnt-link-candidate', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', borderTop: '1px solid #dcdcde', paddingTop: '8px', marginTop: '8px' } } );
+					var rowText = el( 'div', {}, [
+						el( 'strong', { text: candidate.label || '' } ),
+						el( 'p', { 'class': 'description', style: { margin: '2px 0 0' }, text: candidateMeta( candidate ) } ),
+					] );
+					var linkBtn = el( 'button', { 'type': 'button', 'class': 'button button-secondary', text: __( 'Select', 'native-translations' ) } );
+					linkBtn.disabled = ! canLink;
+					linkBtn.addEventListener( 'click', function () {
+						self.confirm = { action: 'link-existing', candidate: candidate };
+						self.render();
+					} );
+					row.appendChild( rowText );
+					row.appendChild( linkBtn );
+					searchBox.appendChild( row );
+				} );
+			}
+			linkWrap.appendChild( searchBox );
+		}
+		mount.appendChild( linkWrap );
 
 		// With no language yet, show a single prompt instead of one disabled Translate
 		// row (with duplicated help) per language.

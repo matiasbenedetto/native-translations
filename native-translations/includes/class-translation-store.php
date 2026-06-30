@@ -398,9 +398,12 @@ class Wpnt_Translation_Store {
 					/* translators: %s: language code. */
 					__( 'This translation group already has a member in language "%s".', 'native-translations' ),
 					$code
-				)
+				),
+				array( 'status' => 409 )
 			);
 		}
+
+		$old_group = $this->get_group( $object_type, $translation_id );
 
 		if ( 'term' === $object_type ) {
 			update_term_meta( $translation_id, self::META_GROUP, $group );
@@ -408,6 +411,9 @@ class Wpnt_Translation_Store {
 			update_post_meta( $translation_id, self::META_GROUP, $group );
 		}
 
+		if ( $old_group !== $group ) {
+			$this->bust_group_cache( $object_type, $old_group );
+		}
 		$this->bust_group_cache( $object_type, $group );
 
 		return true;
